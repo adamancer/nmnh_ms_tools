@@ -1,0 +1,32 @@
+name: nmnh_minsci
+channels:
+- conda-forge
+- default
+dependencies:
+- bibtexparser
+- bs4
+- dateparser
+- geographiclib
+- html5lib
+- inflect
+- lxml
+- matplotlib
+- nameparser
+- nltk
+- numpy
+- pillow
+- pymongo
+- pyproj
+- pytz
+- pyyaml
+- requests
+- requests_cache
+- shapely
+- six
+- sqlalchemy
+- titlecase
+- unidecode
+# Testing packages
+- coverage
+- pytest
+- pytest-mock

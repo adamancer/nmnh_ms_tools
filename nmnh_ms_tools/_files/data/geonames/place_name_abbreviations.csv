@@ -1,0 +1,174 @@
+﻿"# Abbreviations compiled from list of 500,000 localities from NMNH GBIF dump",,,,,
+word,soft_delimiter,full_word,notes,kind,expand_when
+ab,TRUE,above,,,has period
+ala,TRUE,Alabama,,,has period
+alt,TRUE,altitude,,,has period
+am,TRUE,,ambiguous,,never
+ant,TRUE,,ambiguous,,never
+approx,TRUE,approximately,,,has period
+aprox,TRUE,approximately,,,has period
+arch,TRUE,archipelago,,island,has period
+atl,TRUE,Atlantic,,,has period
+austr,TRUE,,taxonomic?,,never
+ave,TRUE,avenue,,road,has period
+bet,TRUE,between,,,always
+betw,TRUE,between,,,always
+biocol,TRUE,biocollection,,,has period
+biol,TRUE,,,,never
+blvd,TRUE,boulevard,,road,has period
+bo,TRUE,barrio,,municipality,has period
+bor,TRUE,borough,,admin,has period
+bot,TRUE,bottom,,,has period
+br,TRUE,,ambiguous,,never
+btw,TRUE,between,,,always
+ca,TRUE,circa,,,has period
+cal,TRUE,California,,,has period
+cala,TRUE,California,,,has period
+calif,TRUE,California,,,has period
+carr,TRUE,carratera,,road,has period
+cd,TRUE,ciudad,,municipality,has period
+centr,TRUE,,ambiguous,,never
+ch,TRUE,,ambiguous,,never
+ck,TRUE,creek,,river,has period
+co,TRUE,county,may also be company,admin,never
+col,TRUE,,ambiguous,,never
+colo,TRUE,Colorado,,,has period
+com,TRUE,comisaria,,admin,has period
+cord,TRUE,cordillera,,,has period
+cr,TRUE,creek,,river,has period
+crs,TRUE,,depth?,,never
+cult,TRUE,,cultured?,,never
+deg,TRUE,degree,,,has period
+dep,TRUE,department,,admin,always
+depart,TRUE,department,,admin,has period
+dept,TRUE,department,,admin,always
+depto,TRUE,departmento,,admin,always
+df,TRUE,federal district,,admin,always
+dist,TRUE,district,,admin,always
+distr,TRUE,district,,admin,always
+div,TRUE,division,,admin,always
+dpto,TRUE,departmento,,admin,always
+dr,TRUE,doctor or drive,,road,has period
+dto,TRUE,distrito,,admin,always
+dtto,TRUE,distrito,,admin,always
+edo,TRUE,estado,,admin,always
+elev,TRUE,elevation,,,has period
+est,TRUE,estimate,,,has period
+estr,TRUE,estrada,,road,always
+etc,TRUE,et cetera,,,has period
+exp,TRUE,expedition,,,has period
+faz,TRUE,,,,never
+fed,TRUE,federal,,admin,has period
+fl,TRUE,Florida,,,has period
+fla,TRUE,Florida,,,has period
+flor,TRUE,Florida,,,has period
+fms,TRUE,,,,never
+fne,TRUE,,,,never
+for,TRUE,forest,,,has period
+fr,TRUE,from,,,has period
+ft,TRUE,feet,,,has period
+ga,TRUE,Georgia,,,has period
+geol,TRUE,,,,never
+gn,TRUE,,depth?,,never
+gob,TRUE,gobierno,,admin,always
+govt,TRUE,government,,admin,always
+gy,TRUE,,,,never
+hbr,TRUE,harbor,,bay,always
+hda,TRUE,hacienda,,municipality,always
+hort,TRUE,,,,never
+hwy,TRUE,highway,,road,always
+i,TRUE,island,,island,never
+id,TRUE,island,,island,has period
+ids,TRUE,islands,,island,has period
+ill,TRUE,Illinois,,,has period
+ind,TRUE,Indiana,,,has period
+ins,TRUE,,ambiguous,,never
+int,TRUE,,ambiguous,,never
+is,TRUE,island,,island,has period
+isl,TRUE,island,,island,has period
+jct,TRUE,junction,,road,always
+kil,TRUE,km,,,has period
+km,TRUE,km,,,has period
+kms,TRUE,km,,,always
+ky,TRUE,Kentucky,,,has period
+lab,TRUE,laboratory,,,has period
+loc,TRUE,,,,never
+lt,TRUE,light,,,has period
+mass,TRUE,Massachusetts,,,has period
+mex,TRUE,Mexico,,,always
+mi,TRUE,mi or Michigan,,,has period
+mich,TRUE,Michican,,,always
+mid,TRUE,middle,,,has period
+min,TRUE,,,,never
+minn,TRUE,Minnesota,,,has period
+miss,TRUE,Mississippi,,,has period
+mo,TRUE,mouth,,river,has period
+mont,TRUE,Montana or mont or…,,,has period
+mpio,TRUE,municipio,,,always
+mr,TRUE,,,,never
+mrs,TRUE,,,,never
+ms,TRUE,,ambiguous,,never
+mt,TRUE,mount,,mountain,always
+mtn,TRUE,mountain,,mountain,always
+mtns,TRUE,mountains,,mountain,always
+mts,TRUE,mountains,,mountain,always
+mun,TRUE,municipality,,municipality,has period
+nac,TRUE,nacional,,,has period
+nat,TRUE,national,,,has period
+natl,TRUE,national,,,always
+naut,TRUE,nautical,,,always
+no,TRUE,number or north,,,has period
+nr,TRUE,near,,,always
+occ,TRUE,,ambiguous,,never
+occid,TRUE,,taxonomic?,,never
+opp,TRUE,opposite,,,has period
+pac,TRUE,Pacific,,,has period
+pag,TRUE,,"""prope pag.""",,never
+penin,TRUE,peninsula,,,has period
+penin,TRUE,peninsula,,,always
+pk,TRUE,peak or park,,mountain,always
+pr,TRUE,,taxonomic?,admin,never
+pref,TRUE,prefecture,,admin,always
+prov,TRUE,province,,admin,always
+pt,TRUE,point,,,always
+pta,TRUE,punta,,,always
+pto,TRUE,punto,,,always
+quad,TRUE,quadrangle,,,always
+r,TRUE,river,,river,never
+rd,TRUE,road,,road,has period
+ref,TRUE,reference,,,has period
+reg,TRUE,region,,admin,has period
+rep,TRUE,republic,,admin,has period
+res,TRUE,reservation,,,has period
+riv,TRUE,river,,river,always
+rod,TRUE,,road?,road,never
+rr,TRUE,railroad,,,has period
+rt,TRUE,route,,road,has period
+rte,TRUE,route,,road,has period
+sd,TRUE,sound,,bay,has period
+sec,TRUE,section,,,never
+sect,TRUE,section,,,never
+sh,TRUE,,depth?,,never
+so,TRUE,south,,,has period
+sp,TRUE,species,,,has period
+st,TRUE,saint,may also be street,,always
+sta,TRUE,santa,may also be station,,always
+ste,TRUE,sainte,,,always
+stn,TRUE,station,,,has period
+sto,TRUE,santo,,,always
+str,TRUE,strait,,,has period
+subdist,TRUE,subdistrict,,admin,has period
+tenn,TRUE,Tennessee,,,has period
+terr,TRUE,territory,,admin,has period
+territ,TRUE,territory,,admin,has period
+tex,TRUE,Texas,,,has period
+tg,TRUE,tangung,,bay,has period
+tn,TRUE,Tennessee,,,has period
+tr,TRUE,trail,,road,has period
+trib,TRUE,tributary,,,always
+twp,TRUE,township,,admin,never
+univ,TRUE,university,,,always
+va,TRUE,Virginia,,,has period
+val,TRUE,valley,,,has period
+vic,TRUE,vicinity,,,has period
+yds,TRUE,yards,,,has period

@@ -1,0 +1,8 @@
+__pycache__
+downloads
+register.py
+
+.coverage
+
+*.egg-info
+*.log

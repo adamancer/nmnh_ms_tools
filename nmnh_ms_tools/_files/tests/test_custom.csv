@@ -1,0 +1,3 @@
+﻿# Volcano data from the Smithsonian Institution's Global Volcanism Program (https://volcano.si.edu/),,,,,,,,,,,,,
+location_id,site_source,site_names,synonyms,verbatim_latitude,verbatim_longitude,site_kind,country,state_province,county,continent,country_code,admin_code_1,admin_code_2
+gvp:321030,GVP,Rainier,Columbia Crest | Disappointment Cleaver | East Crater | Mount Tacoma | Tacoman | West Crater,46.853,-121.76,VLC,United States,,,NA,US,,

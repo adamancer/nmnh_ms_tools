@@ -1,0 +1,27 @@
+catnum: ({prefix} {{0,4}}{number}{suffix}*)
+mask: \b((?:{code}(?!B) {{0,4}}{filler}?{catnum}(?=\b)|(?<!{code}[ -]){filler}{catnum} \({code}\))(({join_discrete}|{join_range}){catnum}(?=\b))*)
+range_mask: \b({catnum}{join_range}{catnum})\b
+discrete_mask: \b((?:{catnum}(?:{join_range}{catnum})?)({join_discrete}(?:{catnum}(?:{join_range}{catnum})?))+)\b
+
+# Museum codes (e.g., USNM)
+code: (AMNH|FMNH|NMNH|USNH|USNM|MCZ |YPM )
+
+# Words found between prefix and number (e.g., USNM No. 12345). This is a non-
+# capture group that includes whitespace/punctuation before/after.
+filler: (?:\(?(?:(?:[Tt]ype) |[Ss]lide |(?:(?:[A-z\.]+ )*[Cc]oll(?:\.|ection)? ))?([Nn]os?\.? |[Nn]umbers? |# ?)|specimens? |[A-z]+ [Cc]oll(?:\.|ection)?)
+
+# Uncoded catalog number (e.g., G3551-00, 111234/44, 111123.0001)
+prefix: (?:[A-Z]{0,3})
+number: (?:(?:[IlO0-9](?=(?:[IlO0-9]|[A-z]\b|[A-z]-[A-z]\b|\b))){1,7})
+suffix: (?:(?:[A-z](?:-[A-z])?| ?(?:--?|/|,) ?[A-z0-9]{1,4})(?=\b))
+simple: '^(AMNH|FMNH|NMNH|USNH|USNM|MCZ |YPM ) {0,4}[A-Z]?[0-9]{6}$'
+
+# Identifies non-standard suffixes
+suffix2: (( \d{1,4}| [A-z] ?\d| [A-z]{1,3}| \d{1,2} \d{1,2}| \d{1,2} [A-z])?[A-z]?)$
+
+# Conjunctions that may be used to join multiple numbers (e.g, USNM 123 and 345)
+#########################################################################vvv############################################
+join_discrete: '(,? (and|&) |(?:, [A-z](?:--?[A-z])?(?=[,;\b]))+|[,;] ?|(\.? {1,4}(?=[IlO0-9]{1,6}(?!\.[IlO0-9])[A-z]?\b))+)'
+join_range: '( thru | through | ?--? ?)'
+join_interrupted: (AMNH|FMNH|NMNH|USNH|USNM|MCZ |YPM )([0-9] ?)+
+  

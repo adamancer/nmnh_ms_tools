@@ -1,0 +1,222 @@
+bots:
+  user_agent: null
+  elsevier_api_key: null
+  geonames_username: null
+  geonames_use_local: False
+data:
+  admin: databases/admin.json
+  custom: databases/custom.sqlite
+  geonames: databases/geonames.sqlite
+  georef_data: databases/georef_data.sqlite
+  georef_job: job.sqlite
+  natural_earth: databases/natural_earth.sqlite
+  natural_earth: databases/thesaurus.yml
+routines:
+  georeferencing:
+    params:
+      max_sites_to_evaluate: 150
+      resize_when_testing_intersection: 1.1
+      dist_km_to_extend_sites_offshore: 200
+    ordered_field_list:
+      - field: locality
+        codes:
+          - A
+          - H
+          - L
+          - P
+          - R
+          - S
+          - T
+          - U
+          - V
+      - field: mine
+        codes:
+          - MN
+          - MNAU
+          - MNC
+          - MNCR
+          - MNCU
+          - MNFE
+          - MNN
+          - MNQ
+          - MNQR
+      - field: municipality
+        codes:
+          - P
+      - field: features
+        codes:
+          - A
+          - H
+          - L
+          - P
+          - R
+          - S
+          - T
+          - U
+          - V
+      - field: municipality2
+        codes:
+          - A
+          - H
+          - L
+          - P
+          - R
+          - S
+          - T
+          - U
+          - V
+      - field: volcano
+        codes:
+          - CLDA
+          - CONE
+          - CRTR
+          - VLC
+          - VLF
+          - VLS
+      - field: volcano2
+        codes:
+          - HLL
+          - HLLS
+          - MT
+          - MTS
+          - PK
+      - field: maps
+        codes:
+          - A
+          - H
+          - L
+          - P
+          - R
+          - S
+          - T
+          - U
+          - V
+      - field: water_body
+        codes:
+          - BAY
+          - BAYS
+          - BGHT
+          - COVE
+          - INLT
+          - GULF
+          - H
+          - SD
+          - SEA
+          - OCN
+      - field: island
+        codes:
+          - ATOL
+          - ISL
+          - ISLET
+          - ISLF
+          - ISLM
+          - ISLS
+          - ISLT
+          - RK
+          - RKS
+          - SMU
+          - SMSU
+          - TMSU
+          - TMTU
+      - field: mining_district
+        codes:
+          - MNA
+      - field: mining_district2
+        codes:
+          - A
+          - H
+          - L
+          - P
+          - R
+          - S
+          - T
+          - U
+          - V
+      - field: bay_sound
+        codes:
+          - BAY
+          - BAYS
+          - BGHT
+          - COVE
+          - FJD
+          - FJDS
+          - GULF
+          - LGN
+          - LGNS
+          - INLT
+          - INLTQ
+          - SD
+          - SEA
+          - SHOR
+      - field: county
+        codes:
+          - ADM2
+          - ADM2H
+      - field: county2
+        codes:
+          - ADM3
+          - ADM3H
+          - ADM4
+          - ADM4H
+          - ADM5
+      - field: county3
+        codes:
+          - MNA
+      - field: island_group
+        codes:
+          - ATOL
+          - ISL
+          - ISLET
+          - ISLF
+          - ISLM
+          - ISLS
+          - ISLT
+          - RK
+          - RKS
+          - SMU
+          - SMSU
+          - TMSU
+          - TMTU
+      - field: state_province
+        codes:
+          - ADM1
+          - ADM1H
+          - TERR
+          - LAND
+          - RGN
+      - field: state_province2
+        codes:
+          - L
+      - field: country
+        codes:
+          - PCL
+          - PCLD
+          - PCLF
+          - PCLH
+          - PCLI
+          - PCLIX
+          - PCLS
+          - TERR
+      - field: sea_gulf
+        codes:
+          - BAY
+          - BAYS
+          - BGHT
+          - COVE
+          - FJD
+          - FJDS
+          - GULF
+          - LGN
+          - LGNS
+          - INLT
+          - INLTQ
+          - SD
+          - SEA
+          - SHOR
+      - field: ocean
+        codes:
+          - OCN
+      - field: continent
+        codes:
+          - CONT
+          - REG

@@ -121,7 +121,7 @@ class Specimen(Record):
     def cited_in(self, text, dept=None, taxa=None, id_only=False):
         """Tests if specimen occurs in given text"""
         if not text:
-            raised ValueError('No text provided')
+            raise ValueError('No text provided')
 
         score = MatchObject()
         score.penalties = -1

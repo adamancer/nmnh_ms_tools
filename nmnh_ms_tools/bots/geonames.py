@@ -521,9 +521,7 @@ class GeoNamesBot(Bot):
         Returns:
             Result set as JSON
         """
-        try:
-            assert self.username
-        except AssertionError:
+        if not self.username:
             raise AttributeError('username is required')
         params = {
             'style': 'full',

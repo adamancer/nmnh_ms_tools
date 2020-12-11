@@ -1,4 +1,4 @@
-name: nmnh_minsci
+name: nmnh_ms_tools
 channels:
 - conda-forge
 - default

@@ -67,10 +67,23 @@ class Parser:
         return sorted(matches, key=len)
 
 
-    def snippets(self, text, num_chars=32, highlight=True, pages=None):
+    def snippets(self, text, mask=None, num_chars=32, highlight=True, pages=None):
         """Find all occurrences of a pattern in text"""
+        if mask is None:
+            mask = self.mask
+        elif isinstance(mask, str):
+            mask = re.compile(mask)
+
+        # Clean museum codes in the text
+        def clean_codes(match):
+            return re.sub(r'[^A-z]', '', match.group()).upper()
+
+        codes = [r"\.? *".join(c) for c in self.codes]
+        pattern = r"\b({})\b".format("|".join(codes))
+        text = re.sub(pattern, clean_codes, text, flags=re.I)
+
         snippets = {}
-        for match in self.mask.finditer(text):
+        for match in mask.finditer(text):
             val = match.group()
             start = match.start()
             i = start - num_chars
@@ -79,6 +92,7 @@ class Parser:
                 i = 0
             if j > len(text):
                 j = len(text)
+
             # Construct the snippet
             snippet = []
             if i:
@@ -90,7 +104,12 @@ class Parser:
             if highlight:
                 snippet = snippet.replace(val, '**' + val + '**')
             snippet = IndexedSnippet(snippet, start, start + len(val))
-            snippets.setdefault(val, []).append(snippet)
+
+            # Add snippet if not identical to existing
+            existing = snippets.setdefault(val, [])
+            if snippet.text not in {s.text for s in existing}:
+                existing.append(snippet)
+
         return snippets
 
 

@@ -373,7 +373,7 @@ class Parser:
             mask = (r'^(?:(?P<code>NMNH|USNM) )?'
                     r'(?P<prefix>(?:[BCGMRS]|[A-Z]{3,4}))? ?'
                     r'(?P<number>\d+)'
-                    r'(?P<suffix>(?:(?:[-,](?:[A-Z0-9]+))|[A-Z])?'
+                    r'(?P<suffix>(?:(?:[-, ](?:[A-Z0-9]+))|[A-Z])?'
                     r'(?: \((?:[A-Z:]+)\))?)$')
         return SpecNum(**re.search(mask, val, flags=re.I).groupdict())
 

@@ -8,7 +8,7 @@ code: (AMNH|FMNH|NMNH|USNH|USNM|MCZ |YPM )
 
 # Words found between prefix and number (e.g., USNM No. 12345). This is a non-
 # capture group that includes whitespace/punctuation before/after.
-filler: (?:\(?(?:(?:[Tt]ype) |[Ss]lide |(?:(?:[A-z\.]+ )*[Cc]oll(?:\.|ection)? ))?([Nn]os?\.? |[Nn]umbers? |# ?)|specimens? |[A-z]+ [Cc]oll(?:\.|ection)?)
+filler: (?:\(?(?:(?:[Ll]oc)(?:\.|ality) |(?:[Tt]ype) |[Ss]lide |(?:(?:[A-z\.]+ )*[Cc]oll(?:\.|ection)? ))?([Nn]os?\.? |[Nn]umbers? |# ?)?|specimens? |[A-z]+ [Cc]oll(?:\.|ection)?)
 
 # Uncoded catalog number (e.g., G3551-00, 111234/44, 111123.0001)
 prefix: (?:[A-Z]{0,3})
@@ -24,4 +24,3 @@ suffix2: (( \d{1,4}| [A-z] ?\d| [A-z]{1,3}| \d{1,2} \d{1,2}| \d{1,2} [A-z])?[A-z
 join_discrete: '(,? (and|&) |(?:, [A-z](?:--?[A-z])?(?=[,;\b]))+|[,;] ?|(\.? {1,4}(?=[IlO0-9]{1,6}(?!\.[IlO0-9])[A-z]?\b))+)'
 join_range: '( thru | through | ?--? ?)'
 join_interrupted: (AMNH|FMNH|NMNH|USNH|USNM|MCZ |YPM )([0-9] ?)+
-  

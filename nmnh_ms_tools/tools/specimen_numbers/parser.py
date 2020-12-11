@@ -184,8 +184,15 @@ class Parser:
                 nums = [n for n in nums if n.number > 10**(maxlen - 2)]
         nums = [self.stringify(n) for n in nums]
         nums = [n for i, n in enumerate(nums) if n not in nums[:i]]
+
+        # Add keywords to special numbers
+        if 'loc' in val.lower():
+            nums = [n.replace(' ', ' locality no. ', 1) for n in nums]
+        if 'slide' in val.lower():
+            nums = [n.replace(' ', ' slide no. ', 1) for n in nums]
         if 'type' in val.lower():
             nums = [n.replace(' ', ' type no. ', 1) for n in nums]
+
         return nums
 
 

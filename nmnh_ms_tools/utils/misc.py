@@ -192,8 +192,19 @@ def coerce(val, coerce_to, delim=' | '):
         if isinstance(val, str):
             return val.strip()
         return val
+
     cast_from = type(val)
     cast_to = type(coerce_to)
+
+    # Cast to custom class
+    if cast_to == type:
+        try:
+            return coerce_to(val)
+        except TypeError:
+            if not val:
+                return None
+            raise
+
     # Complex cast (lists of types)
     try:
         cast_to_inner = type(coerce_to[0])

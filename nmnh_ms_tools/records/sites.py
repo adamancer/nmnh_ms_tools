@@ -263,6 +263,7 @@ class Site(Record):
         self.island_group = ''
         self.water_body = []
         self.features = []
+        self.maps = []
         self.mine = ''
         self.mining_district = ''
         self.volcano = ''
@@ -270,7 +271,7 @@ class Site(Record):
         self.sea_gulf = ''
         self.bay_sound = ''
         self.locality = ''
-        self.maps = []
+        self.verbatim_locality = ''
         self.geodetic_datum = ''
         self.decimal_latitude = ''
         self.decimal_longitude = ''
@@ -294,10 +295,10 @@ class Site(Record):
         self.admin_code_1 = []
         self.admin_div_2 = []
         self.admin_code_2 = []
-        self.other_ids = {}
-        self.interpreted = {}
         self.related_sites = []
         self.sources = []  # hmm
+        self.other_ids = {}
+        self.interpreted = {}
         # Define additional attributes required for parse
         self._geometry = None
         self._site_kind = ''

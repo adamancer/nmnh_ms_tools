@@ -3,6 +3,7 @@ import logging
 
 from .core import Bot, JSONResponse
 #from ..records.people import Person
+from ..utils import as_list
 
 
 
@@ -18,6 +19,7 @@ class GeoDeepDiveBot(Bot):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault('wrapper', GeoDeepDiveResponse)
         super().__init__(*args, **kwargs)
+        self._docid_clusters = {}
 
 
     def get_snippets(self, term, **kwargs):
@@ -31,7 +33,7 @@ class GeoDeepDiveBot(Bot):
 
         }
         params.update(kwargs)
-        return self.get(url, params=params)
+        return self._get_clustered(url, params=params)
 
 
     def get_article(self, identifier):
@@ -45,7 +47,7 @@ class GeoDeepDiveBot(Bot):
     def get_articles(self, **kwargs):
         """Gets articles matching given criteria from the GeoDeepDive API"""
         url = 'https://geodeepdive.org/api/articles'
-        return self.get(url, params=kwargs)
+        return self._get_clustered(url, params=kwargs)
 
 
     def list_coauthors(self, name, **kwargs):
@@ -59,6 +61,45 @@ class GeoDeepDiveBot(Bot):
             if any([a.similar_to(person) for a in authors]):
                 coauthors.extend(authors)
         return sorted(set([str(n) for n in coauthors]))
+
+
+    def _get_clustered(self, url, params):
+        """Clusters queries that use the docid parameter"""
+        params = params.copy()
+
+        doc_ids = as_list(params.get('docid'))
+        if doc_ids:
+            qid = str({k: v for k, v in params.items() if k != 'docid'})
+            self._docid_clusters.setdefault(url, {}).setdefault(qid, [])
+
+            # Find document IDs that have already been clustered
+            clustered = []
+            for cluster in self._docid_clusters[url][qid]:
+                clustered.extend(cluster)
+
+            # If document IDs exactly match clustered, use existing clusters.
+            # Otherwise start from scratch.
+            if clustered == doc_ids[:len(clustered)]:
+                doc_ids = [d for d in doc_ids if d not in set(clustered)]
+            else:
+                self._docid_clusters[url][qid] = []
+
+            while doc_ids:
+                self._docid_clusters[url][qid].append(doc_ids[:75])
+                doc_ids = doc_ids[75:]
+
+            # Make requests for each group of doc ids
+            responses = []
+            for doc_ids in self._docid_clusters[url][qid]:
+                params['docid'] = ','.join(doc_ids)
+                responses.append(self.get(url, params=params))
+
+            # Combine responses
+            response = responses[0]
+            response.extend(responses[1:])
+            return response
+
+        return self.get(url, params=params)
 
 
 

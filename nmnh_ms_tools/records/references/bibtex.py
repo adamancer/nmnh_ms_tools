@@ -17,6 +17,12 @@ class BibTeXMapper:
             'thesis': '{}thesis',
             'thesis (masters)' : 'mastersthesis',
             'thesis (phd)' : 'phdthesis',
+            # BHL genres
+            'journal': 'book',
+            'monograph/item': 'book',
+            'monographic component part': 'chapter',
+            'serial': 'book',
+            'serial component part': 'article',
         }
         return custom_to_bibtex.get(kind.lower(), kind).format(modifier).lower()
 

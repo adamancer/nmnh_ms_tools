@@ -10,8 +10,9 @@ from bibtexparser.bparser import BibTexParser
 from bibtexparser.customization import convert_to_unicode
 
 from .bibtex import BibTeXMapper
-from ..core import Record
-from ..people import Person, combine_authors, parse_names
+from .formatters import CSEFormatter
+from ..core import Record, Records
+from ..people import People, Person, combine_authors, parse_names
 from ...bots import Bot
 from ...utils.standardizers import Standardizer
 
@@ -22,13 +23,11 @@ logger = logging.getLogger(__name__)
 
 ENTITIES = {
     r'$\mathsemicolon$': ';',
-    r'{\{AE}}': ';',
-    r'({IUCr})': ';',
-    r'{\textdegree}': ';' ,
+    r'{\{AE}}': 'Æ',
+    r'{\textdegree}': '°' ,
     r'{\textquotesingle}': u"'",
-    r'\textemdash': ';',
-    r'\textendash': ';',
-    r'St\u0e23\u0e16ffler': ';',
+    r'\textemdash': '—',
+    r'\textendash': '–',
     r'{\'{a}}': 'a',
     r'$\greater$': '>',
     r'$\less$': '<'
@@ -46,6 +45,7 @@ class Reference(Record):
         'year',
         'title',
         'publication',
+        'publication_url',
         'volume',
         'number',
         'pages',
@@ -66,14 +66,18 @@ class Reference(Record):
         self.number = ''
         self.pages = ''
         self.publication = ''
+        self.publication_url = ''
         self.publisher = ''
         self.title = ''
         self.url = ''
         self.volume = ''
         self.year = ''
         self._doi = ''
+
         # Initialize instance
         super(Reference, self).__init__(data)
+
+        self.formatter = CSEFormatter
 
 
     def __str__(self):
@@ -90,7 +94,6 @@ class Reference(Record):
         # Split off common DOI prefixes
         if doi:
             doi = doi.split('doi.org/', 1)[-1].split('doi:', 1)[-1].strip()
-
         # Test if DOI appears to be valid, log a warning if not
         if doi.startswith('10.'):
             self._doi = doi
@@ -138,10 +141,14 @@ class Reference(Record):
         self.reset()
         self.verbatim = data
         is_doi = isinstance(data, str) and data.startswith('10.')
+        parse_doi = not is_doi
         if is_doi:
             self._parse_doi(data)
         elif 'BibRecordType' in data:
             self._parse_emu(data)
+        elif 'ItemID' in data or 'PartID' in data:
+            self._parse_bhl(data)
+            parse_doi = False
         elif '_gddid' in data:
             self._parse_geodeepdive(data)
         elif 'title' in data:
@@ -150,11 +157,22 @@ class Reference(Record):
             self._parse_reference(self.to_dict(attributes=attributes))
         else:
             raise ValueError('Could not parse {}'.format(data))
+
         # Always use publisher data if possible
-        if self.doi and not is_doi:
+        if self.doi and parse_doi:
             doi = self.doi
             self.reset()
             self._parse_doi(doi)
+
+        # Clean up trailing puntuation
+        for attr in self.attributes:
+            val = getattr(self, attr)
+            if isinstance(val, str):
+                setattr(self, attr, val.strip(';,. '))
+
+        # Clean up duplicated information
+        if self.volume == self.year:
+            self.volume = ''
 
 
     def same_as(self, other, strict=True):
@@ -172,9 +190,11 @@ class Reference(Record):
             return False
         if self.doi and other.doi:
             return self.doi == other.doi
+
         same_first_author = self.authors[0].first == other.authors[0].first
         same_year = self.year == other.year
         similar_title = self.std.similar(self.title, other.title, minlen=2)
+
         return same_first_author and same_year and similar_title
 
 
@@ -202,44 +222,18 @@ class Reference(Record):
                 logger.warning(f"Could not resolve {doi}")
 
 
+    def author_string(self, max_names=20, delim=', ', conj='&', **kwargs):
+        """Converts list of authors objects to a string"""
+        return combine_authors(self.authors,
+                               max_names=max_names,
+                               delim=delim,
+                               conj=conj,
+                               **kwargs)
+
+
     def citation(self):
         """Writes a citation based on bibliographic data"""
-        authors = combine_authors(self.authors, delim=', ', conj='&')
-        if self.doi:
-            url = 'https://doi.org/{}'.format(self.doi)
-        elif self.url:
-            url = self.url
-        else:
-            url = ''
-        # Theses don't have publications, so provide something here
-        publication = self.publication
-        if not publication:
-            pubs = {
-                'book': self.title,
-                'mastersthesis': '{} (Masters Thesis)'.format(self.title),
-                'misc': self.title,
-                'phdthesis': '{} (PhD Dissertation)'.format(self.title),
-                'techreport': self.title
-            }
-            try:
-                publication = pubs[self.entry_type]
-            except KeyError:
-                raise ValueError('No source: {}'.format(self.entry_type))
-        # Create the raw citation string
-        mask = '{} {} ({}) {}: {}. {}'
-        ref = mask.format(authors,
-                          publication,
-                          self.year,
-                          self.volume,
-                          self.number,
-                          url).strip('. ')
-        # Clean up the raw citation string
-        ref = re.sub(r' +', ' ', ref).replace(': .', '.') \
-                                     .replace(' :', '') \
-                                     .replace(' ()', '') \
-                                     .replace(' .', '.') \
-                                     .rstrip(': ')
-        return ref.strip()
+        return str(self.formatter(self))
 
 
     def serialize(self):
@@ -258,7 +252,7 @@ class Reference(Record):
         })
 
 
-    def to_emu(self):
+    def _to_emu(self):
         """Formats record for EMu ebibliography module"""
         rec_type = self._btm.emu_record_type(self.entry_type)
         source_type = self._btm.emu_source_type(self.entry_type)
@@ -275,8 +269,9 @@ class Reference(Record):
             '{}Volume': self.volume,
             '{}Issue': self.number,
             '{}Pages': self.pages,
-            'NotNotes': self.verbatim
         }
+        if isinstance(self.verbatim, str):
+            rec['NotNotes'] = self.verbatim
 
         if parent and self.publication:
             rec['{}ParentRef'] = {
@@ -306,6 +301,45 @@ class Reference(Record):
         # Assign prefix and remove empty keys
         rec = {k.format(prefix): v for k, v in rec.items() if v}
         return rec
+
+
+    def _parse_bhl(self, rec):
+        """Parses a JSON record from BHL"""
+        self.kind = rec['Genre']
+        # Map type-specific metadata
+        if 'PartID' in rec:
+            self.url = f'https://biodiversitylibrary.org/part/{rec["PartID"]}'
+            self.publication = rec.get('ContainerTitle').rstrip('. ')
+        elif 'ItemID' in rec:
+            self.url = f'https://biodiversitylibrary.org/item/{rec["ItemID"]}'
+        else:
+            raise ValueError('Invalid BHLType: {}'.format(bhl_type))
+        # Map common metadata
+        self.authors = [Person(a['Name']) for a in rec.get('Authors', [])]
+        self.title = rec.get('Title', '').rstrip('. ')
+        self.volume = rec.get('Volume', '')
+        self.number = rec.get('Issue', '')
+        self.pages = rec.get('PageRange', '').replace('--', '-')
+        for key in ('Year', 'PublicationDate', 'Date'):
+            try:
+                self.year = self._parse_year(rec[key])
+                if self.year:
+                    break
+            except KeyError:
+                pass
+        else:
+            self.year = '????'
+        self.doi = rec.get('Doi', '')
+        self.publisher = rec.get('PublisherName', '')
+        self.publication_url = self.publication_url.replace('www.', '', 1)
+
+        # Volume sometimes include extra information
+        if self.volume and not self.volume.isnumeric() and not self.number:
+            without_year = re.sub(r' *\(\d{4}\)$', '', self.volume)
+            nums = re.findall(r'[a-z]+\.(\d+)', without_year)
+            if 0 < len(nums) <= 3:
+                self.volume = nums[0]
+                self.number = "-".join(nums[1:])
 
 
     def _parse_bibtex(self, text):
@@ -447,6 +481,8 @@ class Reference(Record):
     def _parse_reference(self, data):
         """Parses a pre-formatted reference"""
         for attr, val in data.items():
+            if attr == 'authors':
+                val = parse_names(val)
             setattr(self, attr, val)
 
 
@@ -460,65 +496,99 @@ class Reference(Record):
         if isinstance(val, dt.date):
             return str(val.year)
         try:
-            return re.search(r'\d{4}', val).group()
+            return re.search(r'\d{4}( *-+ *\d{4})?', val).group()
         except AttributeError:
             return '????'
 
 
 
 
-class References:
-
-    def __init__(self, references=None):
-        self._references = references if references is not None else []
+class References(Records):
+    item_class = Reference
 
 
-    def __getattr__(self, attr):
-        try:
-            return getattr(self._references, attr)
-        except AttributeError:
-            raise AttributeError(
-                f"'{self.__class__.__name__}' object has no attribute '{attr}'"
-            )
 
 
-    def __bool__(self):
-        return bool(self._references)
+class Citation(Record):
+    terms = [
+        'text',
+        'reference',
+        'matches',
+    ]
 
 
-    def __contains__(self, ref):
-        """Checks if the given reference appears in a list of references"""
-        if not isinstance(ref, Reference):
-            ref = Reference(ref)
-        for ref_ in self.references:
-            if ref.similar_to(ref_):
-                return True
-        return False
+    def __init__(self, text, reference, matches=None):
+        # Set lists of original class attributes and reported properties
+        self._class_attrs = set(dir(self))
 
+        # Initialize instance
+        super(Citation, self).__init__((text, reference, matches))
 
-    def __iter__(self):
-        return iter(self._references)
-
-
-    def __len__(self):
-        return len(self._references)
+        self.emu_note_mask = 'This citation mentions the following specimens:\n{}'
 
 
     def __str__(self):
-        return str(self._references)
+        text = self.text.strip('"')
+        return f'"{text}" ({str(self.reference)})'
 
 
-    @property
-    def references(self):
-        references = []
-        for ref in self._references:
-            if not isinstance(ref, Reference):
-                ref = Reference(ref)
-            references.append(ref)
-        self._references = references
-        return references
+    def parse(self, data):
+        text, reference, matches = data
+
+        if not isinstance(text, (list, tuple)):
+            text = text.split("|")
+        self.text = '\n'.join(['"...{}..."'.format(s.strip('". ')) for s in text])
+
+        self.reference = reference
+        self.matches = matches if matches is not None else []
 
 
-    @references.setter
-    def references(self, references):
-        self._references = references
+    def same_as(self, other, strict=True):
+        if not isinstance(other, self.__class__):
+            return False
+        return self.text == other.text and self.reference == other.reference
+
+
+    def _to_emu(self):
+
+        def zfill(match):
+            return match.group().zfill(16)
+
+        # Inherit authors from reference
+        kwargs = {'SecRecordStatus': 'Unlisted'}
+        authors = [a.to_emu(**kwargs) for a in self.reference.authors]
+
+        self.matches.sort(key=lambda v: re.sub(r"\d+", zfill, v))
+
+        return {
+            'BibRecordType': 'Citation',
+            'CitCitingText': self.text,
+            'CitAuthorsRef_tab': authors,
+            'CitRole_tab': ['Author' for _ in self.reference.authors],
+            'CitParentRef': self.reference.to_emu(),
+            'NotNotes': self.emu_note_mask.format('\n'.join(self.matches))
+        }
+
+
+
+
+class Citations(Records):
+    item_class = Citation
+
+
+
+
+def get_author_and_year(ref):
+    """Extracts the first author and year from a reference"""
+    if isinstance(ref, Reference):
+        return (ref.authors[0], ref.year)
+    try:
+        authors, year, _ = [s.strip(". ") for s in re.split(r"\b(\d{4}[a-zA-Z]?)\b", ref, 1)]
+        # Strip dates from end of author string
+        pattern = r"\b(\d{,2} )?(Jan|Feb|Mar|Apr|May|June?|July?|Aug|Sep|Oct|Nov|Dec) *$"
+        authors = re.sub(pattern, "", authors).strip()
+        if authors:
+            return (People(authors)[0], year)
+    except:
+        raise
+    raise ValueError(f"Could not extract author/year from {ref}")

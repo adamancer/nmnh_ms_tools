@@ -19,7 +19,13 @@ class IndexedDict(BaseDict):
 
 
     def __setitem__(self, key, val):
-        super().setdefault(self._key(key), {})[key] = val
+        idx = self._key(key)
+        if (key == idx
+            and isinstance(val, dict)
+            and self._key(list(val.keys())[0]) == idx):
+                super().__setitem__(key, val)
+        else:
+            super().setdefault(idx, {})[key] = val
 
 
     def __delitem__(self, key):

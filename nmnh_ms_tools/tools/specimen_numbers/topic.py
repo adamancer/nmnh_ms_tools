@@ -117,7 +117,7 @@ class Topicker:
         'br': 'Vertebrate Zoology: Birds',
         'en': 'Entomology',
         'fs': 'Vertebrate Zoology: Fishes',
-        'hr': 'Vertebrate Zoology: Herpetology',
+        'hr': 'Vertebrate Zoology: Amphibians & Reptiles',
         'iz': 'Invertebrate Zoology',
         'mm': 'Vertebrate Zoology: Mammals',
         'ms': 'Mineral Sciences',

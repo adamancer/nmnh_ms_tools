@@ -1,4 +1,5 @@
 """Defines methods to work with USNM catalog numbers and specimen data"""
+import functools
 import json
 import logging
 import math
@@ -37,7 +38,7 @@ class Parser:
         with open(fp, 'r') as f:
             self.regex = yaml.safe_load(f)
         self.regex['catnum'] = self.regex['catnum'].format(**self.regex)
-        self.mask = re.compile(self.regex['mask'].format(**self.regex))
+        self.mask = re.compile(self.regex['mask'].format(**self.regex), flags=re.I)
         self.simple = re.compile(self.regex['simple'])
         self.discrete = re.compile(self.regex['discrete_mask'].format(**self.regex))
         self.suf_range = re.compile(r'(([A-z])' + self.regex['join_range'].format(**self.regex) + r'([A-z]))')
@@ -51,8 +52,8 @@ class Parser:
 
 
     def cluster(self, val):
-        """Attempts to identify bad spacing, etc. if text is from OCR"""
-        return self._cluster.cluster(val) if self.from_ocr else val
+        """Clusters lists of numbers and expands alpha suffixes"""
+        return self._cluster.cluster(self.fix_ocr_errors(val))
 
 
     def findall(self, text):
@@ -67,6 +68,16 @@ class Parser:
         return sorted(matches, key=len)
 
 
+    def clean_text(self, text):
+        def clean_codes(match):
+            return re.sub(r'[^A-z]', '', match.group()).upper()
+
+        codes = [r"\.? *".join(c) for c in self.codes]
+        pattern = r"\b({})\b".format("|".join(codes))
+        return re.sub(pattern, clean_codes, text, flags=re.I)
+
+
+
     def snippets(self, text, mask=None, num_chars=32, highlight=True, pages=None):
         """Find all occurrences of a pattern in text"""
         if mask is None:
@@ -74,33 +85,40 @@ class Parser:
         elif isinstance(mask, str):
             mask = re.compile(mask)
 
-        # Clean museum codes in the text
-        def clean_codes(match):
-            return re.sub(r'[^A-z]', '', match.group()).upper()
-
-        codes = [r"\.? *".join(c) for c in self.codes]
-        pattern = r"\b({})\b".format("|".join(codes))
-        text = re.sub(pattern, clean_codes, text, flags=re.I)
-
         snippets = {}
         for match in mask.finditer(text):
             val = match.group()
             start = match.start()
-            i = start - num_chars
-            j = i + len(val) + 2 * num_chars
-            if i < 0:
-                i = 0
-            if j > len(text):
-                j = len(text)
 
-            # Construct the snippet
-            snippet = []
-            if i:
-                snippet.append('...')
-            snippet.append(text[i:j].strip())
-            if j < len(text):
-                snippet.append('...')
-            snippet = ''.join(snippet)
+            # Get index for start of string based on the number of characters,
+            # seeking backwards to find the nearest word break
+            i = start - num_chars
+            num_chars_before = num_chars
+            if i < 0:
+                num_chars_before += i
+                i = 0
+            while i > 0:
+                if re.match(r'\W', text[i], flags=re.U):
+                    break
+                i -= 1
+
+            # Get index for start of string based on the number of characters,
+            # seeking forwards to find the nearest word break.
+            j = min([i + len(val) + num_chars_before + num_chars, len(text)])
+            while j < len(text):
+                if re.match(r'\W', text[j], flags=re.U):
+                    break
+                j += 1
+
+            # Compile snippet with ellipses to indicate where snippets were
+            # pulled from mid-text. Also neatens up the snppets by stripping
+            # non-alphanumeric characters from each end.
+            snippet = ''.join([
+                '...' if i else '',                          # leading ellipsis
+                re.sub(r'(^\W+|\W+$)', "", text[i:j]),
+                '...' if j < len(text) else ''               # trailing ellpsis
+            ])
+
             if highlight:
                 snippet = snippet.replace(val, '**' + val + '**')
             snippet = IndexedSnippet(snippet, start, start + len(val))
@@ -113,6 +131,7 @@ class Parser:
         return snippets
 
 
+    @functools.lru_cache()
     def parse(self, val, expand_short_ranges=None):
         """Parses catalog numbers from a string"""
         if expand_short_ranges is not None:
@@ -149,12 +168,9 @@ class Parser:
                 val = ''.join(val).strip('|;, ')
                 try:
                     parsed = self._parse(val)
-                except ValueError:
-                    logger.warning('Could not parse "%s" from "%s"', val, orig)
-                except:
-                    logger.error('Undefined exception: '
-                                 'ChronostratHierarchy.similar_to')
-                    logger.error('Could not parse "%s" from "%s"', val, orig)
+                except Exception as e:
+                    logger.warning(f"Parse failed: {str(e)}")
+                    logger.debug("Parse traceback", exc_info=e)
                 else:
                     vals.extend(parsed)
                     logger.debug('Parsed "{}" as {}'.format(val, parsed))
@@ -194,7 +210,8 @@ class Parser:
         if not nums:
             logger.debug('Parsed as catalog number: %s', val)
             val = self.remove_museum_code(val)
-            nums = [self.parse_num(self.cluster(val))]
+            clustered = [n.strip() for n in self.cluster(val).split(';')]
+            nums = [self.parse_num(n) for n in clustered if n]
         # Are the lengths in the results reasonable?
         if len(nums) > 1:
             minlen = min([len(str(n.number)) for n in nums])
@@ -238,20 +255,20 @@ class Parser:
     def parse_discrete(self, val):
         """Returns a list of discrete specimen numbers"""
         logger.debug('Looking for discrete numbers in "{}"...'.format(val))
-        val = re.sub(self.regex['filler'], '', val)
-        prefix = re.match('(' + self.regex['prefix'] + ')', val)
+        val = re.sub(self.regex['filler'], '', val, flags=re.I)
+        prefix = re.match(r'\b(' + self.regex['prefix'] + r')(?![a-zA-z])', val)
         prefix = prefix.group() if prefix is not None else ''
         discrete = self.discrete.search(val)
         if discrete is None:
-            val = self.cluster(self.fix_ocr_errors(val))
+            val = self.cluster(val)
             discrete = self.discrete.search(val)
         nums = []
         if discrete is not None:
             val = discrete.group().strip()
-            val = self.cluster(self.fix_ocr_errors(val))
+            val = self.cluster(val)
             if self.is_range(val):
                 nums.extend(self.get_range(val))
-            elif re.match('^' + self.regex['catnum'] + '$', val):
+            elif self.is_catnum(val):
                 # Check if value is actually a single catalog number
                 nums.append(self.parse_num(val.replace(' ', '')))
             else:
@@ -267,8 +284,9 @@ class Parser:
                 # prefix from the succeeding catalog number.
                 spec_nums = [s.strip() for s in re.split(r'(?:,|;| and | & )', val)]
                 for spec_num in spec_nums:
-                    if not re.match('^' + self.regex['catnum'] + '$', spec_num):
+                    if not self.is_catnum(spec_num):
                         spec_nums = re.findall(self.regex['catnum'], val)
+                        spec_nums = [s for s in spec_nums if self.is_catnum(s)]
                         break
                 # Clean up suffixes after chunking into discrete parts
                 for chunk in re.split(self.regex['join_discrete'], val):
@@ -284,7 +302,7 @@ class Parser:
                         spec_num = prefix + spec_num
                     if self.is_range(spec_num):
                         nums.extend(self.fill_range(spec_num))
-                    elif re.match(self.regex['catnum'] + '$', spec_num.strip()):
+                    elif self.is_catnum(spec_num.strip()):
                         nums.append(self.parse_num(spec_num.replace(' ', '')))
                     else:
                         nums.append(self.parse_num(spec_num))
@@ -299,7 +317,7 @@ class Parser:
     def parse_ranges(self, val):
         """Returns a list of specimen numbers given in ranges"""
         logger.debug('Looking for ranges in "{}"...'.format(val))
-        val = self.cluster(self.fix_ocr_errors(val))
+        val = self.cluster(val)
         ranges = self.range.search(val)
         nums = []
         if ranges is not None:
@@ -315,6 +333,7 @@ class Parser:
                     # Finds ranges joined by something other than a dash
                     try:
                         n1, n2 = re.findall(self.regex['catnum'], spec_num)
+                        n1, n2 = [n for n in (n1, n2) if self.is_catnum(n)]
                         n1, n2 = [self.parse_num(n) for n in (n1, n2)]
                     except ValueError:
                         pass
@@ -371,7 +390,7 @@ class Parser:
         """Parses a single well-formed catalog number"""
         if mask is None:
             mask = (r'^(?:(?P<code>NMNH|USNM) )?'
-                    r'(?P<prefix>(?:[BCGMRS]|[A-Z]{3,4}))? ?'
+                    r'(?P<prefix>(?:[A-Z]{1,4}))? ?'
                     r'(?P<number>\d+)'
                     r'(?P<suffix>(?:(?:[-, ](?:[A-Z0-9]+))|[A-Z])?'
                     r'(?: \((?:[A-Z:]+)\))?)$')
@@ -387,7 +406,7 @@ class Parser:
         except IndexError:
             code = self.code
         val = self.remove_museum_code(val.strip())
-        val = re.sub(self.regex['filler'], '', val)
+        val = re.sub(self.regex['filler'], '', val, flags=re.I)
         # Identify prefix and number
         try:
             prefix = re.match(r'\b[A-Z ]+', val).group()
@@ -432,33 +451,62 @@ class Parser:
         number = self.fix_ocr_errors(number)
         if len(number) < 6:
             suffix = self.fix_ocr_errors(suffix.strip(), match=True)
-        return SpecNum(code, prefix, int(number), suffix.upper())
+        # Disregard unlikely suffixes
+        stopwords = {'and', 'but', 'in', 'for', 'not', 'on', 'so', 'the', 'was'}
+        if (
+            len(suffix) > 3 and suffix.isalpha()
+            or len(suffix) > 5
+            or re.search(r'fig.*\d', suffix, flags=re.I)
+            or suffix in stopwords
+        ):
+            suffix = ''
+        try:
+            return SpecNum(code, prefix, int(number), suffix.upper())
+        except ValueError as e:
+            raise ValueError(f'Could not parse: {val} ({e})')
 
 
     def fix_ocr_errors(self, val, match=False):
-        """Attempts to fix common OCR errors"""
+        """Attempts to fix common OCR errors in a specimen number"""
         if not self.from_ocr:
             return val
-        pairs = {
+
+        common_ocr_errors = {
             'i': '1',
             'I': '1',
             'l': '1',
             'O': '0',
             'S': '5'
         }
+
         if match:
-            return pairs.get(val, val)
+            return common_ocr_errors.get(val, val)
         else:
+            # Trim unlikely suffixes that get garbled by the OCR check
+            try:
+                part, last_word = val.split(' ', 1)
+            except ValueError:
+                pass
+            else:
+                if last_word.lower() in ('el', 'is', 'la', 'le'):
+                    val = part
+
+            # Fix common errors where leading or between numbers
+            for find, repl in common_ocr_errors.items():
+                pattern = r'(^|\d){}(\d)'.format(find)
+                val = re.sub(pattern, r'\g<1>{}\g<2>'.format(repl), val)
+
             # Filter out likely strings
             words = []
             for word in re.split(r'(\W+)', val):
                 filtered = word
-                for key in pairs:
+                for key in common_ocr_errors:
                     filtered = filtered.replace(key, '')
                 if not filtered[:-1].isalpha():
-                    for search, repl in pairs.items():
-                        word = word.replace(search, repl)
+                    for find, repl in common_ocr_errors.items():
+                        word = word.replace(find, repl)
                 words.append(word)
+
             return ''.join(words)
 
 
@@ -524,6 +572,13 @@ class Parser:
                     and small_diff
                     and no_suffix
                     and n2_bigger)
+
+
+    def is_catnum(self, val):
+        return (
+            re.match('^' + self.regex['catnum'] + '$', val)
+            and not val.strip().isalpha()
+        )
 
 
     def short_range(self, n1, n2):

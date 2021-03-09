@@ -3,8 +3,9 @@ from collections import namedtuple
 
 from nltk.corpus import stopwords
 
+from ..geographic_names.parsers.feature import FEATURES, OF_WORDS
 from ...utils.lists import oxford_comma
-from ...utils.strings import to_attribute
+from ...utils.strings import lcfirst, to_attribute
 
 
 
@@ -26,35 +27,32 @@ ENDINGS = [
     'a',
     'e'
 ]
+
 REPLACEMENTS = {
     'aeo': 'eo',  # archaeo
     'usc': 'usk'  # mollusk
 }
+
 STOPWORDS = [
     'above',
     'along',
     'animalia',
-    'beach',
     'boundary',
-    'coast',
     'collection',
     'confluence',
-    'county',
-    'creek',
-    'district',
     'early',
+    'east',
     'eastern',
     'family',
     'formation',
+    'group',
     'harbor',
     'indet',
-    'island',
+    'isla',
     'late',
     'locality',
-    'lower',
     'member',
-    'middle',
-    'mountain',
+    'nacional',
     'national',
     'north',
     'northern',
@@ -65,11 +63,7 @@ STOPWORDS = [
     'genus',
     'group',
     'present',
-    'province',
-    'ridge',
-    'river',
     'slide',
-    'slope',
     'south',
     'southern',
     'southeast',
@@ -77,20 +71,38 @@ STOPWORDS = [
     'southwest',
     'southwestern',
     'sp',
+    'species',
     'specimen',
     'unknown',
-    'upper',
-    'valley',
+    'west',
     'western',
+    # STRAT
+    'lower',
+    'upper',
+    'early',
+    'late',
+    'mid',
+    'middle',
     # COLORS
+    'black',
     'blue',
     'green',
+    'orange',
+    'purple',
     'red',
+    'violet',
     'yellow',
     'white',
-    'black'
+    # TAXA
+    'animalia',
+    'chordata',
+    'vertebrata',
+    'synapsida',
     ]
 STOPWORDS.extend(stopwords.words('english'))
+STOPWORDS.extend(stopwords.words('spanish'))
+STOPWORDS.extend(FEATURES)
+STOPWORDS.extend(OF_WORDS)
 
 
 
@@ -99,7 +111,10 @@ class MatchObject:
     """Defines methods to score how well text matches a specimen record"""
     hints = {}
 
-    def __init__(self):
+    def __init__(self, source=None, text=None):
+        self.source = source
+        self.text = text
+        self.record = None
         self.points = 0
         self.penalties = 0
         self.threshold = 1
@@ -107,21 +122,26 @@ class MatchObject:
 
 
     def __str__(self):
-        if self.score <= 1:
+        if not self:
             return 'No match'
+        if not self.components:
+            return 'Matched {}'.format(self.source)
+
+        # Look for public fields that have been matched
         matched = []
-        only = ''
-        count_pos = len([k for k, v in self.components.items() if v > 0])
-        for key in self:
-            if not key and count_pos == 2:
-                only = ' only'
-            elif self[key] > 0:
-                matched.append(to_attribute(key).replace('_', ' '))
-        return 'Matched on {}{}'.format(oxford_comma(sorted(matched)), only)
+        for key, val in self.items():
+            if self[key] > 0 and not key.startswith('_'):
+                matched.append(key)
+
+        # Add "only" keyword if match is on a single public field
+        only = ' only' if len(matched) == 1 else ''
+
+        mask = 'Matched {} on {}{}' if self.source else 'Matched on {1}{2}'
+        return mask.format(self.source, oxford_comma(sorted(matched)), only)
 
 
     def __repr__(self):
-        attrs = ['matched', 'score', 'components', 'points', 'penalties']
+        attrs = ['score', 'threshold', 'components', 'points', 'penalties']
         ntp = namedtuple(self.__class__.__name__, attrs)
         kwargs = {attr: getattr(self, attr) for attr in attrs}
         return str(ntp(**kwargs))
@@ -132,6 +152,15 @@ class MatchObject:
             self.penalties += val
         else:
             self.points += val
+        return self
+
+
+    def __sub__(self, val):
+        if val > 0:
+            self.penalties -= val
+        else:
+            self.points -= val
+        return self
 
 
     def __eq__(self, val):
@@ -171,21 +200,15 @@ class MatchObject:
 
 
     def __bool__(self):
-        return self.matched
+        return self.score > self.threshold
+
+
+    def __len__(self):
+        return len(self.components)
 
 
     def items(self):
         return self.components.items()
-
-
-    @property
-    def matched(self):
-        return self._matched()
-
-
-    @matched.setter
-    def matched(self, _):
-        raise AttributeError('Cannot set matched')
 
 
     @property
@@ -202,7 +225,7 @@ class MatchObject:
         """Adds/subtracts given value from the score"""
         try:
             self.components[name] += val
-        except KeyError as e:
+        except KeyError:
             self.components[name] = val
         self += val
         return self
@@ -219,9 +242,66 @@ class MatchObject:
         return self.points + self.penalties
 
 
-    def _matched(self):
-        """Calculates whether the score exceeds the threshold (i.e., matches)"""
-        return self.score > self.threshold
+
+
+class MatchMaker(list):
+
+    def __init__(self):
+        self.threshold = 1
+
+
+    def __str__(self):
+        if not self:
+            return 'No match'
+
+        # Since we're interested in combining multiple contexts, include all
+        # scores with positive values, not just those that exceed the
+        # threshold for that particular match. To keep the individual matches
+        # valid while generating the match strings, set the threshold for
+        # each match to zero, then restore it once the string has been created.
+        matches = []
+        for match in self:
+            threshold = match.threshold
+            match.threshold = 0
+            if match:
+                matches.append(lcfirst(str(match)) if matches else str(match))
+            match.threshold = threshold
+
+        return oxford_comma(matches, delim="; ")
+
+
+    def __bool__(self):
+        return self.score >= self.threshold
+
+
+    @property
+    def record(self):
+        if len({m.record.occurrence_id: m.record for m in self}) != 1:
+            raise ValueError("MatchMaker includes multiple different records!")
+        return self[0].record
+
+
+    @property
+    def score(self):
+        return self._score()
+
+
+    @score.setter
+    def score(self, _):
+        raise AttributeError('Cannot set score')
+
+
+    def add(self, source, text, score=1):
+        match = MatchObject(source, text)
+        match.points += score
+        self.append(match)
+
+
+    def _score(self):
+        score = 0
+        for item in self:
+            score += (item.points - item.penalties)
+        return score
 
 
 
@@ -244,7 +324,7 @@ def validate_dept(dept):
         'br': 'Vertebrate Zoology: Birds',
         'en': 'Entomology',
         'fs': 'Vertebrate Zoology: Fishes',
-        'hr': 'Vertebrate Zoology: Herpetology',
+        'hr': 'Vertebrate Zoology: Amphibians & Reptiles',
         'iz': 'Invertebrate Zoology',
         'mm': 'Vertebrate Zoology: Mammals',
         'ms': 'Mineral Sciences',

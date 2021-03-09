@@ -1,11 +1,12 @@
 """Defines tools to parse and display NMNH catalog numbers"""
+import functools
 import logging
 import pprint as pp
 import re
 
-from .core import Record
+from .core import Record, Records
 from ..tools.specimen_numbers.parser import Parser, SpecNum
-from ..utils.strings import to_attribute
+from ..utils import PrefixedNum, to_attribute
 
 
 
@@ -29,6 +30,7 @@ class CatNum(Record):
         'suffix',
         'delim'
     ]
+    parser = DEFAULT_PARSER
 
     def __init__(self, *args, **kwargs):
         # Set lists of original class attributes and reported properties
@@ -101,7 +103,7 @@ class CatNum(Record):
                 'Paleobiology',
                 'Vertebrate Zoology: Birds',
                 'Vertebrate Zoology: Fishes',
-                'Vertebrate Zoology: Herpetology',
+                'Vertebrate Zoology: Amphibians & Reptiles',
                 'Vertebrate Zoology: Mammals'
             }
             assert department in departments
@@ -137,6 +139,7 @@ class CatNum(Record):
         name = 'Smithsonian Microbeam'
         if [c for c in self._collections if c.startswith(name)]:
             return 'SMS'
+
         # Petrology has an unfortunate habit of assigning children the same
         # catalog number as their parents. This shows up especially in the
         # Reference Standards Collection, where you additionally run into
@@ -163,6 +166,7 @@ class CatNum(Record):
                     mask = 'Could not map {} (primary={})'
                     raise ValueError(mask.format(catnum, self._primary))
             return 'REF'
+
         return self.division
 
 
@@ -190,11 +194,27 @@ class CatNum(Record):
             self._mask = mask
 
 
+    @property
+    def prefixed_num(self):
+        if self.number:
+            return PrefixedNum('{}{}'.format(self.prefix, self.number))
+        raise ValueError('Could not create prefixed_num (number empty)')
+
+
+
     def parse(self, data):
         """Parses catalog numbers contained in verbatim"""
         self.reset()
         if data and isinstance(data, str):
-            self._parse_string(data)
+            # Some departments use trailing apostrophes to
+            # differentiate between suffixes (A, A', A'', etc.) Trailing
+            # apostrophes are a problem in OCR and haven't been/won't
+            # be integrated into the parser, but are fine for more
+            # reliable data, so handle them manaully here.
+            trailing_primes = re.search(r"'+$", data)
+            self._parse_string(data.rstrip("'"))
+            if trailing_primes:
+                self.suffix += trailing_primes.group()
         elif data and isinstance(data, self.__class__):
             self._parse_self(data)
         elif 'basisOfRecord' in data or 'basis_of_record' in data:
@@ -222,27 +242,45 @@ class CatNum(Record):
 
     def same_as(self, other, strict=True):
         """Tests if two catalog numbers are equivalent"""
+        if not other:
+            return False
         if not isinstance(other, self.__class__):
             other = self.__class__(other)
+
         # Compare museum codes (e.g., NMNH or USNM)
         same_code = self.code == other.code
         if not same_code and not strict:
             codes = sorted([self.code, other.code])
             same_code = (not all(codes) or codes == ['NMNH', 'USNM'])
-        # Compare major parts of the catalog number
-        same_prefix = self.prefix == other.prefix
+
+        # Compare number
         same_number = int(self.number) == int(other.number)
+
+        # Compare prefix. Published specimen numbers may include a
+        # departmental code (ENT, PAL, etc.) which in the non-strict check
+        # are checked using the department attribute.
+        same_prefix = self.prefix == other.prefix
+        if not same_prefix and self.department and not strict:
+            same_prefix = self.prefix.upper() == self.department[:3].upper()
+
+        # Compare suffix. The non-strict check will allow matches if
+        # only one suffix is populated and the other is either 00 or a letter.
+        # Both variants are common in the literature.
         same_suffix = self.suffix == other.suffix
         if not same_suffix and not strict:
             suffixes = (self.suffix, other.suffix)
-            same_suffix = not(all(suffixes)) and '00' in suffixes
+            same_suffix = (any([s == '00' or s.isalpha() for s in suffixes])
+                           and not(all(suffixes)))
+
         # Compare collection info
         same_dept = self.department == other.department
         if not same_dept and not strict:
             same_dept = not all([self.department, other.department])
+
         same_div = self.division == self.division
         if not same_div and not strict:
             same_div = not all([self.division, other.division])
+
         return (same_code
                 and same_prefix
                 and same_number
@@ -271,7 +309,7 @@ class CatNum(Record):
         return key
 
 
-    def to_emu(self):
+    def _to_emu(self):
         """Formats list for EMu"""
         if self.is_antarctic():
             return {'MetMeteoriteName': str(self)}
@@ -324,6 +362,7 @@ class CatNum(Record):
         data = {to_attribute(k): v for k, v in data.items()}
         self.verbatim = data['catalog_number']
         self._parse_string(self.verbatim)
+        self.department = data.get('collection_code')
 
 
     def _parse_emu(self, data):
@@ -345,8 +384,7 @@ class CatNum(Record):
             try:
                 self._primary = data['IdeTaxonRef_tab'][0]['ClaScientificName']
             except (KeyError, TypeError, IndexError):
-                self._primary = data['MetMeteoriteType']
-
+                self._primary = data.get('MetMeteoriteType')
 
 
     def _parse_self(self, data):
@@ -379,10 +417,10 @@ class CatNum(Record):
     def _parse_string(self, data):
         """Parses catalog number from string"""
         self.verbatim = data
-        parsed = parse_catnums(data)
-        if len(parsed) > 1:
-            raise ValueError('Multiple numbers found in {}'.format(data))
-        self._parse_self(parsed[0])
+        try:
+            self._parse_spec_num(self.parser.parse_quick(data))
+        except (AttributeError, ValueError):
+            raise ValueError('Could not parse {}'.format(data))
 
 
     def is_antarctic(self):
@@ -419,13 +457,17 @@ class CatNum(Record):
 
 
 
-class CatNumList(list):
+class CatNums(Records):
     """Parses and displays lists of catalog numbers"""
+    item_class = CatNum
 
     def __init__(self, *args):
-        super(CatNumList, self).__init__()
-        if len(args) == 1 and isinstance(args[0], (list, tuple)):
-            catnums = args[0]
+        super(CatNums, self).__init__()
+        if len(args) == 1:
+            if isinstance(args[0], (list, tuple)):
+                catnums = args[0]
+            else:
+                raise ValueError("Could not coerce {}".format(args))
         elif len(args) > 1:
             catnums = args
         else:
@@ -456,33 +498,6 @@ class CatNumList(list):
         return pp.pformat([repr(c) for c in self])
 
 
-    @staticmethod
-    def _coerce(val):
-        """Coerces value to a CatNum object"""
-        if isinstance(val, CatNum):
-            return val
-        if isinstance(val, str):
-            return CatNum(val)
-        if isinstance(val, dict):
-            return CatNum(**val)
-        raise ValueError('Could not convert "{}" to CatNum'.format(val))
-
-
-    def append(self, catnum):
-        """Parses and appends a catalog number"""
-        super(CatNumList, self).append(self._coerce(catnum))
-
-
-    def extend(self, catnums):
-        """Parses and extends list from a list of catalog numbers"""
-        super(CatNumList, self).extend([self._coerce(c) for c in catnums])
-
-
-    def to_emu(self):
-        """Formats list for EMu"""
-        return [catnum.to_emu() for catnum in self]
-
-
     def for_filename(self, clustered=True, sortable=True,
                      lower=False, n_max=None):
         """Formats list for use as a filename"""
@@ -499,11 +514,6 @@ class CatNumList(list):
         return filename.replace(' ', '_')
 
 
-    def unique(self):
-        """Dedupes list of catalog numbers"""
-        return CatNumList([v for i, v in enumerate(self) if not v in self[:i]])
-
-
     def cluster(self):
         """Groups catalog numbers into continuous ranges"""
         catnums = self.unique()
@@ -511,13 +521,13 @@ class CatNumList(list):
 
         codes = {}
         for catnum in catnums:
-            codes.setdefault(catnum.code, CatNumList()).append(catnum)
+            codes.setdefault(catnum.code, CatNums()).append(catnum)
 
         clusters = []
         for code in sorted(codes):
             prefixes = {}
             for catnum in codes[code]:
-                prefixes.setdefault(catnum.prefix, CatNumList()).append(catnum)
+                prefixes.setdefault(catnum.prefix, CatNums()).append(catnum)
 
             # Sort prefixed numbers to beginning of list
             keys = sorted(prefixes)
@@ -550,6 +560,11 @@ class CatNumList(list):
         raise IndexError('List does not have exactly one member')
 
 
+    def _to_emu(self):
+        """Formats list for EMu"""
+        return [catnum.to_emu() for catnum in self]
+
+
 
 
 def get_catnum(val, **kwargs):
@@ -560,24 +575,26 @@ def get_catnum(val, **kwargs):
     return parsed
 
 
+@functools.lru_cache()
 def parse_catnums(val, parser=None):
     """Parses catalog numbers from a string"""
     if not val:
-        return CatNumList()
+        return CatNums()
     if isinstance(val, dict):
-        return CatNumList([CatNum(val)])
+        return CatNums([CatNum(val)])
     if parser is None:
         parser = DEFAULT_PARSER
     try:
-        return CatNumList([CatNum(parser.parse_quick(val))])
+        return CatNums([CatNum(parser.parse_quick(val))])
     except (AttributeError, TypeError):
         try:
-            return CatNumList([CatNum(c) for c in parser.parse(val)])
+            return CatNums([CatNum(c) for c in parser.parse(val)])
         except Exception as exc:
-            logger.error('Undefined exception: parse_catnums', from_exc=exc)
-            return CatNumList()
+            logger.error('Undefined exception: parse_catnums', exc_info=exc)
+            return CatNums()
 
 
+@functools.lru_cache()
 def is_antarctic(val):
     """Tests if catalog number is a NASA meteorite number"""
     return re.search(r'^[A-Z]{3}[A ]\d{5,6}(,\d+)?$', val) if val else False

@@ -15,6 +15,7 @@ from .coords import (
     parse_coordinate
 )
 from .dicts import (
+    AbbrDict,
     AttrDict,
     BaseDict,
     IndexedDict,
@@ -67,6 +68,7 @@ from .numeric import (
     frange,
     num_dec_places
 )
+from .prefixed_num import PrefixedNum
 from .standardizers import (
     LocStandardizer,
     Standardizer,

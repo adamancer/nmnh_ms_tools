@@ -72,6 +72,24 @@ class Parser:
         return NotImplementedError
 
 
+    def names(self):
+        """Returns the list of parsed names"""
+        try:
+            nested_features = self.features
+        except AttributeError:
+            nested_features = [[self.feature]]
+
+        names = []
+        for features in nested_features:
+            for feat in as_list(features):
+                if isinstance(feat, Parser):
+                    names.extend(feat.names())
+                else:
+                    names.append(feat)
+
+        return [n for n in names if n]
+
+
     def reset(self):
         """Resets all attributes to defaults"""
         for attr in self.attributes:

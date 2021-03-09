@@ -1,5 +1,6 @@
 """Defines functions to classify/parse features using parser objects"""
 import csv
+import functools
 import logging
 import os
 import re
@@ -11,7 +12,7 @@ from unidecode import unidecode
 from .between import BetweenParser
 from .border import BorderParser
 from .direction import DirectionParser
-from .feature import FeatureParser
+from .feature import FEATURES, OF_WORDS, FeatureParser
 from .measurement import MeasurementParser
 from .modified import ModifiedParser, is_modified_feature
 from .multifeature import MultiFeatureParser
@@ -44,6 +45,9 @@ def clean_locality(val):
     if isinstance(val, list):
         return [clean_locality(s) for s in val]
     orig = val
+    # Convert uppercase string to title case
+    if val.isupper():
+        val = val.title()
     # Remove diacritics and strip trailing punctuation
     val = unidecode(val).strip(' ,;:|').strip('"').rstrip('.')
     delim = get_delim(val)
@@ -209,9 +213,10 @@ def split_localities(vals, **kwargs):
     return vals
 
 
-@clock
+@functools.lru_cache()
 def parse_localities(val, parsers=None, split_phrases=True):
     """Parses individual localities from a complex string"""
+
     if parsers is None:
         parsers = [
             PLSSParser,
@@ -280,11 +285,13 @@ def parse_localities(val, parsers=None, split_phrases=True):
             phrase = phrase.strip(puncs)
         i = val.index(phrase)
         j = i + len(phrase)
+
         if False:
             print(orig, i, j, lbound, rbound)
             for k, v in localities.items():
                 print('+', k)
             print('-' * 40)
+
         # Only check single words bounded by punctuation or string boundaries
         if split_phrases:
             one_word = re.match(r'^[A-z\-]+$', phrase.strip())
@@ -345,6 +352,28 @@ def parse_localities(val, parsers=None, split_phrases=True):
 
     # Remove non-localities
     return localities
+
+
+def get_proper_names(val, *args, **kwargs):
+
+    # Parse localities if string given
+    if isinstance(val, str):
+        val = parse_localities(val, *args, **kwargs)
+
+    # Construct pattern to catch generic names at beginning/end of each value
+    features = list(FEATURES) + OF_WORDS
+    features.extend(['{}s'.format(f) for f in features])
+    features = sorted(features, key=lambda w: -len(w))
+    pattern = r'(^({0})\b|\b({0})$)'.format('|'.join(features))
+
+    # Get list of features with generic feature names removed
+    names = []
+    for loc in val:
+        name = re.sub(r'[\(\){}]', '', loc.feature.strip('"'))
+        name = re.sub(pattern, '', name, flags=re.I).strip()
+        if name:
+            names.append(name)
+    return names
 
 
 def get_leftover(val, features=None):

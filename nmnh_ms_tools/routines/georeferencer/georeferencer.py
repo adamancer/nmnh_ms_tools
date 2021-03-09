@@ -223,7 +223,7 @@ class Georeferencer:
             result['location_id'] = site.location_id
             self.results.append(result)
             self.notify('Retrieved from cache')
-            return
+            return result
         except KeyError:
             try:
                 meets_criteria = self.meets_criteria(site, self.callback)
@@ -271,7 +271,7 @@ class Georeferencer:
         except TypeError:
             fn = '{}'.format(site.location_id)
         evaluator.kml(fn, refsite=site)
-        result = OrderedDict(
+        result = dict(
             location_id=site.location_id,
             site=evaluator.result,
             found=True,
@@ -567,7 +567,7 @@ class Georeferencer:
             configure_log('geo', level=level, stream=stream)
 
 
-    def notify(self, outcome):
+    def notify(self, outcome):        
         msg = (f'{self._loc_id}: {outcome}'
                f' ({len(self.results):,}/{self._index + 1:,} succeeded)')
         print(msg)

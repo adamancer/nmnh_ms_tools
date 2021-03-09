@@ -122,7 +122,7 @@ class PLSSParser(Parser):
                 self.specific = True
                 logger.debug('Parsed "{}"'.format(text))
                 return self
-                
+
         raise ValueError('Could not parse "{}"'.format(text))
 
 

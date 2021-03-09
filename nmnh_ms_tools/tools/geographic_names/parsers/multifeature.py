@@ -159,7 +159,7 @@ class MultiFeatureParser(Parser):
     def parse_features(self, vals):
         """Parses features from a list of names"""
         features = []
-        for val in vals:
+        for val in as_list(vals):
             if val:
                 # Parser list is roughly anything that could be used as
                 # a reference point for a direction
@@ -176,10 +176,10 @@ class MultiFeatureParser(Parser):
                     except ValueError:
                         pass
                 else:
-                    if re.match(r'([A-Z]\.? ?)+$', val):
-                        mask = 'Name discarded: "{}" (initials)'
-                        logger.warning(mask.format(val))
-                    else:
+                    # Parser can reject initials and still return a valid match
+                    if not re.match(r'^[A-Z]([\. ]+[A-Z])*[\. ]*$', val):
+                        #mask = 'Name discarded: "{}" from {} (initials)'
+                        #logger.info(mask.format(val, self.verbatim))
                         mask = 'Could not parse: {} (invalid feature)'
                         raise ValueError(mask.format(vals))
         if not features:
@@ -222,12 +222,22 @@ class MultiFeatureParser(Parser):
 
     def split_conjunction(self, val):
         """Splits feature name at a non-and conjunction"""
-        names = re.split(r'\b(?:and|or|y|&|\+)\b', val, flags=re.I)
+
+        # Disregard borders and junctions
+        for parser in (BorderParser, JunctionParser):
+            try:
+                parser().parse(val)
+            except ValueError:
+                pass
+            else:
+                mask = 'Conjunction probably part of border/junction: "{}"'
+                raise ValueError(mask.format(val))
 
         # If only one name found, try splitting on "of" instead of an
         # and-like delimiter. This is a rare case and only applies to
         # pairs of features delimited by "of" where each feature can
         # stand alone.
+        names = re.split(r'\b(?:and|or|y|&|\+)\b', val, flags=re.I)
         if len(names) == 1:
             names = [s.strip() for s in re.split(r'\bof\b', val, flags=re.I)]
             if (
@@ -236,7 +246,7 @@ class MultiFeatureParser(Parser):
                 or ' ' not in names[-1]
                 or names[0].lower().endswith(tuple(OF_WORDS))
             ):
-                mask = '"of" is probably part of name: "{}"'
+                mask = '"of" probably part of name: "{}"'
                 raise ValueError(mask.format(val))
 
         # Do not consider leading or trailing conjunctions
@@ -261,7 +271,7 @@ class MultiFeatureParser(Parser):
                     names = [mask.format(n) for n in (before, name)]
                 else:
                     # Drop the parenthetical is not explicitly a synonym
-                    names = mask.format(before)
+                    names = [mask.format(before)]
             elif before:
                 names = [before, name]
 

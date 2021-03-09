@@ -19,46 +19,64 @@ LAND_FEATURES = {
     'atoll': True,
     'bar': True,
     'borough': True,
+    'butte': True,
     'caldera': True,
     'camp': True,
     'canal': True,
     'cape': True,
     'city': True,
+    'cliff': True,
     'county': True,
+    'crater': True,
     'creek': True,
     'department': True,
     'district': True,
+    'escarpment': True,
     'forest': True,
+    'harbor': True,
     'hill': True,
     'island': True,
     'islands': False,
     'islet': True,
     'lake': True,
+    'maar': True,
     'meadow': True,
+    'mesa': True,
+    'mount': True,
     'mountain': True,
     'mountains': True,
     'mouth': True,
     'municipality': True,
     'pass': True,
+    'peninsula': True,
+    'plateau': True,
     'province': True,
+    'preserve': True,
     'point': True,
+    'reserve': True,
     'river': True,
     'rock': True,
     'spring': True,
     'state': True,
+    'stream': True,
     'sub-province': True,
     'town': True,
+    'tributary': True,
     'valley': True,
     'village': True,
     'volcano': True,
     'well': True
 }
 MARINE_FEATURES = {
+    'archipelago': False,
     'bay': True,
     'beach': True,
     'channel': True,
     'lagoon': True,
     'gulf': False,
+    'ocean': False,
+    'passage': True,
+    'playa': True,
     'reef': True,
     'sea': False,
     'shore': True,
@@ -195,6 +213,11 @@ class FeatureParser(Parser):
 
         if val.isnumeric():
             mask = 'Could not parse "{}" (numeric)'
+            raise ValueError(mask.format(val))
+
+        # Reject borders and junctions
+        if val.lower().startswith(('border of', 'junction of')):
+            mask = 'Could not parse "{}" (border/junction)'
             raise ValueError(mask.format(val))
 
         # Ensure that phrases look feature-like

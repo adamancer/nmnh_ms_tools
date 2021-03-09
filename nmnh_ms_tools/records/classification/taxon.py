@@ -147,7 +147,7 @@ class Taxon(BaseDict):
         return [sp for i, sp in enumerate(faceted) if not sp in faceted[:i]]
 
 
-    def to_emu(self):
+    def _to_emu(self):
         """Converts taxon to EMu etaxonomy record"""
         rec = {
             'ClaScientificName': self.sci_name,

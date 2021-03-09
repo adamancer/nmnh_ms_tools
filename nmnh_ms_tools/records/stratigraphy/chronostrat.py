@@ -92,7 +92,7 @@ class ChronostratHierarchy(Record):
         return True
 
 
-    def to_emu(self, **kwargs):
+    def _to_emu(self, **kwargs):
         """Formats record for EMu"""
         raise NotImplementedError('to_emu')
 

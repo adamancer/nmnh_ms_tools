@@ -137,7 +137,7 @@ class StratUnit(Record):
         return same_as or (same_name and same_level and same_lith and same_pos)
 
 
-    def to_emu(self, **kwargs):
+    def _to_emu(self, **kwargs):
         """Formats record for EMu"""
         raise NotImplementedError('to_emu')
 
@@ -206,8 +206,10 @@ class StratUnit(Record):
 
     def _parse_name(self, unit):
         """Parses base name from unit name"""
-        unit = re.sub(self.level, '', unit, flags=re.I)
-        unit = re.sub(self.lithology, '', unit, flags=re.I)
+        if self.level:
+            unit = re.sub(self.level, '', unit, flags=re.I)
+        if self.lithology:
+            unit = re.sub(self.lithology, '', unit, flags=re.I)
         # Try to strip the more complicated upper/lower stuff
         pattern = r'(\({0}\)|{0}( part of(the ?))?)'.format(self.modifier)
         unit = re.sub(pattern, '', unit, flags=re.I)

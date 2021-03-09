@@ -41,7 +41,7 @@ class Template(Record):
         return self.same_as(other, strict=False)
 
 
-    def to_emu(self, **kwargs):
+    def _to_emu(self, **kwargs):
         """Formats record for EMu"""
         raise NotImplementedError('to_emu')
 

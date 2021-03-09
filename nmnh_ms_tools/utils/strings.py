@@ -1,4 +1,5 @@
 """Defines helper functions for working with strings"""
+import functools
 import re
 
 import inflect
@@ -115,6 +116,7 @@ def add_article(val):
     return 'a {}'.format(val)
 
 
+@functools.lru_cache()
 def to_attribute(val):
     """Constructs a python_attribute string from the given value"""
     val = unidecode(val)
@@ -127,17 +129,20 @@ def to_attribute(val):
     return val.lower().strip('_')
 
 
+@functools.lru_cache()
 def to_camel(val):
     """Constructs a camelCase string from the given value"""
     capped = ''.join([capitalize(w) for w in to_attribute(val).split('_')])
     return lcfirst(capped)
 
 
+@functools.lru_cache()
 def to_pascal(val):
     """Constructs a PacalCasee string from the given value"""
     return ucfirst(to_camel(val))
 
 
+@functools.lru_cache()
 def to_dwc_camel(val):
     """Constructs a DwC case string from the given value"""
     return re.sub(r'Id$', 'ID', to_camel(val))

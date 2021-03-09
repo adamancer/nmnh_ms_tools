@@ -73,9 +73,6 @@ class GeoNamesFeatures:
         ]
         self.csv_kwargs = {'delimiter': '\t', 'quotechar': '"'}
         self.delim = ','
-        # Constantly calling to_attribute slows down imports, so store them when created
-        self._key_to_attribute = {}
-        self._key_to_camel = {}
         # List of geonameid-st_name pairs that should be removed
         self.unwanted_names = {
             3358844: 'atlantic-ocean',
@@ -103,22 +100,11 @@ class GeoNamesFeatures:
         """Maps dictionary to GeoNames schema"""
         mapped = {}
         if reverse:
-            mapped = {}
-            for key, val in rowdict.items():
-                try:
-                    mapped[self._key_to_camel[key]] = val
-                except KeyError:
-                    self._key_to_camel[key] = to_camel(key)
-                    mapped[self._key_to_camel[key]] = val
+            mapped = {to_camel(k): v for k, v in rowdict.items()}
             synonyms = [s['name'] for s in mapped['alternateNames']]
             mapped['alternateNames'] = as_str(synonyms)
         else:
-            for key, val in rowdict.items():
-                try:
-                    mapped[self._key_to_attribute[key]] = val
-                except KeyError:
-                    self._key_to_attribute[key] = to_attribute(key)
-                    mapped[self._key_to_attribute[key]] = val
+            mapped = {to_attribute(k): v for k, v in rowdict.items()}
         return mapped
 
 

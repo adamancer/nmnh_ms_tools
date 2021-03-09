@@ -496,6 +496,30 @@ class GeoNamesBot(Bot):
         return self._find_latlong(url, lat, lng, dec_places, radius=radius)
 
 
+    def postal_code_search_json(self, postal_code, country):
+        """Returns metadata about the given postal code
+
+        Args:
+            postal_code (str): postal code
+            country (str): country name or code
+
+        Returns:
+            JSON representation of point
+        """
+        url = 'http://api.geonames.org/postalCodeSearchJSON'
+
+        if not postal_code or not country:
+            raise ValueError("postal_code and country are both required")
+
+        country = self._map_country([country])[0]
+        # For addresses in the US, strip the ZIP+4 code if given
+        if country == "US":
+            postal_code = postal_code.split("-")[0]
+        return self._query_geonames(url,
+                                    postalcode=postal_code,
+                                    country=country)
+
+
     def get_state(self, name, country_code):
         """Gets the state matching the given name and country code"""
         results = self.search_json(name,

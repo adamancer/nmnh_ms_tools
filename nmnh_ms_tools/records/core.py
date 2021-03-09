@@ -67,6 +67,7 @@ class Record:
         # Reset values for this instance
         self.reset()
         self.verbatim = data
+        self.irn = None
         # Define attribution parameters
         self.attribute_to = None
         self.url_mask = None
@@ -326,6 +327,15 @@ class Record:
         return '<br />'.join(html)
 
 
+    def to_emu(self, use_irn=True, **kwargs):
+        """Converts record to an EMu XML record"""
+        if use_irn and self.irn:
+            return {'irn': irn}
+        rec = self._to_emu()
+        rec.update(kwargs)
+        return rec
+
+
     def _parse(self, rec):
         """Parses pre-formatted data into a record object"""
         for key, val in rec.items():
@@ -338,3 +348,83 @@ class Record:
     def _sortable(self):
         """Returns a sortable version of the object"""
         return str(self)
+
+
+    def _to_emu(self):
+        raise NotImplementedError
+
+
+
+
+class Records(list):
+    """List of records with special methods to test membership"""
+    item_class = Record
+
+    def __init__(self, *args):
+        super().__init__()
+
+        # Does not use the native list transformation because the
+        # the Record class has an __iter__ method that will cause it
+        # to be expanded.
+        if args:
+            if len(args) != 1:
+                raise TypeError('Too many arguments')
+            self.extend(as_list(args[0]))
+
+        self.eq_func = 'similar_to'
+
+
+    def __contains__(self, val):
+        val = self._coerce(val)
+        if self.eq_func == 'equals':
+            return val in self
+
+        # Test membership using a custom method
+        for item in self:
+            if getattr(val, self.eq_func)(item):
+                return True
+
+        return False
+
+
+    def __getitem__(self, i):
+        item = super().__getitem__(i)
+        return self.__class__(item) if isinstance(item, list) else item
+
+
+    def __setitem__(self, i, val):
+        super().__setitem__(i, self._coerce(val))
+
+
+    def append(self, val):
+        super().append(self._coerce(val))
+
+
+    def extend(self, vals):
+        for val in vals:
+            self.append(val)
+
+
+    def insert(self, i, val):
+        super().insert(i, self._coerce(val))
+
+
+    def count(self, val):
+        return super().count(self._coerce(val))
+
+
+    def copy(self):
+        return self.__class__(super.copy())
+
+
+    def unique(self, sort_values=True):
+        unique = [v for i, v in enumerate(self) if v not in self[:i]]
+        if sort_values:
+            unique.sort()
+        return unique
+
+
+    def _coerce(self, val):
+        if isinstance(val, self.item_class):
+            return val
+        return self.item_class(val)

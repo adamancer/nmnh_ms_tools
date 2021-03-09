@@ -232,6 +232,8 @@ class JSONResponse:
 
 
     def __getitem__(self, key):
+        if isinstance(key, int):
+            return self.all(default=[])[0]
         return self._json[key]
 
 
@@ -259,9 +261,9 @@ class JSONResponse:
             return self._response.json()
         except Exception:
             url = self._response.url
-            text = self._response.text[:240]
-            mask = 'Could not cast to JSON: "{}" ({})'
-            raise ValueError(mask.format(text, url))
+            text = self._response.text
+            mask = 'Could not cast to JSON: "{} ({})" ({})'
+            raise ValueError(mask.format(text, self._response.status_code, url))
 
 
     def one(self, default=None):

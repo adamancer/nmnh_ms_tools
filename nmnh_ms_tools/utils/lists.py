@@ -1,7 +1,7 @@
 """Defines helper functions for working with lists"""
 import six
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, KeysView, ValuesView
 
 
 
@@ -21,9 +21,11 @@ def as_list(val, delims='|;'):
                 if len(vals) > 1:
                     return vals
         return [val]
-    if isinstance(val, (set, tuple)):
+    if isinstance(val, (set, tuple, KeysView, ValuesView)):
         return list(val)
-    raise TypeError('Cannot coerce {} to list'.format(type(val)))
+    #raise TypeError('Cannot coerce {} to list'.format(type(val)))
+    # Fall back to a single-item list
+    return [val]
 
 
 def as_set(val, delims='|;'):
@@ -63,7 +65,7 @@ def oxford_comma(lst, lowercase=False, delim=', ', conj='and'):
     if len(lst) <= 1:
         return ''.join(lst)
     if len(lst) == 2:
-        return ' {} '.format(conj).join(lst)
+        return ' {} '.format(conj if conj else delim).join(lst)
     last = lst.pop()
     return delim.join(lst) + delim + conj + ' ' + last
 

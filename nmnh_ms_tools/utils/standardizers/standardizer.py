@@ -135,16 +135,18 @@ class Standardizer:
 
 
     def same_as(self, val, other, kind='exact', **kwargs):
-        """Checks if two values are the same"""
-        assert kind in {'all', 'any', 'exact'}
+        """Checks if two values are the same or similar"""
+        assert kind in {'all', 'any', 'exact', 'in'}
         # Evaluates to False if either value is empty
         if not val or not other:
             return False
+
         # Check for exact match on a simple standardization
         st_val = re.sub(r'[^A-Za-z0-9]', '', val).lower()
         st_other = re.sub(r'[^A-Za-z0-9]', '', other).lower()
         if st_val == st_other:
             return True
+
         # Exact string comparison. Wrapped in a try-except to catch
         # values that can't be standardized.
         try:
@@ -154,18 +156,36 @@ class Standardizer:
                 return st_val == st_other
         except ValueError:
             return False
+
         # Compare sets
         st_val = set(st_val.split(self.delim))
         st_other = set(st_other.split(self.delim))
-        if 'any':
-            return bool(st_val & st_other)
+        if kind == 'any':
+            xtn = st_val & st_other
+            # This is a very permissive comparison, but matches that consist
+            # of a single short number are unreliable and are disregarded
+            if not all([s.isnumeric() and len(s) < self.minlen for s in xtn]):
+                return bool(xtn)
+
         return st_val == st_other
 
 
-    def words(self, val):
+    def words(self, val, use_delim=True):
         if isinstance(val, str):
-            return val.split(self.delim), False
+            if use_delim:
+                return val.split(self.delim), False
+
+            # Split on non-alphanumeric characters if not using delimiter
+            val = re.sub(r"([a-z])'([a-z])", r'\1\2', val)
+            return [w for w in re.split(r'[^A-z0-9]+', val) if w], False
+
         return val, True
+
+
+    def delimit(self, val, lower=True):
+        """Returns a delimited version of the string"""
+        delimited = self.delim.join(self.words(val, use_delim=False)[0])
+        return delimited.lower() if lower else delimited
 
 
     def move(self, val, terms, index=0):

@@ -17,6 +17,14 @@ class BaseDict(dict):
         super(BaseDict, self).__setitem__(key, self._coerce_dicts(val))
 
 
+    def get(self, key, default=None):
+        """Explicitly route get through class.__getitem__"""
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+
     def update(self, *args, **kwargs):
         """Explicitly routes update through class.__setitem__"""
         for key, val in dict(*args, **kwargs).items():

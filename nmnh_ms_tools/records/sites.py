@@ -296,7 +296,6 @@ class Site(Record):
         self.admin_div_2 = []
         self.admin_code_2 = []
         self.related_sites = []
-        self.sources = []  # hmm
         self.other_ids = {}
         self.interpreted = {}
         # Define additional attributes required for parse
@@ -1128,6 +1127,7 @@ class Site(Record):
         # source is not always GeoNames.
         source = data.get('source')
         self.site_source = source if source else 'GeoNames (CC-BY-4.0)'
+        self.sources.append(self.site_source)
         # Get names and alternate names
         self.synonyms = [data.get('name'), data.get('toponymName')]
         names = data.get('alternateNames', [])

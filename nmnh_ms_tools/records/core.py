@@ -72,6 +72,7 @@ class Record:
         self.attribute_to = None
         self.url_mask = None
         self.url = None
+        self.sources = []
         # Define indexing params
         self._indexed = None
         self._state = {}
@@ -79,7 +80,6 @@ class Record:
         if isinstance(data, self.__class__):
             data = data.to_dict()
         self.parse(data)
-        self.sources = []
 
 
     def __str__(self):

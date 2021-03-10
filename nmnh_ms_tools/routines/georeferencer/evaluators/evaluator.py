@@ -537,12 +537,17 @@ class MatchEvaluator:
         # especially if only limited admin info is provided. Note that this
         # block will not fire for very large features that are discarded
         # earlier on.
-        polygons = self.site.get_admin_polygons()
-        admin = ('county', 'state_province', 'country')
-        for field in admin:
-            admin = getattr(self.site, field)
-            if admin and field not in {s.field for s in sites}:
-                geom = self.constrain(geom, polygons[field], field)
+        #
+        # Do not constrain directions. Admin info on directions is often
+        # given for the location the directions are calculated from and
+        # may be misleading if applied to the direction.
+        if not any([s.site_kind == "direction" for s in sites]):
+            polygons = self.site.get_admin_polygons()
+            admin = ('county', 'state_province', 'country')
+            for field in admin:
+                admin = getattr(self.site, field)
+                if admin and field not in {s.field for s in sites}:
+                    geom = self.constrain(geom, polygons[field], field)
 
         # Extend polygon into ocean
         if extend_into_ocean or self.site.is_marine():

@@ -9,6 +9,7 @@ import requests_cache
 from lxml import etree
 
 from ..config import CONFIG
+from ..utils import to_attribute
 
 
 
@@ -87,6 +88,15 @@ class Bot:
     def validate(self, response):
         """Placeholder function to validate response"""
         return True
+
+
+    def download(self, url, path, ext=None, chunk_size=8192):
+        # FIXME: Get path if not provided
+        with requests.get(url, stream=True) as r:
+            r.raise_for_status()
+            with open(path, 'wb') as f:
+                for chunk in r.iter_content(chunk_size=chunk_size):
+                    f.write(chunk)
 
 
     def handle_error(self, response):

@@ -22,7 +22,7 @@ def hasher(filestream, size=8192):
         size (int): size of block. Should be multiple of 128.
 
     Return:
-        Tuple of (filename, hash)
+        MD5 hash of file
     """
     if size % 128:
         raise ValueError('Size must be a multiple of 128')
@@ -44,7 +44,8 @@ def hash_file(path):
     Returns:
         Hash as string
     """
-    return hasher(open(path, 'rb'))
+    with open(path, 'rb') as f:
+        return hasher(f)
 
 
 def hash_file_if_exists(path):

@@ -43,6 +43,14 @@ routines:
       - field: municipality
         codes:
           - P
+      - field: municipality2
+        codes:
+          - ADM3
+          - ADM3H
+          - ADM4
+          - ADM4H
+          - ADM5
+          - ADM5H
       - field: features
         codes:
           - A
@@ -54,9 +62,14 @@ routines:
           - T
           - U
           - V
-      - field: municipality2
+      - field: municipality3
         codes:
-          - A
+          - ADM3
+          - ADM3H
+          - ADM4
+          - ADM4H
+          - ADM5
+          - ADM5H
           - H
           - L
           - P

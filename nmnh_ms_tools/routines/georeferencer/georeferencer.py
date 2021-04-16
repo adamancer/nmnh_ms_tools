@@ -67,7 +67,6 @@ class Georeferencer:
             '.csv': self.read_gbif,
             '.txt': self.read_gbif,
         }
-        self.records = records
         # Set pipes
         if pipes is None:
             pipes = [
@@ -107,6 +106,8 @@ class Georeferencer:
         self._notified = False
         # Capture any tests
         self.tests = self.read_tests(tests)
+        # Get records
+        self.records = records
 
 
     def __iter__(self):
@@ -170,7 +171,7 @@ class Georeferencer:
         else:
             self.path = None
             self.slug = 'records'
-            self._records = records[:]
+            self._records = records[self.skip:]
 
 
     def georeference(self):
@@ -567,7 +568,7 @@ class Georeferencer:
             configure_log('geo', level=level, stream=stream)
 
 
-    def notify(self, outcome):        
+    def notify(self, outcome):
         msg = (f'{self._loc_id}: {outcome}'
                f' ({len(self.results):,}/{self._index + 1:,} succeeded)')
         print(msg)

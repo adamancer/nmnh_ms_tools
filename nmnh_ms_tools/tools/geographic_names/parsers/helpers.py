@@ -14,7 +14,7 @@ from .border import BorderParser
 from .direction import DirectionParser
 from .feature import FEATURES, OF_WORDS, FeatureParser
 from .measurement import MeasurementParser
-from .modified import ModifiedParser, is_modified_feature
+from .modified import ModifiedParser
 from .multifeature import MultiFeatureParser
 from .plss import PLSSParser
 from .simple import SimpleParser

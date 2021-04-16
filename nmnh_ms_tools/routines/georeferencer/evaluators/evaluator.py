@@ -20,7 +20,8 @@ from ....config import CONFIG
 from ....databases.georef_data import OceanQuery
 from ....tools.geographic_operations.geometry import GeoMetry
 from ....records import Site
-from ....utils import as_set
+from ....tools.geographic_names.parsers.modified import abbreviate_direction
+from ....utils import as_set, most_common
 
 
 
@@ -33,7 +34,7 @@ logger = logging.getLogger(__name__)
 STATUSES = {
     'admin',          # an administratic division
     'constrained',    # selection constrained to intersection with this site
-    'encompassing',   # selection falls within these sites
+    'encompassing',   # selection contained by these sites
     'intersecting',   # selection intersects these sites
     'less specific',  # selection is more specific than these sites
     'more specific',  # selection is less specific but
@@ -46,7 +47,9 @@ STATUSES = {
     'rejected (disjoint on higher geo)',  # disjoint on admin or cont/ocean/sea
     'rejected (disjoint)',                # disjoint from other sites
     'rejected (not reconciled)',          # no coherent georeference possible
-    'rejected (outlier)'                  # far away from other sites
+    'rejected (outlier)',                 # far away from other sites
+    'rejected (ancillary match)',         # matched secondary definition
+    'rejected (encompassed)'              #
 }
 REJECTED = {
     'rejected (duplicate)',
@@ -55,7 +58,9 @@ REJECTED = {
     'rejected (disjoint on higher geo)',
     'rejected (disjoint)',
     'rejected (not reconciled)',
-    'rejected (outlier)'
+    'rejected (outlier)',
+    'rejected (ancillary match)',
+    'rejected (encompassed)'
 }
 # Job parameters
 MAX_SITES = 150
@@ -193,9 +198,10 @@ class MatchEvaluator:
         return self
 
 
-    def key(self, site):
+    def key(self, site, strip_num=True):
         """Returns field:name for the given site"""
-        return '{}:{}'.format(self.field(site.field), site.filter['name'])
+        field = self.field(site.field) if strip_num else site.field
+        return '{}:{}'.format(field, site.filter['name'])
 
 
     @staticmethod
@@ -228,14 +234,50 @@ class MatchEvaluator:
         if sites is None or sites == self.sites:
             sites = self.sites[:]
 
+        for site in sites:
+            input(site)
+
+        # Standardize keys that use compass directions
+        keys = {}
+        for site in sites:
+            key = self.key(site)
+            keys.setdefault(abbreviate_direction(key), []).append(key)
+
+        for key, vals in keys.items():
+            if len(set(vals)) != 1:
+                preferred = most_common(vals)
+                for site in sites:
+                    key = self.key(site)
+                    if key in vals and key != preferred:
+                        site.filter['name'] = preferred.split(':')[-1]
+
         # Check if too many sites given
         logger.debug('{:,} sites remain after initial cull'.format(len(sites)))
         if len(sites) > MAX_SITES:
             mask = 'Too many candidates to encompass ({}/{})'
             raise ValueError(mask.format(len(sites), MAX_SITES))
+
+        # Cull related and duplicate sites
         sites = self.uninterpreted(self.ignore_related(sites))
         sites = self.uninterpreted(self.dedupe(sites))
         logger.debug('Unique geometries: {}'.format(self.names(sites)))
+
+        # Cull matches on ancillary field definitions if primary was found.
+        # For example, the township field in EMu sometimes contains sites
+        # coded by GeoNames as admin divisions. These are captured
+        # separately from the more common case where the municipality is
+        # a town or city and can be dropped if the common case matches.
+        #
+        # This is located here to prevent names that match both admin and
+        # non-admin sites from being automatically interpreted as admin in
+        # the next block. It clearly overlaps with disentangle_names.
+        #
+        # TODO: Assess whether to integrate this into disentangle_names
+        # TODO: Assess whether this is necessary after adding cap city check
+        #ancillary = self.find_ancillary(sites)
+        #self.interpret(ancillary, 'rejected (ancillary match)')
+        #sites = self.uninterpreted(sites)
+        #logger.debug('Matched primary: {}'.format(self.names(sites)))
 
         # Extract large features like admin divisions, oceans, and seas
         terr = self.uninterpreted(self.validate_against_higher_geo(sites))
@@ -244,11 +286,11 @@ class MatchEvaluator:
         logger.debug('Matches marine: {}'.format(self.names(marine)))
         sites = terr + marine
 
-        # Check againt very large features
+        # Check sites against very large features
         sites = self.uninterpreted(self.validate_against_large(sites))
         logger.debug('Intersects continent/ocean: {}'.format(self.names(sites)))
 
-        # Make some eductaed guesses about how to interpret names if multiple
+        # Make some eductaed guesses about how to interpret multiple matches
         sites = self.uninterpreted(self.disentangle_names(sites))
         logger.debug('Names disentangled: {}'.format(self.names(sites)))
 
@@ -260,10 +302,10 @@ class MatchEvaluator:
             if not encompassing or not encompassed or encompassed == sites:
                 encompassing, encompassed = self.encompassing(sites)
             if encompassing and encompassed and encompassed != sites:
-                logger.debug('Found encompassing sites')
+                logger.debug('Found encompassing sites: {}'.format(self.names(encompassing)))
                 self.interpret(encompassing, 'encompassing', True)
                 others = [s for s in self.uninterpreted() if s not in encompassed]
-                self.interpret(others, 'rejected (interpreted elsewhere)')
+                self.interpret(others, 'rejected (disjoint)')
                 return self.encompass(encompassed, max_dist_km=max_dist_km)
 
         # Return encompassing sites to the pool if no sites remain
@@ -289,6 +331,7 @@ class MatchEvaluator:
         sites = self.uninterpreted(self.discard_outliers(sites))
 
         # Examine parsed locality strings
+        # FIXME: This does not work anymore
         logger.debug('Examining parsed strings')
         parsers = (
             'BetweenParser',
@@ -326,7 +369,6 @@ class MatchEvaluator:
                 restricted_to_admin.append(site)
         sites = restricted_to_admin
         logger.debug('Restricted to admin: {}'.format(self.names(sites)))
-
 
         # Look for most specific names
         names = self.most_specific_names(sites)
@@ -373,29 +415,46 @@ class MatchEvaluator:
 
         # One specific name found, but multiple sites match that name
         if len(names) == 1 and len(specific) > 1:
+
+            # Limit results to sites that match the current name
+            current = self.find_current_names(specific)
+            if current and len(current) != len(specific):
+                geom, valid = self.encompass_name(current)
+                if valid:
+                    logger.debug('Matched on current names only')
+                    others = [s for s in specific if s not in current]
+                    msg = ('excludes features where this name is listed as'
+                           ' a synonym or alternate name')
+                    self.explain(others, msg)
+                    self.interpret(others, 'rejected (interpreted elsewhere)')
+                    return self.select(self.uninterpreted(current), geom)
+                mask = 'Could not encompass current {} (radius={:.2f} km)'
+                logger.debug(mask.format(names[0], geom.radius_km))
+
+            # Limit results to populated places
+            cities = self.find_major_cities(specific)
+            if cities and len(cities) != len(specific):
+                geom, valid = self.encompass_name(cities)
+                if valid:
+                    logger.debug('Matched cities matching one name')
+                    others = [s for s in specific if s not in cities]
+                    if all([re.match(r'^PPL[AC]', s.site_kind) for s in cities]):
+                        msg = ('includes only capital cities matching this name')
+                    else:
+                        msg = ('includes only populated places matching this name')
+                    self.explain(others, msg)
+                    self.interpret(others, 'rejected (interpreted elsewhere)')
+                    return self.select(self.uninterpreted(cities), geom)
+                mask = 'Could not encompass cities {} (radius={:.2f} km)'
+                logger.debug(mask.format(names[0], geom.radius_km))
+
+            # Failing that, encompass all matching names
             geom, valid = self.encompass_name(specific)
             if valid:
                 logger.debug('Matched multiple instances of one name')
                 # The encompass_name method can toss sites from the list, so
                 # limit sites being selected to those that are uninterpreted
                 return self.select(self.uninterpreted(specific), geom)
-
-            # Limit results to populated places
-            cities = self.find_major_cities(specific)
-            if cities:
-                geom, valid = self.encompass_name(cities)
-                if valid:
-                    logger.debug('Matched cities matching one name')
-                    others = [s for s in specific if s not in cities]
-                    if all([re.match(r'^PPL[AC]', s.site_kind) for s in cities]):
-                        msg = 'excluded all features except capital cities'
-                    else:
-                        msg = 'excluded all features except populated places'
-                    self.explain(others, msg)
-                    self.interpret(others, 'rejected (interpreted elsewhere)')
-                    return self.select(self.uninterpreted(cities), geom)
-                mask = 'Could not encompass name {} (radius={:.2f} km)'
-                logger.debug(mask.format(names[0], geom.radius_km))
 
         # Multiple names of similar specificity found
         if len(names) > 1:
@@ -463,7 +522,10 @@ class MatchEvaluator:
                 field, polygon = self.smallest_encompassing
                 for site in sorted(terr, key=lambda s: -s.radius_km):
                     geom = self.constrain(site.geometry, polygon, field)
-                    if (geom.radius_km <= max_dist_km * 5
+                    # The first line in the conditional verifies that
+                    # constrain is actually making the site geometry smaller
+                    if (geom.radius_km <= site.geometry.radius_km * 0.9
+                        and geom.radius_km <= max_dist_km * 5
                         and geom.radius_km < polygon.radius_km):
                             logger.debug('Matched combination of'
                                          ' terrestial features')
@@ -523,7 +585,9 @@ class MatchEvaluator:
 
     def select(self, sites, geom=None, extend_into_ocean=False):
         """Select sites and compute geometry"""
-        assert isinstance(sites, (list, tuple)), 'sites must be list-like'
+        if not isinstance(sites, (list, tuple)):
+            raise ValueError('sites must be list-like')
+
         self.interpret(sites, 'selected')
         for site in sites:
             self.sources.extend(site.sources)
@@ -558,6 +622,11 @@ class MatchEvaluator:
 
         # Flag anything that hasn't been handled as unreconciled
         self.interpret(self.uninterpreted(), 'rejected (not reconciled)')
+
+        # Double radius if selected uses the "near" keywords
+        selected = self.interpreted_as('selected')
+        if len(selected) == 1 and '(near)' in self.key(selected[0]):
+            geom.radius_km *= 2
         self.geometry = geom
 
         # Summarize selection
@@ -594,52 +663,89 @@ class MatchEvaluator:
 
 
     def disentangle_names(self, sites=None, aggressive=True):
-        """Evaluates likely matches for names that match more than one site
+        """Selects likely matches for names that match more than one site
 
-        This function is one source of the "best match" for names corresponding to
-        multiple sites in MatchAnnotator. The best match will be a town/city, if present.
-        Failing that, the best match is anything that isn't classified by GeoNames as
-        a spot.
+        This function is one source of the "best match" for names
+        corresponding to multiple sites in MatchAnnotator. The best match
+        will be a town/city, if present. Failing that, the best match is
+        anything that isn't classified by GeoNames as a spot.
         """
         if sites is None:
             sites = self.sites[:]
         for name, group in self.group_by_name(sites).items():
             # Check for mutually intersecting groups
             if len(group) > 1 and group[0].intersects_all(group[1:]):
+
                 # Prefer encompassing
                 codes = set(CODES_ADMIN + CODES_ISLANDS)
                 enc = [s for s in group if s.site_kind in codes]
                 if enc:
                     others = [s for s in group if s.site_kind not in codes]
-                    self.explain(others, ('excluded all features except'
-                                          ' admin divisions and islands'))
+                    features = []
+                    admin = [s for s in enc if s.site_kind in CODES_ADMIN]
+                    if admin:
+                        features.append("administrative divisions")
+                        # Specify if admin divisions are ADM3 or smaller
+                        # NOTE: Not needed if feature code included
+                        #kinds = [s.site_kind for s in admin]
+                        #admin_num = int(re.search(r"\d", kinds[0]).group())
+                        #if len(set(kinds)) == 1 and admin_num >= 3:
+                        #    features[-1] = "small admin divisions"
+                    if [s for s in enc if s.site_kind in CODES_ISLANDS]:
+                        features.append("islands")
+                    features = ' and '.join(features)
+
+                    self.explain(others, (f'excludes all features matching'
+                                          f' this name except {features}'))
                     self.interpret(others, 'rejected (interpreted elsewhere)')
                     continue
+
                 # Prefer populated places
                 places = [s for s in group if s.site_class == 'P']
                 if places:
                     others = [s for s in group if s.site_class != 'P']
-                    self.explain(others, ('excluded all features except'
-                                          ' populated places'))
+                    self.explain(others, ('includes only populated places'
+                                          ' matching this name'))
                     self.interpret(others, 'rejected (interpreted elsewhere)')
                     continue
+
                 # Discard building and spot names
                 places = [s for s in group if s.site_class != 'S']
                 if places and places != sites:
                     others = [s for s in group if s.site_class == 'S']
-                    self.explain(others, 'excluded buildings and spots')
+                    self.explain(others, ('excludes buildings and spots'
+                                          ' matching this name'))
                     self.interpret(others, 'rejected (interpreted elsewhere)')
                     continue
             elif len(group) > 1:
                 mask = 'Sites matching "{}" are not mutually intersecting'
                 logger.debug(mask.format(group[0].filter['name']))
+
+                # Check for ancillary matches
+                ancillary = self.find_ancillary(group)
+                if ancillary:
+                    self.interpret(ancillary, 'rejected (ancillary match)')
+                    logger.debug('Matched primary: {}'.format(self.names(group)))
         return self.uninterpreted(sites)
+
+
+    def find_current_names(self, sites=None):
+        """Finds sites that match on the preferred name"""
+        if sites is None:
+            sites = self.sites[:]
+        return [s for s in sites if s.filter['name'] in s.site_names[0]]
 
 
     def find_major_cities(self, sites=None):
         """Finds cities in a list of sites, preferring capitals if they exist"""
         if sites is None:
             sites = self.sites[:]
+
+        # City check is invalid for sites parsed using the ModifiedParser
+        for site in sites:
+            print(site)
+        input()
+
         capitals = [s for s in sites if re.match(r'^PPL[AC]', s.site_kind)]
         if capitals:
             return capitals
@@ -759,10 +865,26 @@ class MatchEvaluator:
             sites = self.sites[:]
         terr, marine = self.split_land_sea(sites)
 
+        # Get admin polygons and use admin codes to filter out low-quality
+        # matches on country, state_province, and county
+        polygons = self.site.get_admin_polygons()
+        reject = []
+        for name_field, code_field in zip(self.site.adm.name_fields,
+                                          self.site.adm.code_fields):
+            codes = as_set(getattr(self.site, code_field))
+            for site in sites:
+                if (
+                    site.field.startswith(name_field)
+                    and as_set(getattr(site, code_field)).isdisjoint(codes)
+                ):
+                    reject.append(site)
+        if reject:
+            self.interpret(reject, 'rejected (interpreted as admin)')
+            sites = self.uninterpreted(sites)
+
         # Verify that sites overlap with the most specific administrative
         # division specified in the original record. This ensures that matches
         # from GeoNames aren't in the wrong hemisphere or something.
-        polygons = self.site.get_admin_polygons()
         for field in ('county', 'state_province', 'country'):
             try:
                 polygon = polygons[field].resize(RESIZE)
@@ -1051,12 +1173,19 @@ class MatchEvaluator:
             for term in result.terms_checked - result.terms_matched:
                 missed.setdefault(term, []).append(result.field)
         countries = {s.country for s in self._sites}
+
         # Add related sites to matched
         matched = list(self.terms_matched)
         for site in self.active():
             matched.extend([s.name for s in site.related_sites])
-        missed = {k: v[0] for k, v in missed.items()
-                  if k not in countries | set(matched)}
+        matched = {abbreviate_direction(s) for s in matched}
+
+        # Remove terms from missed if they're equivalent to a matched term
+        missed = {
+            k: v[0] for k, v in missed.items()
+            if k not in countries and abbreviate_direction(k) not in matched
+        }
+
         terms = ['{}="{}"'.format(v, k.strip('"')) for k, v in missed.items()]
         return sorted(set(terms))
 
@@ -1219,6 +1348,39 @@ class MatchEvaluator:
         if sites is None or sites == self.sites:
             sites = self.sites[:]
         rel = self.map_relationships(sites)
+
+        # Scrub relationships between sites with the same name. Basically,
+        # if a site contains one site with the same name, it must also
+        # have a relationship with all other sites with that name for the
+        # relationship to be considered meaningful. This is intended to
+        # prevent clusters of widely distributed sites of the same name from
+        # being selected simply because that cluster is related.
+        all_keys = {}
+        for site in sites:
+            all_keys.setdefault(self.key(site), []).append(site.location_id)
+
+        for site_id, related in rel.items():
+
+            # Is site a parent/child of all other sites with the same key?
+            site_ids = all_keys[self.key(self.expand(site_id))]
+            rel_ids = [site_id] + related["parents"] + related["children"]
+            rel_ids = [s for s in rel_ids if s in site_ids]
+
+            # If not, scrub those relationships
+            if len(rel_ids) > 1 and set(site_ids) != set(rel_ids):
+
+                # Remove site from list of parents of each child
+                children = [s for s in related["children"] if s in rel_ids]
+                for child_id in children:
+                    rel[child_id]["parents"] = [
+                        s for s in rel[child_id]["parents"] if s not in site_ids
+                    ]
+
+                # Remove children with same name
+                rel[site_id]["children"] = [
+                    s for s in rel[site_id]["children"] if s not in rel_ids
+                ]
+
         all_names = sorted({self.key(s) for s in sites})
         target = []
         related = []
@@ -1230,10 +1392,29 @@ class MatchEvaluator:
             # Get list of related names from others
             other_names = {self.key(s) for s in others}
             # Test if all names are accounted for in other_names
-            if names and not names - other_names:
+            if len(all_names) == 1 or (names and not names - other_names):
                 target.append(site)
                 related.extend(others)
         return target, related
+
+
+    def find_ancillary(self, sites=None):
+        if sites is None or sites == self.sites:
+            sites = self.sites[:]
+
+        keyed = {}
+        for site in sites:
+            key = self.key(site, False)
+            keyed.setdefault(key, []).append(site)
+
+        alpha = {k: v for k, v in keyed.items() if not re.search(r"\d:", k)}
+
+        ancillary = []
+        for key, sites in keyed.items():
+            if key not in alpha and re.sub(r"\d:", ":", key) in alpha:
+                ancillary.extend(sites)
+
+        return ancillary
 
 
     def encompassed(self, sites=None):
@@ -1377,28 +1558,42 @@ class MatchEvaluator:
         for key, status in self.interpreted.items():
             site = self.expand(key)
             statuses.setdefault(self.key(site), []).append(status)
+
         ignored = []
         for key, statuses in statuses.items():
             statuses = set(statuses)
+
+            # Rejected records are considered handled if they have a
+            # non-rejected status or are not superseded by a match on
+            # an identical name.
             if (not statuses - REJECTED
-                and statuses != {'rejected (interpreted elsewhere)'}):
+                and statuses - {'rejected (ancillary match)',
+                                'rejected (interpreted elsewhere)'}):
                     ignored.append(key)
+
         return [s.split(':', 1)[1] for s in ignored]
 
 
-    def reject_interpreted(self, sites=None, interpreted=None,
-                           status='rejected (interpreted elsewhere)',
-                           interpretation=None):
+    def reject_interpreted(
+        self,
+        sites=None,
+        interpreted=None,
+        status='rejected (interpreted elsewhere)',
+        interpretation=None
+    ):
         """Finds and rejects sites similar to those in the given site list"""
         if sites is None:
             sites = self.uninterpreted()
         if interpreted is None:
             interpreted = self.interpreted
 
-        # Use a special status for names that overlap with admin. This
-        # prevents rejected sites from showing up in the description.
-        if interpretation == 'admin':
-            status = 'rejected (interpreted as admin)'
+        # Assign status to other sites based on interpretation
+        interpretations = {
+            'admin': 'rejected (interpreted as admin)',
+            'encompassed': 'encompassing',
+            'encompassing': 'rejected (encompassed)'
+        }
+        status = interpretations.get(interpretation, status)
 
         # Ignore matches from locality if name occurs specifically elsewhere
         keys = [self.key(s) for s in interpreted]
@@ -1408,8 +1603,7 @@ class MatchEvaluator:
 
         # Explain interpretation if given
         if interpretation in {'admin', 'encompassing'}:
-            self.explain(rejectees, 'used the largest encompassing feature')
-
+            self.explain(rejectees, 'uses the largest encompassing feature')
 
 
     def append(self, result):

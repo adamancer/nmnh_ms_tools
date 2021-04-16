@@ -89,6 +89,7 @@ OTHER_FEATURES = {
     'bridge': True,
     'dredge': False,
     'map': True,
+    'quad': True,
     'quadrangle': True,
     'road': True,
     'route': True,

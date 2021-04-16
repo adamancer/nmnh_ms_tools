@@ -1154,9 +1154,13 @@ class Site(Record):
             except KeyError:
                 self.geometry = GeoMetry((data['lat'], data['lng']))
 
+        # Map explicitly defined URL to url_mask
+        if data.get('url'):
+            self.url_mask = data['url']
+
         # Custom locations may use the GeoNames API, so only apply this
-        # url mask if the location_id is numerific
-        if self.location_id.isnumeric():
+        # url mask if the location_id is numeric
+        elif self.location_id.isnumeric():
             self.url_mask = 'http://geonames.org/{location_id}'
 
         # Clear invalid county names (e.g., US.WA.000)

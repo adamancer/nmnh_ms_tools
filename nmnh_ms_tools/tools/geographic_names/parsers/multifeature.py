@@ -112,7 +112,7 @@ class MultiFeatureParser(Parser):
     def parse(self, val, allow_generic=False):
         """Parses string that may contain more than one feature"""
         # Not intended for delimited strings
-        if re.search(r'[:;,\|]', val) and not is_modified_feature(val):
+        if re.search(r'[:;,\|]', val) and not is_modified_feature(val, False):
             raise ValueError('Could not parse: "{}" (delimited)'.format(val))
         val = val.strip()
         self.verbatim = val

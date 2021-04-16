@@ -95,9 +95,10 @@ class ModifiedParser(Parser):
             return [self.feature]
         variants = []
         if '{'  not in self.feature:
-            long_dir = expand_direction(self.modifier, False)
-            adj_dir = expand_direction(self.modifier, True)
-            # Order the modifiers based on the original string
+            long_dir = expand_direction(self.modifier, False)  # North
+            adj_dir = expand_direction(self.modifier, True)    # Northern
+            # Order the modified names based on the form of the modifier in
+            # the original string
             mods = ['', long_dir, adj_dir]
             if self.adj:
                 mods = [adj_dir, long_dir, '']
@@ -126,10 +127,13 @@ class ModifiedParser(Parser):
         except ValueError:
             pass
 
-        if not is_modified_feature(val) and val.count('-') == 1:
+        # Try replacing hyphens with commas to catch cases where direction
+        # is delimited by a hyphen (ex. "Maine - Northern")
+        if not is_modified_feature(val, False) and val.count('-') == 1:
             val = re.sub(r'\s*-\s*', ', ', val)
 
-        if not is_modified_feature(val):
+        # Test if modified feature
+        if not is_modified_feature(val, False):
             mask = 'Could not parse "{}" (not a modified feature)'
             raise ValueError(mask.format(val.strip('"')))
 
@@ -246,10 +250,21 @@ class ModifiedParser(Parser):
 def is_modified_feature(val, test_intrinsic=True):
     """Tests if string appears to be a modified feature name"""
     # Is the directional information likely to be an intrinsic part of the
-    # feature name (e.g., North Carolina)?
+    # feature name (e.g., North Carolina)? This is a holdover from an
+    # earlier implementation of the ModifiedParser where names like North
+    # Carolina (where the modifier is actually a part of the name) were not
+    # prioritized during the georeference. The test_intrinsic parameter
+    # should probably always be False.
     if test_intrinsic and is_intrinsic(val):
         logger.debug('Intrinsic modifier: "{}"'.format(val.strip('"')))
         return False
+
+    # Is the feature name ONLY directional terms (e.g., North West)?
+    # NOTE: Hashed because these names are not captured by FeatureParser
+    #pattern = r'^(north|south|east|west)([ -](north|south|east|west))*$'
+    #if re.match(pattern, val, flags=re.I):
+    #    logger.debug('All directions: "{}"'.format(val.strip('"')))
+    #    return False
 
     # Does the feature name match the general format expected for a modified
     # feature name?
@@ -344,7 +359,6 @@ def get_modified_patterns(match_start=False, match_end=False, masks=None):
     dirs = ['North', 'South', 'East', 'West']
     dirs = ['{}(?:{})?'.format(d[0], d[1:]) for d in dirs]
     dirs = r'(?:{})'.format('|'.join(dirs))
-    #dirs = r'(?:(?:{})\.? ?){{1,2}}(?:ern)?'.format(dirs)
     dirs = r'(?:{0}(?:[- \.]*{0})?(?:ern(?:most)?)?)'.format(dirs)
     vicinity = r'(?:{})'.format('|'.join(OF_WORDS))
     parts = {
@@ -362,3 +376,15 @@ def get_modified_patterns(match_start=False, match_end=False, masks=None):
 def get_any_feature_pattern():
     """Matches simple features or simple modified features"""
     return get_modified_patterns(masks=[r'((?:{dirs}{mod}? )?{feature})'])[0]
+
+
+def abbreviate_direction(name):
+
+    def abbreviate(match):
+        short_dir = match.group().lower().replace("ern", "")
+        for dirname in ["north", "south", "east", "west"]:
+            short_dir = short_dir.replace(dirname, dirname[0].upper())
+        return short_dir
+
+    pattern = r"\b(north|south|east|west)+(ern)?\b"
+    return re.sub(pattern, abbreviate, name, flags=re.I)

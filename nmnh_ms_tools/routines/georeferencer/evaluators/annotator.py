@@ -97,6 +97,10 @@ class MatchAnnotator(MatchEvaluator):
             kml.add_site(refsite, 'measured')
         # Get all selected and candidate sites
         candidates = self.sites[:]
+
+        statuses = {'rejected (encompassed)'}
+        candidates.extend(self.interpreted_as(statuses))
+
         for site in self.active():
             if site.site_kind not in {'CONT', 'OCN'}:
                 candidates.append(site)
@@ -254,17 +258,26 @@ class MatchAnnotator(MatchEvaluator):
 
     def _describe_multiples(self):
         """Lists names that matched multiple sited and gives interpretation"""
-        sites = []
         selected = self.interpreted_as('selected')
+        encompassed = self.interpreted_as('rejected (encompassed)')
         rejected = self.interpreted_as('rejected (interpreted elsewhere)')
-        groups = self.group_by_name(selected + rejected)
+
+        groups = self.group_by_name(selected + encompassed + rejected)
+        sites = []
         for name, group in groups.items():
             count = len(group)
             if count > 1:
-                sites.append('{} (n={})'.format(name.split(':', 1)[1], count))
+                name = self.quote(name.split(':', 1)[1])
+                # Don't mention places that were ignored
+                if name not in self.ignored():
+                    mask = '{} (n={})'
+                    if group[0].intersects_all(group[1:]):
+                        mask = '{} (n={}, all intersecting)'
+                    sites.append(mask.format(name, count))
+
         if sites:
             mask = ('The following place names mentioned in this record'
-                    ' matched multiple records: {}. The final georeference ')
+                    ' match multiple places: {}. The final georeference ')
             if len(selected) == 1:
                 name = sites[0].split(' (n=')[0]
                 explanations = self.multiples.get(name, [])
@@ -272,11 +285,17 @@ class MatchAnnotator(MatchEvaluator):
                     logger.warning('Could not explain "{}"'.format(name))
                     mask += 'uses the best match on this name'
                 else:
-                    mask += '{} matching this name'.format(explanations[0])
-            elif len(groups) == 1 and len(groups[list(groups.keys())[0]]) == 2:
-                mask += 'includes both features matching this name'
-            elif len(groups) == 1:
-                mask += 'includes all features matching this name'
+                    mask += explanations[0]
+            elif (
+                len(groups) == 1
+                and len(set([self.key(s) for s in selected])) == 1
+            ):
+                name = list(groups.keys())[0]
+                count = [self.key(s) for s in selected].count(name)
+                if count == len(selected):
+                    mask += 'includes all features matching this name'
+                else:
+                    mask += 'uses {count} features matching this name'
             else:
                 mask += ('encompasses the features matching each place name'
                          ' with the smallest distance between them')
@@ -312,13 +331,15 @@ class MatchAnnotator(MatchEvaluator):
 
     def _describe_ignored(self):
         """Lists names that could not be reconciled with the selected sites"""
+
+        # Exclude generic features signified by curly braces
         sites = [s for s in self.ignored() if not re.match(r'^{.*}$', s)]
+
         if sites:
             mask = ('The following place names mentioned in this record'
                     ' could not be reconciled with other locality info'
                     ' and were ignored: {}')
-            names = sorted(set(sites))
-            return mask.format(oxford_comma(names))
+            return mask.format(oxford_comma(sorted(set(sites))))
         return
 
 
@@ -339,7 +360,7 @@ class MatchAnnotator(MatchEvaluator):
     def _describe_sources(self):
         """Lists sources that provided base coordinates and geometries"""
         if self.sources:
-            mask = 'The final georeference is based on info from {}'
+            mask = 'This georeference is based on data from {}'
             return mask.format(oxford_comma(self.sources))
         return
 
@@ -397,8 +418,15 @@ class MatchAnnotator(MatchEvaluator):
                 higher_geo.insert(0, self.quote(site.name, bool(site.related_sites)))
         loc = ', '.join([n for n in higher_geo if n])
         # Get the url, cleaning up the trailer on proximity matches
-        url = re.sub(r'\_[A-Z]+$', '', site.url) if site.url else None
-        return '{} ({})'.format(loc, url) if url else loc
+        source = None
+        if site.url:
+            source = re.sub(r'\_[A-Z]+$', '', site.url) if site.url else None
+            if site.site_kind.isupper():
+                source = f'{site.site_kind}: {source}'
+        elif site.site_source:
+            input(site.url)
+            source = f'via {site.site_source}'
+        return '{} ({})'.format(loc, source) if source else loc
 
 
     def save_parsed(self):

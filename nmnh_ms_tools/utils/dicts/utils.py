@@ -26,7 +26,7 @@ def get_all(dct, keys, required=True):
 def get_common_items(*args, keep_empty=False):
     """Returns dict with elements common to a list of dicts"""
     args = list(args)
-    common = args[0]
+    common = args[0].copy()
     for other in args[1:]:
         for key, val in other.items():
             if key in common and common[key] != val:

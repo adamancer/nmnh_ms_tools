@@ -193,13 +193,24 @@ def coerce(val, coerce_to, delim=' | '):
             return val.strip()
         return val
 
+    simple_cast = False
     cast_from = type(val)
     cast_to = type(coerce_to)
 
-    # Cast to custom class
+    # Check if coerce_to is a class (as opposed to an instance of a class)
     if cast_to == type:
+        cast_to = coerce_to
+        simple_cast = True
+
+    # Check if coerce_to is a custom class that does not inherit from
+    # one of the data types handled below
+    elif not isinstance(coerce_to, (float, int, list, str, tuple)):
+        simple_cast = True
+
+    # Cast to class if either of the above conditions evaluates true
+    if simple_cast:
         try:
-            return coerce_to(val)
+            return cast_to(val)
         except TypeError:
             if not val:
                 return None
@@ -240,7 +251,9 @@ def coerce(val, coerce_to, delim=' | '):
     if isinstance(val, (list, tuple)) and isinstance(coerce_to, types):
         val = [cast_to(s) for s in val if not isinstance(val, cast_to)]
         return cast_from(val) if any(val) else cast_from()
-    raise TypeError('Could not coerce {} to {}'.format(repr(val), cast_to))
+    raise TypeError("Could not coerce {} ({}) to {}".format(
+        repr(val), type(val), cast_to)
+    )
 
 
 def configure_log(name=None, level='DEBUG', stream=True):

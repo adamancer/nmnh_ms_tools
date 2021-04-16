@@ -59,7 +59,7 @@ class Record:
     terms = read_dwc_terms()
 
 
-    def __init__(self, data):
+    def __init__(self, data=None, **kwargs):
         # Generate defaults and attributes
         attrs = [a for a in self.terms if a in dir(self)]
         self.defaults = {a: getattr(self, a) for a in attrs}
@@ -76,10 +76,12 @@ class Record:
         # Define indexing params
         self._indexed = None
         self._state = {}
-        # Parse data using parse method defined in the subclass
-        if isinstance(data, self.__class__):
-            data = data.to_dict()
-        self.parse(data)
+
+        if data:
+            # Parse data using parse method defined in the subclass
+            if isinstance(data, self.__class__):
+                data = data.to_dict()
+            self.parse(data)
 
 
     def __str__(self):
@@ -203,6 +205,12 @@ class Record:
     def parse(self, data):
         """Placeholder function for routing parsing from different sources"""
         raise NotImplementedError
+
+
+    def attune(self, other):
+        if not isinstance(other, self.__class__):
+            return self.__class__(other)
+        return other
 
 
     def update(self, data, append_to=None, delim='; '):

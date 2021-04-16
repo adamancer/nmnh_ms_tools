@@ -13,14 +13,11 @@ logger = logging.getLogger(__name__)
 
 class AdamancerBot(Bot):
     """Defines methods to interact with http://adamancer.pythonanywhere.com"""
+    domain = 'http://adamancer.pythonanywhere.com'
 
-    def __init__(self,
-                 *args,
-                 domain='http://adamancer.pythonanywhere.com',
-                 **kwargs):
+    def __init__(self, *args, **kwargs):
         kwargs.setdefault('wrapper', AdamancerResponse)
         super().__init__(*args, **kwargs)
-        self.domain = domain
 
 
     def chronostrat(self, earliest, **kwargs):

@@ -172,7 +172,7 @@ class Bot:
                 # Enforce the minimum wait if response from server
                 local = response.url.startswith(('http://localhost',
                                                  'http://127.0.0.1'))
-                if local or not response.from_cache:
+                if not local and not response.from_cache:
                     logger.info('New request: {}'.format(response.url))
                     time.sleep(self.wait)
                 # Validate the response, returning the response oject if OK

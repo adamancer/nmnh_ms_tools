@@ -163,7 +163,10 @@ class Bot:
             except (requests.exceptions.ConnectionError,
                     requests.exceptions.Timeout):
                 wait = 30 * 2 ** i
-                logger.warning('Retrying in {:,} seconds...'.format(wait))
+                req = [func.__name__] + list(args) + [f'{k}={v}' for k, v in kwargs.items()]
+                logger.warning(
+                    'Retrying in {:,} seconds (request={})...'.format(wait, req)
+                )
                 time.sleep(wait)
             else:
                 # Ensure that the response has the from_cache attribute
@@ -174,7 +177,8 @@ class Bot:
                                                  'http://127.0.0.1'))
                 if not local and not response.from_cache:
                     logger.info('New request: {}'.format(response.url))
-                    time.sleep(self.wait)
+                    # Update wait based on rate limit
+                    time.sleep(self.wait_from_rate_limit(response))
                 # Validate the response, returning the response oject if OK
                 if self.validate(response):
                     return response
@@ -211,6 +215,59 @@ class Bot:
             start = params.get(self.start_param, 0)
             start += 1 if self.paged else len(wrapped)
             kwargs[key][self.start_param] = start
+
+
+    def wait_from_rate_limit(self, response):
+        """Updates wait based on rate limit headers in response"""
+        headers = response.headers
+
+        # Twitter style
+        try:
+            remaining = int(headers["x-rate-limit-remaining"])
+            reset = int(headers["x-rate-limit-reset"])
+        except (AttributeError, KeyError, TypeError, ValueError):
+            pass
+        else:
+            # Reset may be seconds or a timestamp
+            if reset > 10000:
+                reset -= int(time.time())
+            if reset < 0:
+                reset = 0
+            self.wait = reset / remaining
+            print(f'Twitter rate limit: {self.wait}')
+            return self.wait
+
+        # GitHub style
+        try:
+            remaining = int(headers["x-ratelimit-remaining"])
+            reset = int(headers["x-ratelimit-reset"])
+        except (AttributeError, KeyError, TypeError, ValueError):
+            pass
+        else:
+            # Reset may be seconds or a timestamp
+            if reset > 10000:
+                reset -= int(time.time())
+            if reset < 0:
+                reset = 0
+            self.wait = reset / remaining
+            print(f'GitHub rate limit: {self.wait}')
+            return self.wait
+
+        # CrossRef style
+        try:
+            limit = int(response.headers.get('x-rate-limit-limit'))
+            interval = int(
+                response.headers.get('x-rate-limit-interval').rstrip('s')
+            )
+        except (AttributeError, KeyError, TypeError, ValueError):
+            pass
+        else:
+            self.wait = interval / limit
+            print(f'CrossRef rate limit: {self.wait}')
+            return self.wait
+
+        logger.error(str(response.headers))
+        return self.wait
 
 
 

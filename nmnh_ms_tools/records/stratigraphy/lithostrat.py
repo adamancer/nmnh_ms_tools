@@ -1,14 +1,14 @@
 """Definds methods to work with lithostratigraphic names"""
 import numpy as np
 
-from .helpers import LITHOSTRAT_LEVELS
-from .unit import StratUnit, parse_strat
+from .utils import LITHOSTRAT_ABBRS, LITHOSTRAT_RANKS
+from .unit import StratUnit, parse_strat_unit
 from ..core import Record
 from ...bots.macrostrat import MacrostratBot
 from ...tools.geographic_operations.geometry import GeoMetry
 
 
-class LithostratHierarchy(Record):
+class LithoStrat(Record):
     """Defines methods for working with lithostratigraphic names"""
     bot = MacrostratBot()
 
@@ -19,15 +19,15 @@ class LithostratHierarchy(Record):
         # Explicitly define defaults for all reported attributes
         self.unit_id = ''
         self.macrostrat_id = ''
-        self.group = ''
-        self.formation = ''
-        self.member = ''
+        self.group = StratUnit()
+        self.formation = StratUnit()
+        self.member = StratUnit()
         self.min_ma = np.nan
         self.max_ma = np.nan
         self.current_latitude = np.nan
         self.current_longitude = np.nan
         # Initialize instance
-        super(LithostratHierarchy, self).__init__(*args, **kwargs)
+        super(LithoStrat, self).__init__(*args, **kwargs)
         # Define additional attributes
         self._geometry = None
 
@@ -118,7 +118,7 @@ class LithostratHierarchy(Record):
                         strat = self.__class__(rec)
                         if self.similar_to(strat):
                             matches.append(strat)
-                # Only want the most specific level, so break on populated
+                # Only want the most specific rank, so break on populated
                 break
         if matches:
             # Limit matches to those no more specific than this
@@ -168,7 +168,7 @@ class LithostratHierarchy(Record):
 
 
     def _parse_dwc(self, data):
-        for key in ['group', 'formation', 'member']:
+        for key in LITHOSTRAT_RANKS:
             setattr(self, key, [StratUnit(data.get(key, ''), hint=key)])
 
 
@@ -176,8 +176,8 @@ class LithostratHierarchy(Record):
         self.macrostrat_id = data['strat_name_id']
         self.unit_id = data['unit_id']
         for key in ['Gp', 'Fm', 'Mbr']:
-            kind = LITHOSTRAT_LEVELS[key.lower()].lower()
-            units = parse_strat(data[key], hint=kind)
+            kind = LITHOSTRAT_ABBRS[key.lower()].lower()
+            units = parse_strat_unit(data[key], hint=kind)
             setattr(self, kind, units)
         # Update stratigraphic hierarchy with unit
         # Get additional info about age and locality
@@ -205,3 +205,9 @@ class LithostratHierarchy(Record):
     def _parse_self(self, data):
         for key, val in data.items():
             setattr(self, key, val)
+
+
+
+
+def parse_lithostrat(val):
+    return val

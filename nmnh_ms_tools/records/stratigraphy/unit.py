@@ -5,14 +5,16 @@ FIXME: Handle uncertainty
 """
 import re
 
-from .helpers import (
+from .utils import (
     base_name,
     long_name,
     short_name,
+    split_strat,
     std_modifiers,
-    CHRONOSTRAT_LEVELS,
+    CHRONOSTRAT_RANKS,
     LITHOLOGIES,
-    LITHOSTRAT_LEVELS,
+    LITHOSTRAT_ABBRS,
+    LITHOSTRAT_RANKS,
     MODIFIERS
 )
 from ..core import Record
@@ -23,6 +25,13 @@ from ...bots.macrostrat import MacrostratBot
 
 
 class StratUnit(Record):
+    terms = [
+        'kind',
+        'rank',
+        'lithology',
+        'modifier',
+        'unit'
+    ]
     chronobot = AdamancerBot()
     lithobot = MacrostratBot()
 
@@ -32,10 +41,9 @@ class StratUnit(Record):
         self._class_attrs = set(dir(self))
         self._properties = []
         # Explicitly define defaults for all reported attributes
-        self.verbatim = ''
         self.unit = ''
         self.kind = ''
-        self.level = ''
+        self.rank = ''
         self.lithology = ''
         self.modifier = ''
         # Define additional attributes required for parse
@@ -49,7 +57,7 @@ class StratUnit(Record):
 
 
     def __bool__(self):
-        return bool(self.unit or self.level or self.lithology)
+        return bool(self.unit or self.rank or self.lithology)
 
 
     @property
@@ -61,7 +69,7 @@ class StratUnit(Record):
         """Parses data from various sources to populate class"""
         self.reset()
         self.verbatim = unit
-        if unit in (None, '', 'Unknown'):
+        if not unit or unit == 'Unknown':
             return
         # Remove some less common abbreviations
         unit = unit.replace('Bd', 'Bed')
@@ -69,14 +77,14 @@ class StratUnit(Record):
         # Parse components of the unit name
         unit = std_modifiers(long_name(unit))
         self.modifier = self._parse_modifier(unit)
-        self.level = self._parse_level(unit)
+        self.rank = self._parse_rank(unit)
         self.lithology = self._parse_lithology(unit)
         self.unit = self._parse_name(unit)
         self.kind = self._parse_kind(unit)
         self.uncertain = self._parse_uncertainty(unit)
-        # Apply hint if level could not be parsed
-        if self._hint and not self.level:
-            self.level = self._hint
+        # Apply hint if rank could not be parsed
+        if self._hint and not self.rank:
+            self.rank = self._hint.strip('[]')
         # Check if modified name is an official ICS unit (e.g., Early Jurrasic)
         self.check_name()
 
@@ -108,7 +116,7 @@ class StratUnit(Record):
         if not isinstance(other, self.__class__):
             return False
         return (self.unit == other.unit
-                and self.level.strip('[]') == other.level.strip('[]')
+                and self.rank.strip('[]') == other.rank.strip('[]')
                 and self.lithology == other.lithology
                 and self.modifier == other.modifier)
 
@@ -130,11 +138,11 @@ class StratUnit(Record):
             other = self.__class__(other)
         same_as = self.same_as(other)
         same_name = self.same_name_as(other)
-        same_level = self.level.strip('[]') == other.level.strip('[]')
+        same_rank = self.rank.strip('[]') == other.rank.strip('[]')
         same_lith = (self.lithology == other.lithology
                      or bool(self.lithology) != bool(other.lithology))
         same_pos = self.modifier == other.modifier
-        return same_as or (same_name and same_level and same_lith and same_pos)
+        return same_as or (same_name and same_rank and same_lith and same_pos)
 
 
     def _to_emu(self, **kwargs):
@@ -148,14 +156,14 @@ class StratUnit(Record):
         if vals['modifier'] and not (vals['unit'] or vals['lithology']):
             vals['unit'] = vals['modifier']
             vals['modifier'] = ''
-        name = '{unit} {lithology} {level} ({modifier})'.format(**vals)
+        name = '{unit} {lithology} ({modifier})'.format(**vals)
         return re.sub(r' +', ' ', name).replace('()', '').strip()
 
 
-    def _parse_level(self, unit):
-        """Parses level from unit name"""
+    def _parse_rank(self, unit):
+        """Parses rank from unit name"""
         matches = []
-        for val in LITHOSTRAT_LEVELS.values():
+        for val in LITHOSTRAT_RANKS:
             match = re.search(r'\b{}\b'.format(val), unit, flags=re.I)
             if match:
                 matches.append(match)
@@ -206,8 +214,8 @@ class StratUnit(Record):
 
     def _parse_name(self, unit):
         """Parses base name from unit name"""
-        if self.level:
-            unit = re.sub(self.level, '', unit, flags=re.I)
+        if self.rank:
+            unit = re.sub(self.rank, '', unit, flags=re.I)
         if self.lithology:
             unit = re.sub(self.lithology, '', unit, flags=re.I)
         # Try to strip the more complicated upper/lower stuff
@@ -218,13 +226,13 @@ class StratUnit(Record):
 
     def _parse_kind(self, unit):
         """Determines whether unit is chrono- or lithostrat"""
-        if self.level in LITHOSTRAT_LEVELS.values():
+        if self.rank in LITHOSTRAT_RANKS:
             return 'lithostrat'
         if self._hint is not None:
             hint = self._hint.strip('[]')
-            if hint in LITHOSTRAT_LEVELS.values():
+            if hint in LITHOSTRAT_RANKS:
                 return 'lithostrat'
-            if hint in CHRONOSTRAT_LEVELS:
+            if hint in CHRONOSTRAT_RANKS:
                 return 'chronostrat'
         # Final try is to check names against known geologic ages
         if self.unit:
@@ -262,44 +270,16 @@ class StratUnit(Record):
 
 
 
-def split_strat(val):
-    """Splits string containing multiple units"""
-    val = val.strip(' .')
-    val = re.sub(' of ', ' of ', val.strip(' .'), flags=re.I)
-    # Treat "of"-delimited lists as hierarchies
-    try:
-        child, parent = val.rsplit(' of ')
-    except ValueError:
-        pass
-    else:
-        return split_strat(child)
-    # Standardize Lower/Early to make splitting easier
-    val = std_modifiers(val)
-    # Extract parentheticals
-    parens = re.findall(r'(\(.*?\))', val)
-    parens = [s for s in parens if s.lower().strip('()') not in MODIFIERS]
-    for paren in parens:
-        val = val.replace(paren, '')
-    val = re.sub(r' +', ' ', val)
-    parens = [s.strip('()') for s in parens]
-    # Split ranges. Because hyphens can also be used as parent-child
-    # delimiters, only two-unit ranges are currently parseable.
-    vals = re.split(r'(?:[ -]to[ -]| ?- ?)', val, flags=re.I)
-    if len(vals) != 2:
-        # Select delimiters to use to split names
-        delims = [';', '/', ',? and ', ',? & ', ',? or ', '-', '_', r'\+']
-        pattern = r'(, ({0}))(/({0}))?'.format('|'.join(MODIFIERS))
-        if not re.search(pattern, val, flags=re.I):
-            delims.append(',')
-        pattern = r'(?:{})'.format('|'.join(delims))
-        vals = re.split(pattern, val, flags=re.I)
-    return parens + [val.strip() for val in vals if val]
+def parse_strat_unit(val, hint=None):
+    """Parses a string containing stratigraphic info into a list of units"""
 
+    # Return StratUnit as is
+    if isinstance(val, StratUnit):
+        return [val]
 
-def parse_strat(val, hint=None):
-    """Parses a string containing stratigraphic info"""
     # Convert names to units
     units = [StratUnit(val, hint=hint) for val in split_strat(val)]
+
     # Propagate properties of the last unit up the list if needed
     if units:
         last = units[-1]

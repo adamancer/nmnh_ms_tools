@@ -1,0 +1,1015 @@
+"Senecan" 1000
+Aalenian 1000
+Abereiddian 1000
+Actonian 1000
+Adavere 1000
+Adorf 1000
+Aegean 1000
+Aeronian 1000
+Agenian 1000
+Aijiashan 1000
+Aksayan 1000
+Alaunian 1000
+Albertian 1000
+Albian 1000
+Aleksian 1000
+Alexandrian 1000
+Aller 1000
+Alportian 1000
+Altonian 1000
+Aluoja 1000
+Amb 1000
+Amgan 1000
+Angulata 1000
+Animikean 1000
+Anisian 1000
+Aparima 1000
+Aptian 1000
+Aquilan 1000
+Aquilian 1000
+Aquitanian 1000
+Aratauran 1000
+Arcadian 1000
+Archean 1000
+Arenig 1000
+Arenigian 1000
+Arikareean 1000
+Arnioceras arnouldi 1000
+Arnold 1000
+Arnsbergian 1000
+Arowhanan 1000
+Arshantan 1000
+Artinskian 1000
+Arundian 1000
+Arvernian 1000
+Asbian 1000
+Aseri 1000
+Ashbyan 1000
+Ashgill 1000
+Ashgillian 1000
+Asselian 1000
+Astaracian 1000
+Asteroceras varians 1000
+Atdabanian 1000
+Atokan 1000
+Aurelucian 1000
+Autunian 1000
+Ayusokkanian 1000
+Badenian 1000
+Baggy 1000
+Bajocian 1000
+Balfour 1000
+Baodean 1000
+Baoqingian 1000
+Barettian 1000
+Barmouth 1000
+Barremian 1000
+Barstovian 1000
+Bartonian 1000
+Bashkirian 1000
+Basin Groups 1-9 1000
+Bathonian 1000
+Batyrbaian 1000
+Begadean 1000
+Bendigonian 1000
+Berounian 1000
+Berriasian 1000
+Biarmian 1000
+Bifrons 1000
+Billingen 1000
+Bithynian 1000
+Black River 1000
+Blackhillsian 1000
+Blackriveran 1000
+Blacksforkian 1000
+Blancan 1000
+Bobrikovian 1000
+Bohdalec 1000
+Bolindian 1000
+Bolorian 1000
+Boomerangian 1000
+Bortonian 1000
+Botomian 1000
+Branchian 1000
+Brecon 1000
+Bridgerian 1000
+Brigantian 1000
+Bringewood 1000
+Bucklandi 1000
+Buildwas 1000
+Bukobayian 1000
+Bumbanian 1000
+Bunter 1000
+Buntsandstein 1000
+Buntsandstein 1000
+Burdigalian 1000
+Burgsvik 1000
+Burrellian 1000
+Bursumian 1000
+Burtsevian 1000
+Burzyan 1000
+Caerfai 1000
+Calabrian 1000
+Callovian 1000
+Calymmian 1000
+Cambrian 1000
+Campanian 1000
+Canadaway 1000
+Canadensis 1000
+Canadian 1000
+Cantabrian 1000
+Capitan 1000
+Capitanian 1000
+Caradoc 1000
+Caradocian 1000
+Carboniferous 1000
+Carlottense 1000
+Carnian 1000
+Casamayoran 1000
+Cassinian 1000
+Castile 1000
+Castlecliffian 1000
+Castlemainian 1000
+Cautleyan 1000
+Cayugan 1000
+Cazenovian 1000
+Cenomanian 1000
+Cenozoic 1000
+Cernaysian 1000
+Cf1 1000
+Cf2 1000
+Cf3 1000
+Chadian 1000
+Chadronian 1000
+Chagyrka 1000
+Changhsingian 1000
+Chapadmalalan 1000
+Chasicoan 1000
+Chatfieldian 1000
+Chattian 1000
+Chazy 1000
+Chazyan 1000
+Cheneyan 1000
+Cheremshanian 1000
+Cherepetsian 1000
+Chesnokovka 1000
+Chesterian 1000
+Chewtonian 1000
+Chhidru 1000
+Chientangkiangian 1000
+Chokierian 1000
+Chotec 1000
+Cincinnatian 1000
+Cisuralian 1000
+Clarence 1000
+Clarendonian 1000
+Clarkforkian 1000
+Clifdenian 1000
+Clinton 1000
+Clogau 1000
+Coalbrookdale 1000
+Coblencien 1000
+Colhuehuapian 1000
+Colloncuran 1000
+Concavum 1000
+Conewangoan 1000
+Coniacian 1000
+Conneaut 1000
+Coroniceras 1000
+Costonian 1000
+Couvinien 1000
+Cowleigh Park 1000
+Crassicosta 1000
+Crassicostatus 1000
+Cressagian 1000
+Cretaceous 1000
+Cryogenian 1000
+Cryptic 1000
+Cudahyan 1000
+DUrville 1000
+Dalanian 1000
+Daleje 1000
+Danian 1000
+Dannevirke 1000
+Daobaowan 1000
+Dapingian 1000
+Darriwilian 1000
+Dasberg 1000
+Datsonian 1000
+Davoei 1000
+Dawan 1000
+Deer Park 1000
+Delamaran 1000
+Deming 1000
+Demingian 1000
+Deseadan 1000
+Desmoinesian 1000
+Devonian 1000
+Dewey Lake 1000
+Dewunian 1000
+Diandongian 1000
+Dienerian 1000
+Discites 1000
+Ditton 1000
+Divisaderan 1000
+Dobrotiva 1000
+Dobrotivian 1000
+Dolgellian 1000
+Dolgelly 1000
+Dolwen 1000
+Donguzian 1000
+Dorogovilovian 1000
+Downton 1000
+Downton Castle 1000
+Dragonian 1000
+Dresbachian 1000
+Drumian 1000
+Duchesnean 1000
+Duntroonian 1000
+Duyunian 1000
+Dyeran 1000
+Eastonian 1000
+Ectasian 1000
+Edenian 1000
+Ediacara 1000
+Ediacaran 1000
+Edmontonian 1000
+Eifel 1000
+Eifelian 1000
+Eke 1000
+Elton 1000
+Ems 1000
+Emsian 1000
+Ensenadan 1000
+Ensyan 1000
+Eoarchean 1000
+Eocene 1000
+Epizigzagiceras 1000
+Ergilian 1000
+Etalian 1000
+Euphyllites 1000
+Falciferum 1000
+Famennian 1000
+Famennien 1000
+Fassanian 1000
+Fedorovkian 1000
+Fennian 1000
+Festiniogian 1000
+Filipovian 1000
+Flettian 1000
+Floian 1000
+Floran 1000
+Fortunian 1000
+Franconian 1000
+Franklinian 1000
+Franziceras 1000
+Frasnian 1000
+Frasnien 1000
+Freboldi 1000
+Friasian 1000
+Furongian 1000
+Gallic 1000
+Gamach 1000
+Gamachian 1000
+Gamian 1000
+Gamlan 1000
+Garantiana 1000
+Gardnerbuttian 1000
+Gasconadian 1000
+Gashatan 1000
+Gedinne 1000
+Gedinnine 1000
+Geiseltalian 1000
+Gelasian 1000
+Genesee 1000
+Geringian 1000
+Gisbornian 1000
+Givet 1000
+Givetian 1000
+Givetien 1000
+Gleedonian 1000
+Gore 1000
+Gorstian 1000
+Grauvian 1000
+Graybullian 1000
+Greenlandian 1000
+Griesbachian 1000
+Guadalupian 1000
+Gumerovian 1000
+Guniu 1000
+Guzhangian 1000
+Gzhelian 1000
+Hadean 1000
+Hafotty 1000
+Haljala 1000
+Hamra 1000
+Hangman 1000
+Hanjiang 1000
+Harju 1000
+Harnagian 1000
+Harrisonean 1000
+Harrisonian 1000
+Hastarian 1000
+Haumurian 1000
+Hauptdolomitstinkschiefer 1000
+Hauterivian 1000
+Haweran 1000
+Headonian 1000
+Helderberg 1000
+Hemberg 1000
+Hemingfordian 1000
+Hemphillian 1000
+Hemse 1000
+Herangi 1000
+Heretaungan 1000
+Heterian 1000
+Hettangian 1000
+Hillebrandti 1000
+Hirnantian 1000
+Hogklint 1000
+Holkerian 1000
+Holocene 1000
+Homerian 1000
+Houldjinian 1000
+Howelli 1000
+Hsandagolian 1000
+Huashibanian 1000
+Huayquerian 1000
+Hulo 1000
+Humphresianum 1000
+Hunderum 1000
+Hunjiang 1000
+Hunneberg 1000
+Huronian 1000
+Ibex 1000
+Ibexian 1000
+Ichangian 1000
+Idamean 1000
+Idavere 1000
+Ilfracombe 1000
+Illyrian 1000
+Imlayi 1000
+Induan 1000
+Ionian 1000
+Irdinmanhan 1000
+Irenian 1000
+Irginian 1000
+Irvingtonian 1000
+Isuan 1000
+Itaboraian 1000
+Iverian 1000
+Ivorian 1000
+Jaagarahu 1000
+Jaani 1000
+Jamesoni 1000
+Jefferson 1000
+Jeffersonian 1000
+Jiangshanian 1000
+Jinnigian 1000
+Jiusian 1000
+Johvi 1000
+Judithian 1000
+Julian 1000
+Jurassic 1000
+Juuru 1000
+Kaiatan 1000
+Kaihikuan 1000
+Kalabagh 1000
+Kanense 1000
+Kapitean 1000
+Karakubian 1000
+Karatau 1000
+Kashirian 1000
+Kasimovian 1000
+Katian 1000
+Kaugetuma 1000
+Kawhia 1000
+Kazanian 1000
+Keila 1000
+Kekeamuan 1000
+Ketyan 1000
+Keuper 1000
+Khamovnichean 1000
+Khoridzhian 1000
+Kimmeridgian 1000
+Kinderhookian 1000
+Kinderscoutian 1000
+Kirkfield 1000
+Kirkfieldian 1000
+Kirschneri 1000
+Kizolovian 1000
+Klabava 1000
+Klazminskian 1000
+Kopaninaschichten 1000
+Korangan 1000
+Kosov 1000
+Kosovian 1000
+Kosvinian 1000
+Kralodvorian 1000
+Kraluv Dvur 1000
+Krasnopolyanian 1000
+Krevyakian 1000
+Kubergandian 1000
+Kuhfengian 1000
+Kuimov 1000
+Kukruse 1000
+Kunae 1000
+Kunda 1000
+Kungurian 1000
+Kupferschiefer 1000
+Kuressaare 1000
+Kuzel 1000
+Lacian 1000
+Ladinian 1000
+Laeviuscula 1000
+Laibinian 1000
+Lancefieldian 1000
+Lancian 1000
+Landon 1000
+Langevoja 1000
+Langhian 1000
+Laoshanian 1000
+Lasnamagi 1000
+Latorp 1000
+Latorpian 1000
+Laventan 1000
+Lebach 1000
+Leine 1000
+Leintwardine 1000
+Lengwuan 1000
+Lenian 1000
+Leonard 1000
+Letna 1000
+Levesquei 1000
+Lianghekou 1000
+Lias 1000
+Liasicus 1000
+Liben 1000
+Lillburnian 1000
+Lincolnian 1000
+Litenschichten 1000
+Llanbedr 1000
+Llandeilian 1000
+Llandeilo 1000
+Llandovery 1000
+Llanvirn 1000
+Llanvirnian 1000
+Lochkovian 1000
+Lochkovian (Czechoslovakia) 1000
+Lockport 1000
+Lockportian 1000
+Longlinian 1000
+Longobardian 1000
+Longtanian 1000
+Longvillian 1000
+Lopingian 1000
+Lostcabinian 1000
+Lower Cretaceous 1000
+Lower Devonian 1000
+Lower Jurassic 1000
+Lower Mississippian 1000
+Lower Ordovician 1000
+Lower Pennsylvanian 1000
+Lower Triassic 1000
+Ludfordian 1000
+Ludlow 1000
+Lujanian 1000
+Luodianian 1000
+Luosuan 1000
+Lutetian 1000
+Lynton 1000
+Lysitean 1000
+MN 1 1000
+MN 10 1000
+MN 11 1000
+MN 12 1000
+MN 13 1000
+MN 14 1000
+MN 15 1000
+MN 16 1000
+MN 17 1000
+MN 2 1000
+MN 3 1000
+MN 4 1000
+MN 5 1000
+MN 6 1000
+MN 7 + 8 1000
+MN 9 1000
+MP 1 - 5 1000
+MP 10 1000
+MP 11 1000
+MP 12 1000
+MP 13 1000
+MP 14 1000
+MP 15 1000
+MP 16 1000
+MP 17A 1000
+MP 17B 1000
+MP 18 1000
+MP 19 1000
+MP 20 1000
+MP 21 1000
+MP 22 1000
+MP 23 1000
+MP 24 1000
+MP 25 1000
+MP 26 1000
+MP 27 1000
+MP 28 1000
+MP 29 1000
+MP 30 1000
+MP 6 1000
+MP 7 1000
+MP 8 + 9 1000
+Maastrichtian 1000
+Maduan 1000
+Maentwrog 1000
+Maentwrogian 1000
+Makarewan 1000
+Malakovian 1000
+Malevian 1000
+Malm 1000
+Mangaorapan 1000
+Mangaotanean 1000
+Mangapanian 1000
+Mangapirian 1000
+Mansian 1000
+Manykaian 1000
+Mapingian 1000
+Margaritatus 1000
+Marjumian 1000
+Marmor 1000
+Marsdenian 1000
+Marshbrookian 1000
+Mata 1000
+Mayan 1000
+Mayoan 1000
+Maysville 1000
+Maysvillian 1000
+Medina 1000
+Meghalayan 1000
+Meishanian 1000
+Meishucunian 1000
+Melekesian 1000
+Melekhovian 1000
+Menevian 1000
+Meramecian 1000
+Merioneth 1000
+Merionethian 1000
+Mesoarchean 1000
+Mesoproterozoic 1000
+Mesozoic 1000
+Messinian 1000
+Miaolingian 1000
+Middle Devonian 1000
+Middle Jurassic 1000
+Middle Mississippian 1000
+Middle Ordovician 1000
+Middle Pennsylvanian 1000
+Middle Pleistocene 1000
+Middle Triassic 1000
+Migneintian 1000
+Mikhailovian 1000
+Millardan 1000
+Mindyallan 1000
+Miocene 1000
+Misikella bidentata-posthernsteini 1000
+Misikella posthernsteini-hernsteini 1000
+Misikella rhaetica 1000
+Misikella ultima 1000
+Mississippian 1000
+Missourian 1000
+Mohawkian 1000
+Monroecreekian 1000
+Montehermosan 1000
+Montezuman 1000
+Moridunian 1000
+Morrowan 1000
+Morte 1000
+Mortensnes 1000
+Moscovian 1000
+Motuan 1000
+Mulde 1000
+Murchisonae 1000
+Murgabian 1000
+Muschelkalk 1000
+Mustersan 1000
+Myachkovian 1000
+Nabala 1000
+Nammalian 1000
+Namurian 1000
+Nangaoian 1000
+Nectarian 1000
+Nehden 1000
+Neichiashanian 1000
+Nelsonian 1000
+Nemakit-Daldynian 1000
+Neoarchean 1000
+Neocomian 1000
+Neogene 1000
+Neoproterozoic 1000
+Neustrian 1000
+Nganasanian 1000
+Ngaterian 1000
+Niagaran 1000
+Nihewanian 1000
+Ningkuo 1000
+Niuchehean 1000
+Noginian 1000
+Norian 1000
+Northgrippian 1000
+Nukumaruan 1000
+Nyborg 1000
+Oandu 1000
+Oblatum 1000
+Obtusum 1000
+Oeland 1000
+Ohauan 1000
+Ohesaare 1000
+Ohre 1000
+Olenekian 1000
+Olentian 1000
+Oligocene 1000
+Onnian 1000
+Ontarian 1000
+Opalinum 1000
+Opoitian 1000
+Ordian 1000
+Ordovician 1000
+Orellan 1000
+Oretanian 1000
+Oretian 1000
+Orleanian 1000
+Orosirian 1000
+Osagean 1000
+Otaian 1000
+Otamitan 1000
+Otapirian 1000
+Oteke 1000
+Oxfordian 1000
+Oxynotum 1000
+Paadla 1000
+Paibian 1000
+Pakerort 1000
+Paleoarchean 1000
+Paleocene 1000
+Paleogene 1000
+Paleoproterozoic 1000
+Paleozoic 1000
+Pamirian 1000
+Pannonian 1000
+Pareora 1000
+Parkinsoni 1000
+Pavlovoposadian 1000
+Payntonian 1000
+Peligran 1000
+Pelsonian 1000
+Pendleian 1000
+Pennsylvanian 1000
+Permian 1000
+Peskovian 1000
+Phanerozoic 1000
+Piacenzian 1000
+Pickwell Down 1000
+Pilton 1000
+Pirgu 1000
+Piripauan 1000
+Placentian 1000
+Planorbis 1000
+Planulata 1000
+Pleistocene 1000
+Plesechioceras harbledownense 1000
+Pliensbachian 1000
+Pliocene 1000
+Podolskian 1000
+Polaty 1000
+Porangan 1000
+Porkuni 1000
+Porterfieldian 1000
+Poundian 1000
+Povolzhian 1000
+Pragian 1000
+Pragian (Czechoslovakia) 1000
+Priabonian 1000
+Pridoli 1000
+Pridolischichten 1000
+Prikarnian 1000
+Proterozoic 1000
+Protvian 1000
+Pseudaetomoceras 1000
+Psiloceras 1000
+Pu1 1000
+Pu2 1000
+Pu3 1000
+Puaroan 1000
+Puercan 1000
+Puruhauan 1000
+Pusgillian 1000
+Qiandongian 1000
+Qiantianjiang 1000
+Quaternary 1000
+Radaevian 1000
+Raikkula 1000
+Rakvere 1000
+Rancholabrean 1000
+Randian 1000
+Rangerian 1000
+Raricostatum 1000
+Raukumara 1000
+Rawtheyan 1000
+Red Downtonian 1000
+Rexroadian 1000
+Rhaetian 1000
+Rhinog 1000
+Rhuddanian 1000
+Rhyacian 1000
+Richmond 1000
+Richmondian 1000
+Riochican 1000
+Riphean 1000
+Roadian 1000
+Robiacian 1000
+Rockland 1000
+Rocklandian 1000
+Rootsikula 1000
+Rotliegend 1000
+Rotliegendes 1000
+Rotundum 1000
+Runangan 1000
+Rupelian 1000
+Rusavkian 1000
+Ruscinian 1000
+Rustler 1000
+Rybinskian 1000
+Saintaugustinean 1000
+Saka 1000
+Sakian 1000
+Sakmarian 1000
+Salado 1000
+Salina 1000
+Sandbian 1000
+Sandcouleean 1000
+Santacrucian 1000
+Santarosean 1000
+Santonian 1000
+Sappan 1000
+Saranian 1000
+Sarginian 1000
+Sarka 1000
+Sarmatian 1000
+Sauzei 1000
+Sawkill 1000
+Scissum 1000
+Sebisurkhian 1000
+Selandian 1000
+Semicostatum 1000
+Senonian 1000
+Series 2 1000
+Series 3 1000
+Serpukhovian 1000
+Serravallian 1000
+Sevatian 1000
+Severodvinian 1000
+Severokeltmenian 1000
+Shangsian 1000
+Shanwangian 1000
+Sharamurunian 1000
+Sheinwoodian 1000
+Sheridanian 1000
+Sherman 1000
+Shermanian 1000
+Sheshmian 1000
+Shikhanian 1000
+Shikou 1000
+Siderian 1000
+Siegen 1000
+Silurian 1000
+Sinemurian 1000
+Sinian 1000
+Sjuranian 1000
+Skullrockian 1000
+Slite 1000
+Sludkian 1000
+Smalfjord 1000
+Smithian 1000
+Sokian 1000
+Solikamskian 1000
+Solvan 1000
+Sonyea 1000
+Soudleyan 1000
+Southland 1000
+Southwood 1000
+Spathian 1000
+Spinatum 1000
+Srbsko 1000
+St Davids 1000
+Stage 10 1000
+Stage 2 1000
+Stage 3 1000
+Stage 4 1000
+Stage 5 1000
+Stairsian 1000
+Stassfurt Evaporites 1000
+Statherian 1000
+Stenian 1000
+Stephanian 1000
+Stephanian A 1000
+Stephanian B 1000
+Stephanian C 1000
+Steptoean 1000
+Sterlitamakian 1000
+Steshevian 1000
+Streffordian 1000
+Sturtian 1000
+Subfurcatum 1000
+Suevian 1000
+Sundre 1000
+Sunwaptan 1000
+Swazian 1000
+Syrovaty 1000
+Tabenbulakian 1000
+Taghanic 1000
+Taijangian 1000
+Taitai 1000
+Tangbagouan 1000
+Taoyuanian 1000
+Taranaki 1000
+Tarantian 1000
+Tarussian 1000
+Tastubian 1000
+Tatarian 1000
+Tavgian 1000
+Telfordian 1000
+Telychian 1000
+Temaikan 1000
+Temeside Shales 1000
+Templetonian 1000
+Tenuicostatum 1000
+Teratan 1000
+Terreneuvian 1000
+Tertiary 1000
+Tetraspidoceras 1000
+Teurian 1000
+Thanetian 1000
+Thouarsense 1000
+Ti1 1000
+Ti2 1000
+Ti3 1000
+Ti4 1000
+Ti5 1000
+Ti6 1000
+Tickwood 1000
+Tiffanian 1000
+Tinguirirican 1000
+Tioughnioga 1000
+Tithonian 1000
+Tiupampan 1000
+To1 1000
+To2 1000
+To3 1000
+Toarcian 1000
+Tommotian 1000
+Tonawandan 1000
+Tongaporutuan 1000
+Tonian 1000
+Torrejonian 1000
+Tortonian 1000
+Tournaisian 1000
+Toyonian 1000
+Tremadoc 1000
+Tremadocian 1000
+Trempealeauan 1000
+Trentonian 1000
+Triassic 1000
+Tsninian 1000
+Tulean 1000
+Tulian 1000
+Tunggurian 1000
+Turinian 1000
+Turneri 1000
+Turolian 1000
+Turonian 1000
+Tuvalian 1000
+Twinbuttean 1000
+Tyesaian 1000
+Ufimian 1000
+Uhaku 1000
+Uintan 1000
+Ulangochuian 1000
+Undillan 1000
+Ungurian 1000
+Upcott 1000
+Upinian 1000
+Upper Cretaceous 1000
+Upper Devonian 1000
+Upper Jurassic 1000
+Upper Mississippian 1000
+Upper Ordovician 1000
+Upper Pennsylvanian 1000
+Upper Pleistocene 1000
+Upper Triassic 1000
+Uquian 1000
+Ururoan 1000
+Urutawan 1000
+Urzhumian 1000
+Uskalykian 1000
+Ustmylian 1000
+Vaana 1000
+Valanginian 1000
+Valaste 1000
+Valhallan 1000
+Vallesian 1000
+Varanger 1000
+Varangu 1000
+Variabilis 1000
+Vendian 1000
+Venevian 1000
+Vereian 1000
+Vetlugian 1000
+Villafranchian 1000
+Villanyian 1000
+Vinice 1000
+Virgilian 1000
+Viru 1000
+Visean 1000
+Vokhmian 1000
+Volfreyan 1000
+Volkhov 1000
+Volkhovian 1000
+Vormsi 1000
+Voznesenian 1000
+Vtorye Utesy 1000
+Vyatkian 1000
+Waergangian 1000
+Waiauan 1000
+Waiitian 1000
+Waipawan 1000
+Waipipian 1000
+Waitakian 1000
+Wanganui 1000
+Wangcunian 1000
+Warendian 1000
+Warepan 1000
+Wargal 1000
+Wasatchian 1000
+Waucoban 1000
+Weissliegendes 1000
+Wenlock 1000
+Wenlock (England) 1000
+Werra 1000
+West Falls 1000
+Westermanni 1000
+Westphalian 1000
+Westphalian A 1000
+Westphalian B 1000
+Westphalian C 1000
+Westphalian D 1000
+Whaingaroan 1000
+Whitcliffe 1000
+Whiteavesi 1000
+Whiterock 1000
+Whiterockian 1000
+Whitlandian 1000
+Whitneyan 1000
+Whitwellian 1000
+Widebayense 1000
+Wildernessian 1000
+Wocklum 1000
+Wolfcamp 1000
+Wonokan 1000
+Woolhope 1000
+Woolstonian 1000
+Word 1000
+Wordian 1000
+Wuchiapingian 1000
+Wufeng 1000
+Wulingian 1000
+Wuliuan 1000
+Wych 1000
+Xiaodushanian 1000
+Xiaoxita 1000
+Xiejiaan 1000
+Yakhtashian 1000
+Yakounensis 1000
+Yangtzi 1000
+Yapeenian 1000
+Yarengian 1000
+Yeadonian 1000
+Yichang 1000
+Youshuanian 1000
+Ypresian 1000
+Yurakian 1000
+Yurmatin 1000
+Yushanian 1000
+Yushean 1000
+Zahorany 1000
+Zanclean 1000
+Zapaltyubian 1000
+Zechstein 1000
+Zechstein 1000
+Zechsteinkalk 1000
+Zhanarykian 1000
+Zhejiangian 1000
+Zisongian 1000
+Zlichovian 1000
+unnamed Pridoli stage 1000

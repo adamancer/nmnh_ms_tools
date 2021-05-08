@@ -1,5 +1,6 @@
 """Defines methods for parsing and manipulating stratigraphic data"""
-from .chronostrat import ChronostratHierarchy
-from .lithostrat import LithostratHierarchy
-from .unit import StratUnit, split_strat, parse_strat
-from .units import StratUnits
+from .chronostrat import ChronoStrat, parse_chronostrat
+from .utils import CHRONOSTRAT_RANKS, LITHOSTRAT_RANKS
+from .lithostrat import LithoStrat, parse_lithostrat
+from .unit import StratUnit, parse_strat_unit
+from .utils import parse_strat_package, split_strat

@@ -9,8 +9,9 @@ from .references import (
 from .sites import Site, SEAS
 from .specimens import Specimen
 from .stratigraphy import (
-    ChronostratHierarchy,
-    LithostratHierarchy,
+    ChronoStrat,
+    LithoStrat,
     StratUnit,
-    parse_strat
+    parse_chronostrat,
+    parse_lithostrat
 )

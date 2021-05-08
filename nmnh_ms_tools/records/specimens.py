@@ -5,7 +5,7 @@ from .core import Record
 from .catnums import CatNum, get_catnum, is_antarctic, parse_catnums
 from .references import Reference
 from .sites import Site
-from .stratigraphy import LithostratHierarchy
+from .stratigraphy import LithoStrat
 from ..tools.geographic_names.parsers.helpers import parse_localities
 from ..tools.specimen_numbers.link import (
     MatchMaker,
@@ -27,7 +27,7 @@ class Specimen(Record):
     """Defines methods for parsing and manipulating specimen data"""
     parser = Parser()
     _site_attrs = Site({}).attributes
-    _strat_attrs = LithostratHierarchy({}).attributes
+    _strat_attrs = LithoStrat({}).attributes
     _to_attr = {}
 
 
@@ -145,7 +145,7 @@ class Specimen(Record):
         if not self._strat:
             strat = {a: getattr(self, a) for a in attrs}
             if any(strat.values()):
-                self._strat = LithostratHierarchy(strat)
+                self._strat = LithoStrat(strat)
         else:
             for attr in attrs:
                 setattr(self, attr, getattr(self._strat, attr))
@@ -482,7 +482,7 @@ class Specimen(Record):
         self.associated_references = dedupe(self.associated_references)
         # Construct a site from the EMu record and back-populate those fields
         self._site = Site(rec('BioEventSiteRef'))
-        self._strat = LithostratHierarchy(rec)
+        self._strat = LithoStrat(rec)
 
 
     def _parse_mongo(self, rec):

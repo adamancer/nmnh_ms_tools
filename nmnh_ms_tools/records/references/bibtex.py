@@ -23,6 +23,8 @@ class BibTeXMapper:
             'monographic component part': 'chapter',
             'serial': 'book',
             'serial component part': 'article',
+            # GeoDeepDive/xDD genres
+            'fulltext': 'book'
         }
         return custom_to_bibtex.get(kind.lower(), kind).format(modifier).lower()
 

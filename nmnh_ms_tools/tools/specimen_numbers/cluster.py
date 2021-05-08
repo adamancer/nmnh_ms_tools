@@ -8,6 +8,7 @@ import yaml
 
 from ...config import CONFIG_DIR
 from ...databases.cache import CacheDict
+from ...utils import as_list
 
 
 
@@ -37,7 +38,7 @@ class Cluster:
         self.expand_short_ranges = True
 
         # A valid last number is any catalog number, suffix, or range. However,
-        # the regexes defined in regex.yml are less selective than is needed
+        # the regexes defined in 'regex'.yml are less selective than is needed
         # here. We'll limit a "good" value to a subset of high-quality matches.
         catnum = r'([A-Z]{1,3} ?\d{2,6}|\d{4,6})'
         self.p_catnum = r'^{catnum}(-{catnum})?$'.format(catnum=catnum)
@@ -60,7 +61,7 @@ class Cluster:
         orig = val
         logger.debug('Orig: {}'.format(orig))
 
-        # Format string to improve matches
+        # Format string to simplify matches
         callback = lambda match: match.group(1).lower().strip(' -')
         val = re.sub('-? ?([A-z], ?[A-z](, ?[A-Z]))', callback, val)
 
@@ -71,20 +72,23 @@ class Cluster:
         # Split off questionable numbers after the last delimiter. Earlier
         # versions of this part included the hyphen (-), but that doesn't work
         # well. A hyphen denotes a range, not a list, so it has a different
-        # sense than the other characters included here.
+        # sense than the other delimiters.
         val = self.trim_bad_values(val)
 
-        # Check for false hyphens and spacing errors
+        # Check for unlikely hyphens and spacing errors
         if ' ' in val and len(val.replace(' ', '')) <= 10:
             val = val.replace(' ', '')
             logger.debug('Stripping spaces: %s', val)
+
         if val.count('-') == 1:
             n1, n2 = [s.strip() for s in val.split('-')]
+
             # Is the prefix of each number the same?
             pattern = re.compile(r'^[A-Z]\d{1,6}$')
             if n1[0] == n2[0] and pattern.match(n1) and pattern.match(n2):
                 logger.debug('Aborted: Value looks like a range')
                 return val
+
             # Assume short numbers are bad
             if len(n1) <= 3 and 2 <= len(n2) <= 4:
                 val = n1 + n2
@@ -96,23 +100,49 @@ class Cluster:
             return val
 
         # Don't try to cluster across different prefixes
-        if re.search(r'\b\d+\b', val) and re.search(r'\b[A-Z]{1,3} ?\d+\b', val):
+        prefixes = re.findall(r'([A-Z]+(?:[- ][A-Z])*) *\d', val)
+        if len(set(prefixes)) > 1:
             logger.debug('Aborted: Value mixes prefixed and unprefixed numbers')
             return val
 
-        # Expand values with a slash-delimited suffix
+        # Expand values with multiple suffixes
         try:
-            number, suffix = [s.strip() for s in val.split('/')]
-            if re.search(r'^\d+( *- *\d+)?$', suffix):
-                if suffix.isnumeric():
-                    suffixes = [suffix]
+            number, delim, suffixes = re.split(r'([-/])', val)
+            catnums = []
+            for suffix in as_list(suffixes, delims=',;'):
+                catnum = '{}{}{}'.format(number, delim, suffix)
+                if self.is_valid_catnum(catnum):
+                    catnums.append(catnum)
                 else:
-                    suffixes = self.expand_numeric_suffixes(suffix)
-                logger.debug('Expanded slash-delimited suffix')
-                val = '; '.join([f'{number}-{suffix}' for suffix in suffixes])
-                return val
+                    break
+            else:
+                return "; ".join(catnums)
         except ValueError:
             pass
+
+        # Split on common delimiters and check for valid catalog numbers
+        parts = [s for s in re.split(r' *[,;] *', val)]
+        logger.debug('Parts (delimited): {}'.format(parts))
+        valid = []
+        for part in parts:
+            if self.is_valid_catnum(part):
+                valid.append(part)
+            else:
+                # Look for slash-delimited, ranged suffixes
+                try:
+                    number, suffix = part.split('/')
+                except ValueError:
+                    break
+                else:
+                    suffixes = self.expand_suffix(suffix)
+                    if not suffixes:
+                        break
+                    for suffix in suffixes:
+                        valid.append('{}/{}'.format(number, suffix))
+        else:
+            if valid:
+                logger.debug('Aborted: All values are vaid catalog numbers')
+                return '; '.join(valid)
 
         # Leave values with range keywords as-is
         if (re.search(self.regex['join_range'], val)
@@ -120,8 +150,10 @@ class Cluster:
                 logger.debug('Aborted: Value may be a range')
                 return val
 
-        parts = [str(s) for s in re.split(r'([A-z]*\d+)', val)]
-        logger.debug('Parts: {}'.format(parts))
+        # Split into runs of alphanumeric characters
+        pat = r'([a-z]\-[a-z]\b|[a-z]+\d+|\d+[a-z]+(?!-)|\d+|[a-z]+)'
+        parts = [str(s) for s in re.split(pat, val, flags=re.I) if s.strip()]
+        logger.debug('Parts (alphanum): {}'.format(parts))
         if parts:
             parts = self.combine(self.clean(parts),
                                  minlen=minlen,
@@ -161,9 +193,13 @@ class Cluster:
         """Tests if value is a valid catalog number"""
         result = bool(re.match('^' + self.regex['catnum'] + '$', val))
         if result:
-            # Check if suffixed numbers are long enough
-            vals = val.split('-')
-            result = len(vals[0]) >= minlen
+            # Check if suffixed numbers are long enough and have one suffix
+            vals = re.split(r'[-/]', val)
+            result = (
+                len(vals) <= 2
+                and len(vals[0]) >= minlen
+                and not self.ends_with_range(val)
+            )
         logger.debug('"%s" %slooks like a catnum', val, '' if result else 'does not ')
         return result
 
@@ -175,9 +211,6 @@ class Cluster:
         if discard_delim:
             vals = [s for s in vals if re.search(r'[A-z0-9]', s)]
         result = all([self.is_valid_catnum(s.strip(), minlen=minlen) for s in vals])
-        # Test if all values exceed the minimum length
-        if result:
-            result = all([len(s.strip()) > minlen for s in vals])
         # Test if any value ends with an alpha suffix range
         if result:
             result = not any([self.ends_with_range(s.strip()) for s in vals])
@@ -193,11 +226,27 @@ class Cluster:
         """Trims unlikely catalog numbers/suffixes from a list"""
         logger.debug(f'Trimming bad values from "{val}"')
         orig = val
-        # Trim a single number if the first number is five or six characters
-        if re.match(r'^\d{5,6} \d$', val):
+        # Trim a single number following a 5-6 digit number
+        if re.match(r'^[A-Z]* ?\d{5,6} \d$', val):
             return val.split(' ')[0]
+        # Trim a single trailing number following a spaced hyphen
+        val = re.split(r' +- +\d$', val)[0]
+        # Check if value could be a catalog number with multiple suffixes
+        try:
+            num, suf = re.split(r'[-/]', val)
+            for suffix in as_list(suf, delims=',;'):
+                if (
+                    re.match(r'^[a-z]{3,}$', suffix, flags=re.I)
+                    or not self.is_valid_catnum('{}-{}'.format(num, suffix))
+                ):
+                    break
+            else:
+                return val
+        except ValueError:
+            pass
         # Strip out filler
-        val = re.sub(self.regex['filler'], '', val)
+        pattern = self.regex['filler'] + r"(?=[A-Z]{,3}\d{3,})"
+        val = re.sub(pattern, '', val, flags=re.I)
         # Split on common delimiters
         vals = self.split_on_delim(val)
         # Iteratively trim last value
@@ -210,9 +259,13 @@ class Cluster:
                     logger.debug('Trimmed "%s" (alphabetic)', val)
                     break
             vals = vals[:i + 1]
-        if vals != orig:
+        val = self.join(vals).rstrip(' ,;&')
+        # Trim single letters after a comma
+        val = re.sub(r'(?<=\d) *, *[a-z]$', '', val, flags=re.I)
+        # Log if val has changed
+        if val != orig:
             logger.debug('Trimmed to %s', vals)
-        return self.join(vals).rstrip(' ,;&')
+        return val
 
 
     def _validate_last(self, vals):
@@ -236,6 +289,7 @@ class Cluster:
         is_digit = val.isdigit()
         is_suffix = bool(re.match(self.p_suffix, val))
         is_alpha_suffix = bool(re.match(self.p_alpha_suffix, val))
+        is_alpha_range = bool(self.expand_alpha_suffix(val))
         logger.debug('%s: is_valid=%s, is_digit=%s,'
                      ' is_suffix=%s, is_alpha_suffix=%s',
                      val, is_valid, is_digit, is_suffix, is_alpha_suffix)
@@ -245,6 +299,8 @@ class Cluster:
                 # Log each case separately for troubleshooting purposes
                 if is_alpha_suffix and (len(val) > 1 or val not in 'lIO'):
                     logger.debug('"%s" is a valid alpha suffix', val)
+                elif is_alpha_range:
+                    logger.debug('"%s" has a valid alpha range', val)
                 elif is_valid and not is_digit:
                     logger.debug('"%s" is an alphanumeric catnum', val)
                 elif is_valid and is_digit and len(val) >= 4:
@@ -258,7 +314,14 @@ class Cluster:
         return True
 
 
-    def expand_alpha_suffixes(self, val):
+    def expand_suffix(self, val):
+        suffixes = self.expand_alpha_suffix(val)
+        if not suffixes:
+            suffixes = self.expand_numeric_suffix(val)
+        return suffixes
+
+
+    def expand_alpha_suffix(self, val):
         """Expands ranges of alphabetic suffixes"""
         # Get suffixes
         letters = 'abcdefghijklmnopqrstuvwxyz'
@@ -271,44 +334,51 @@ class Cluster:
         else:
             # Find discrete suffixes (123456a,b,d)
             suffixes = re.findall(r'(?<![A-z])([A-z])(?![A-z])', val)
-        logger.debug('Suffixes in "%s": %s', val, suffixes)
+        logger.debug('Alpha suffixes in "%s": %s', val, suffixes)
         return suffixes
 
 
-    def expand_numeric_suffixes(self, val):
+    def expand_numeric_suffix(self, val):
         """Expands ranges of numeric suffixes"""
         try:
             n1, n2 = [int(n.strip()) for n in val.split('-')]
             if n2 - n1 < 50:
                 suffixes = list(range(n1, n2 + 1))
-                logger.debug('Suffixes in "%s": %s', val, suffixes)
+                logger.debug('Numeric suffixes in "%s": %s', val, suffixes)
                 return suffixes
         except ValueError:
-            pass
-        raise ValueError(f'Not a valid range: {val}')
+            return []
 
 
     def clean(self, vals):
-        """Cleans up a list of localities"""
+        """Cleans up a list of candidates"""
         assert isinstance(vals, list)
         # Clean up the formatting of parts
         cleaned = []
         for val in vals:
             stripped = val.strip()
+
             # Remove words
             val = re.sub(r'[A-z]{2,}\.?', '', val)
+
             # Isolate ranges
             for suffix in self.suf_range.findall(val):
                 cleaned.append(suffix[0])
                 val = val.replace(suffix[0], '')
-            if (len(val) > 1 and not (stripped.isalpha()
-                or stripped.isnumeric()
-                or re.match(self.p_catnum, stripped))):
-                    cleaned.extend(list(val))
+
+            if (
+                len(val) > 1
+                and not (stripped.isalpha()
+                         or stripped.isnumeric()
+                         or re.match(self.p_catnum, stripped))
+            ):
+                cleaned.append(val)
+
             elif val:
                 cleaned.append(val)
-        logger.debug('Cleaned: {}'.format(vals))
-        return vals
+
+        logger.debug('Cleaned: {}'.format(cleaned))
+        return cleaned
 
 
     def combine(self, vals, minlen=None, maxlen=None, related=None):
@@ -328,86 +398,93 @@ class Cluster:
             logger.debug('Aborted: Numbers are already valid')
             return vals
 
-        # Does the value match a catalog number followed by a count?
-        #pattern = r'(?<!\d)\d{5,6} \d$'
-        #if re.search(pattern,''.join(vals)):
-        #    return [vals[0]]
-
-        # Are all the numbers minlen digits or longer?
-        pattern = r'^(\d+[A-z]?|[A-z](-[A-z])?)$'
-        nums = [p for p in vals if re.search(pattern, p)]
-        #if min([len(n) for n in nums]) >= minlen:
-        #    logger.debug('Aborted: Numbers are already the right length')
-        #    return ''.join(vals)
-        related += nums
+        # Calculate maximum length based on current and related numbers
         if maxlen is None:
+            pattern = r'^(\d+[A-z]?|[A-z](-[A-z])?)$'
+            nums = [p for p in vals if re.search(pattern, p)]
+            related += nums
             maxlen = max([len(n) for n in related])
 
         # Can shorter fragments be combined into that length?
         clustered = []
-        zap_frag = False
         fragment = ''
-        for orig in vals:
-            val = orig.rstrip(';& ')
-            if re.match(r'[A-Z]{1,3} ?\d+', val):
-                logger.debug('"%s" treated as whole/partial catalog number', val)
-                if fragment and not [n for n in clustered if n.startswith(fragment)]:
-                    clustered.append(fragment)
-                fragment = val
-                zap_frag = False
-            elif val.isnumeric():
-                logger.debug('"%s" treated as whole/partial catalog number', val)
-                if len(fragment) == maxlen or zap_frag:
-                    if fragment and not [n for n in clustered if n.startswith(fragment)]:
-                        clustered.append(fragment)
-                    fragment = ''
-                    zap_frag = False
+        breaker = False
+        for i, val in enumerate(vals):
 
-                if clustered and len(val) >= 2:
-                    try:
-                        last_few = int(clustered[-1][-len(val):])
-                        if int(val) - last_few < 5:
-                            fragment = clustered[-1][:-len(val)] + val
-                        else:
-                            fragment += val
-                    except ValueError:
-                        fragment += val
-                else:
-                    fragment += val
-                if len(fragment) > maxlen:
+            # Get root for suffixes
+            root = fragment
+            if clustered:
+                root = re.sub(r'[A-z]+$', '', clustered[-1])
+
+            # Check if the current fragment is a valid length
+            frag_valid = minlen <= len(fragment) <= maxlen
+
+            # Stop processing when breaking punctuation is followed by a
+            # a string that is not a catalog number but does contain letters
+            # if the preceding entry did not include a suffix. So "1234a, b"
+            # is valid but "1234, ab" is not.
+            if breaker:
+                if (
+                    not self.is_valid_catnum(val)
+                    and re.search(r'[A-z]', val)
+                    and not re.search(r'[A-z]+$', clustered[-1])
+                ):
                     break
-            elif val.isalpha() and len(val) == 1:
-                logger.debug('"%s" treated as one-character suffix', val)
-                clustered.append((fragment + val).strip(';'))
-                zap_frag = True
-            elif val != ' ' and fragment:
-                logger.debug('"%s" treated as multi-character suffix', val)
-                # Each val may contain one or more suffixes or suffix ranges
-                for part in self.split_on_delim(val):
-                    for suffix in self.expand_alpha_suffixes(part):
-                        clustered.append(fragment + suffix)
-                        zap_frag = True
-            else:
-                logger.warning(f'Could not combine "{val}" from {vals}')
+                breaker = False
+
+            # Turn on breaker when comma/semicolor encountered
+            if val in ',;':
+                breaker = True
+
+            # Append numbers to the current fragment
+            elif val.isnumeric() and fragment:
+                fragment += val
+
+            # Iterate last value in clustered if current value is similar to
+            # last few digits of last value
+            elif (
+                val.isnumeric()
+                and len(val) < minlen
+                and clustered
+                and clustered[-1][-1].isnumeric()
+                and int(val) - int(clustered[-1][-len(val):]) == 1
+            ):
+                clustered.append(clustered[-1][:-len(val)] + val)
+
+            # Create new fragment from a number
+            elif val.isnumeric():
+                fragment += val
+
+            # Append single letters to either the current fragment or,
+            # failing that, the last value added to clustered
+            elif len(val) == 1 and val.isalpha():
+                clustered.append(root + val)
+                clustered = [n for n in clustered if n != root]
+                fragment = ''
+
+            # Combine alphanumeric strings with fragment if result is valid
+            elif self.is_valid_catnum(fragment + val):
+                clustered.append(fragment + val)
+                fragment = ''
+
+            # Expand ranges of alpha suffixes
+            elif re.match(r'^[a-z]-[a-z]$', val, flags=re.I):
+                for suffix in self.expand_alpha_suffix(val):
+                    clustered.append(root + suffix)
+                clustered = [n for n in clustered if n != root]
+                fragment = ''
+
+            # Add fragment to clustered when it reaches the maximum allowed
+            # length, then reset the fragment
+            if len(fragment) == maxlen:
+                clustered.append(fragment)
+                fragment = ''
         else:
-            # Checks if the remaining fragment should be added to clustered
-            if fragment and not [n for n in clustered if n.startswith(fragment)]:
-                if len(fragment) >= minlen:
-                    clustered.append(fragment)
-                else:
-                    logger.debug('Aborted: Bad fragment length')
-                    return vals
-            try:
-                nums = [int(n) for n in nums if int(n) in clustered]
-            except ValueError:
-                nums = clustered
-            else:
-                for n in clustered:
-                    mindiff = min([abs(n - m) for m in nums]) if nums else 0
-                    if mindiff > 10:
-                        nums = [n for n in nums if len(str(n)) > minlen]
-                        break
-                else:
-                    nums = clustered
+            # Add fragment to clustered if length is valid
+            if minlen <= len(fragment) <= maxlen:
+                clustered.append(fragment)
+
+        nums = clustered
+
         logger.debug('Combined: %s', nums)
         return nums

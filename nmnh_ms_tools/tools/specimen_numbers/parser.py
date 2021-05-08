@@ -69,26 +69,52 @@ class Parser:
 
 
     def clean_text(self, text):
+        """Removes periods and spaces from museum codes in text"""
         def clean_codes(match):
+            if match.group().count(".") == 1 and match.group().endswith("."):
+                return text
             return re.sub(r'[^A-z]', '', match.group()).upper()
 
         codes = [r"\.? *".join(c) for c in self.codes]
-        pattern = r"\b({})\b".format("|".join(codes))
-        return re.sub(pattern, clean_codes, text, flags=re.I)
+        pattern = r"\b({})(\.|\b)".format("|".join(codes))
+        text = re.sub(pattern, clean_codes, text, flags=re.I)
+
+        # Split text on codes
+        pattern = r'({})'.format('|'.join(self.codes))
+        parts = re.split(pattern, text)
+        combined = []
+        for i, part in enumerate(parts[1:]):
+            if parts[i] in self.codes:
+                coded = f'{parts[i]}{part}'.strip(';. ')
+                coded = re.sub(r'(?<=\d)([\. ]+)(?=[A-Z]$)', '-', coded)
+                combined.append(coded)
+
+        return '; '.join(combined)
 
 
-
-    def snippets(self, text, mask=None, num_chars=32, highlight=True, pages=None):
+    def snippets(self,
+                 text,
+                 mask=None,
+                 num_chars=32,
+                 highlight=True,
+                 clean=True,
+                 pages=None):
         """Find all occurrences of a pattern in text"""
         if mask is None:
             mask = self.mask
         elif isinstance(mask, str):
             mask = re.compile(mask)
 
+        if clean:
+            text = self.clean_text(text)
+
         snippets = {}
         for match in mask.finditer(text):
             val = match.group()
             start = match.start()
+
+            if val.startswith('-'):
+                continue
 
             # Get index for start of string based on the number of characters,
             # seeking backwards to find the nearest word break
@@ -113,6 +139,7 @@ class Parser:
             # Compile snippet with ellipses to indicate where snippets were
             # pulled from mid-text. Also neatens up the snppets by stripping
             # non-alphanumeric characters from each end.
+            # FIXME: Do not strip closing parentheses
             snippet = ''.join([
                 '...' if i else '',                          # leading ellipsis
                 re.sub(r'(^\W+|\W+$)', "", text[i:j]),
@@ -137,7 +164,6 @@ class Parser:
         if expand_short_ranges is not None:
             esr = self.expand_short_ranges
             self.expand_short_ranges = expand_short_ranges
-        #val = val.decode('utf-8')
         orig = val
         # Remove thousands separators`
         val = re.sub(r'(\d),(\d\d\d)\b', r'\1\2', val)
@@ -147,6 +173,8 @@ class Parser:
                 val = code + ' ' + val[:-(len(code) + 2)].strip()
                 logger.debug('Moved "%s" to front of string', code)
             val = val.replace(code, code + ' ').replace('  ', ' ')
+        # Use snippets to get a list of candidates
+        val = '|'.join(self.snippets(val))
         # Try to split the value on strings that look like museum codes,
         # defined here as capitalized alpha strings of 3 or more letters.
         words = [w for w in re.split(r'([A-Z]{3,} ?)', val)
@@ -178,7 +206,7 @@ class Parser:
                 logger.warning('Museum code only: %s', orig)
         if expand_short_ranges is not None:
             self.expand_short_ranges = esr
-        return vals
+        return sorted(vals)
 
 
     def _parse(self, val):
@@ -202,6 +230,7 @@ class Parser:
         for match in [m[0] for m in self.mask.findall(val)]:
             # The museum code interferes with parsing, so strip it here
             match = self.remove_museum_code(match)
+            nums.extend(self.parse_mixed(match))
             nums.extend(self.parse_discrete(match))
             nums.extend(self.parse_ranges(match))
         if not nums and self.is_range(val):
@@ -218,16 +247,19 @@ class Parser:
             if minlen < 4:
                 maxlen = max([len(str(n.number)) for n in nums])
                 nums = [n for n in nums if n.number > 10**(maxlen - 2)]
+
         nums = [self.stringify(n) for n in nums]
         nums = [n for i, n in enumerate(nums) if n not in nums[:i]]
 
-        # Add keywords to special numbers
-        if 'loc' in val.lower():
-            nums = [n.replace(' ', ' locality no. ', 1) for n in nums]
-        if 'slide' in val.lower():
-            nums = [n.replace(' ', ' slide no. ', 1) for n in nums]
-        if 'type' in val.lower():
-            nums = [n.replace(' ', ' type no. ', 1) for n in nums]
+        # Catch special numbers that look like catalog numbers
+        pat = r'\b(loc(\.|ality)?|slide|type) *(?:#|no\.?|num(ber))'
+        try:
+            kind = re.search(pat, val, flags=re.I).group(1).lower().strip('.')
+        except AttributeError:
+            pass
+        else:
+            kind = {'loc': 'locality'}.get(kind, kind)
+            nums = [n.replace(' ', f' {kind} no. ', 1) for n in nums]
 
         return nums
 
@@ -255,7 +287,12 @@ class Parser:
     def parse_discrete(self, val):
         """Returns a list of discrete specimen numbers"""
         logger.debug('Looking for discrete numbers in "{}"...'.format(val))
-        val = re.sub(self.regex['filler'], '', val, flags=re.I)
+        orig = val
+
+        #val = re.sub(self.regex['filler'], '', val, flags=re.I)
+        pattern = self.regex['filler'] + r"(?=[A-Z]{,3}\d{3,})"
+        val = re.sub(pattern, '', val, flags=re.I)
+
         prefix = re.match(r'\b(' + self.regex['prefix'] + r')(?![a-zA-z])', val)
         prefix = prefix.group() if prefix is not None else ''
         discrete = self.discrete.search(val)
@@ -347,6 +384,34 @@ class Parser:
         return nums
 
 
+    def parse_mixed(self, val):
+        """Returns specimen numbers from string with discrete and ranged nums"""
+
+        if not ('-' in val and '/' in val):
+            return []
+
+        parts = [s for s in re.split(r'([-/]\d+)', val)]
+        parts = [p.strip() for p in parts if p.strip()]
+        nums = []
+        if all([re.match(r'[-/]\d+$', p) for p in parts[1:]]):
+            nums.append(self.parse_num(parts[0]))
+            for i, part in enumerate(parts[1:]):
+
+                # Fill ranges for hyphen-delimited parts
+                if part.startswith('-'):
+                    num = self.stringify(nums[-1])
+                    nums.extend(self.fill_range(f'{num}{part}'))
+
+                # Fill discrete by substituting last few characters of
+                # previous number with the current part
+                else:
+                    part = part.strip('/')
+                    num = self.stringify(nums[-1])
+                    nums.append(self.parse_num(num[:-len(part)] + part))
+
+        return nums
+
+
     @staticmethod
     def validate_trailer(vals):
         val = vals[-1].strip()
@@ -406,7 +471,10 @@ class Parser:
         except IndexError:
             code = self.code
         val = self.remove_museum_code(val.strip())
-        val = re.sub(self.regex['filler'], '', val, flags=re.I)
+
+        pattern = self.regex['filler'] + r"(?=[A-Z]{,3}\d{3,})"
+        val = re.sub(pattern, '', val, flags=re.I)
+
         # Identify prefix and number
         try:
             prefix = re.match(r'\b[A-Z ]+', val).group()
@@ -430,14 +498,21 @@ class Parser:
                 # A value after a spaced out hyphen is unlikely to be a suffix
                 if delim == ' - ':
                     suffix = ''
+
+                # A value containing slashes is unlikely to be a suffix
+                if '/' in suffix:
+                    raise ValueError(f'Could not parse: {val} (bad suffix)')
+
                 strip_chars = ''.join(delims) + ' '
                 number = number.rstrip(strip_chars)
                 suffix = suffix.strip(strip_chars)
                 break
+
         # Clean up stray OCR errors in the number now suffix has been removed
         if (not number.isdigit()
             and not (number[:-1].isdigit() and len(number) > 6)):
                 number = ''.join([self.fix_ocr_errors(c) for c in number])
+
         # Identify trailing letters, wacky suffixes, etc.
         if not number.isdigit():
             try:
@@ -447,12 +522,24 @@ class Parser:
             else:
                 suffix = (trailing + delim + suffix).strip()
                 number = number.rstrip(trailing)
+
         prefix = prefix.strip()
         number = self.fix_ocr_errors(number)
         if len(number) < 6:
             suffix = self.fix_ocr_errors(suffix.strip(), match=True)
         # Disregard unlikely suffixes
-        stopwords = {'and', 'but', 'in', 'for', 'not', 'on', 'so', 'the', 'was'}
+        stopwords = {
+            'and',
+            'but',
+            'in',
+            'for',
+            'not',
+            'of',
+            'on',
+            'so',
+            'the',
+            'was'
+        }
         if (
             len(suffix) > 3 and suffix.isalpha()
             or len(suffix) > 5
@@ -526,7 +613,7 @@ class Parser:
 
 
     def get_range(self, n1, n2=None):
-        """Generates all the catalog numbers in a catalog number range"""
+        """Gets the endpoints of a range"""
         if n2 is None:
             n1, n2 = self.split_num(n1)
         if not self._is_range(n1, n2):
@@ -548,6 +635,9 @@ class Parser:
         if n1 is None and n2 is None:
             return False
         if n2 is None:
+            # Only expand numbers if they include a hyphen
+            if '-' not in str(n1):
+                return False
             try:
                 n1, n2 = self.split_num(n1)
             except ValueError:
@@ -567,14 +657,15 @@ class Parser:
         small_diff = (n2.number - n1.number) < 500
         no_suffix = not n1.suffix and not n2.suffix
         n2_bigger = n2.number > n1.number
-        return bool(same_prefix
-                    and (big_numbers or small_diff)
-                    and small_diff
-                    and no_suffix
-                    and n2_bigger)
+        return (same_prefix
+                and (big_numbers or small_diff)
+                and small_diff
+                and no_suffix
+                and n2_bigger)
 
 
     def is_catnum(self, val):
+        """Tests if the given value looks like a catalog number"""
         return (
             re.match('^' + self.regex['catnum'] + '$', val)
             and not val.strip().isalpha()
@@ -583,7 +674,7 @@ class Parser:
 
     def short_range(self, n1, n2):
         """Expands numbers to test for short ranges (e.g., 123456-59)"""
-        x = 10.**(len(str(n2.number)))
+        x = 10 ** len(str(n2.number))
         num = int(math.floor(n1.number / x) * x) + n2.number
         n2 = SpecNum(n2.code, n2.prefix, num, n2.suffix)
         return n1, n2

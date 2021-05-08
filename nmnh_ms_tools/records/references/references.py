@@ -57,7 +57,7 @@ class Reference(Record):
     std = Standardizer()
 
 
-    def __init__(self, data):
+    def __init__(self, data, resolve_parsed_doi=True):
         # Set lists of original class attributes and reported properties
         self._class_attrs = set(dir(self))
         # Explicitly define defaults for all reported attributes
@@ -75,9 +75,11 @@ class Reference(Record):
         self._doi = ''
 
         # Initialize instance
-        super(Reference, self).__init__(data)
-
+        super(Reference, self).__init__()
+        self.resolve_parsed_doi = resolve_parsed_doi
         self.formatter = CSEFormatter
+
+        self.parse(data)
 
 
     def __str__(self):
@@ -116,14 +118,29 @@ class Reference(Record):
         return self.publication
 
 
+    @booktitle.setter
+    def booktitle(self, val):
+        self.publication = val
+
+
     @property
     def journal(self):
         return self.publication
 
 
+    @journal.setter
+    def journal(self, val):
+        self.publication = val
+
+
     @property
     def series(self):
         return self.publication
+
+
+    @series.setter
+    def series(self, val):
+        self.publication = val
 
 
     @property
@@ -141,7 +158,7 @@ class Reference(Record):
         self.reset()
         self.verbatim = data
         is_doi = isinstance(data, str) and data.startswith('10.')
-        parse_doi = not is_doi
+        parse_doi = self.resolve_parsed_doi and not is_doi
         if is_doi:
             self._parse_doi(data)
         elif 'BibRecordType' in data:
@@ -151,6 +168,8 @@ class Reference(Record):
             parse_doi = False
         elif '_gddid' in data:
             self._parse_geodeepdive(data)
+        elif 'provider' in data:
+            self._parse_jstor(data)
         elif 'title' in data:
             self._parse_reference(data)
         elif isinstance(data, self.__class__):
@@ -218,6 +237,7 @@ class Reference(Record):
                 response = self.bot.get(url, headers=headers)
                 if response.text.startswith('@'):
                     return response.text
+
             except ValueError:
                 logger.warning(f"Could not resolve {doi}")
 
@@ -365,7 +385,11 @@ class Reference(Record):
         # Map parsed data to Reference
         self.kind = parsed['ENTRYTYPE']
         self.authors = parse_names(parsed.get('author', ''))
-        self.title = parsed['title']
+        try:
+            self.title = parsed['title']
+        except KeyError:
+            logger.warning('No title: {}'.format(parsed))
+            self.title = '[NO TITLE PROVIDED]'
         try:
             self.year = self._parse_year(parsed['year'])
         except KeyError:
@@ -472,10 +496,41 @@ class Reference(Record):
         try:
             self.doi = [b['id'] for b in identifiers if b['type'] == 'doi'][0]
         except IndexError:
-            self.url = data.get('url', '')
+            if data.get('url'):
+                self.url = data['url']
+            else:
+                self.url = f'https://geodeepdive.org/api/articles?docid={data["_gddid"]}'
         else:
             self.url = 'https://doi.org/{}'.format(self.doi)
         self.publisher = data.get('publisher', '')
+
+
+    def _parse_jstor(self, data):
+        """Parses JSTOR/Portico/Constellate article record"""
+        self.kind = data["docType"]
+        # Get item metadata
+        self.authors = []
+        for name in [a['name'] for a in data.get('creators', []) if a['name']]:
+            self.authors.extend(parse_names(name))
+        self.title = data["title"]
+        self.year = data["publicationYear"]
+        self.publication = data["isPartOf"]
+        self.volume = data["volumeNumber"]
+        self.number = data["issueNumber"]
+        self.pages = "-".join([data["pageStart"], data["pageEnd"]])
+        self.publisher = data["publisher"]
+
+        # Get DOI
+        self.doi = data["doi"]
+        if not self.doi and "doi.org" in data["url"]:
+            self.doi = data["url"].split("doi.org/")[-1]
+        if self.doi:
+            self.url = 'https://doi.org/{}'.format(self.doi)
+        elif data["url"]:
+            self.url = data["url"]
+        elif data["id"].startswith("ark:"):
+            # NOTE: At least some Portico arks don't resolve
+            self.url = 'https://n2t.net/{}'.format(data["id"])
 
 
     def _parse_reference(self, data):

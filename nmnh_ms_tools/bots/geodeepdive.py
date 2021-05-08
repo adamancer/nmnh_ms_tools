@@ -22,15 +22,25 @@ class GeoDeepDiveBot(Bot):
         self._docid_clusters = {}
 
 
-    def get_snippets(self, term, **kwargs):
+    def get_snippets(self, term=None, **kwargs):
         """Gets snippets matching given criteria from the GeoDeepDive API"""
         url = 'https://geodeepdive.org/api/snippets'
+
+        # Use the scrollID if given
+        if kwargs.get("scroll_id"):
+            return self._get_clustered(url, {"scroll_id": kwargs["scroll_id"]})
+
+        if not term:
+            raise ValueError("Must provide either term or scrollID")
+
+        # If term is a non-string iterable, join into a string
+        if not isinstance(term, str):
+            term = ','.join(term)
+
         params = {
             'term': term,
             'clean': '',
-            'article_limit': 1000,
             'fragment_limit': 1000,
-
         }
         params.update(kwargs)
         return self._get_clustered(url, params=params)

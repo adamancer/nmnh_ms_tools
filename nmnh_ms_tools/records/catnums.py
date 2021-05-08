@@ -575,7 +575,6 @@ def get_catnum(val, **kwargs):
     return parsed
 
 
-@functools.lru_cache()
 def parse_catnums(val, parser=None):
     """Parses catalog numbers from a string"""
     if not val:

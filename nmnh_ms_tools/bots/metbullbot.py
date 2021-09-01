@@ -1,9 +1,11 @@
 """Defines bot to interact with the MetBull website"""
+from datetime import datetime
+import hashlib
 import logging
 import re
 
-import html5lib
-from bs4 import BeautifulSoup
+import lxml
+from bs4 import BeautifulSoup, SoupStrainer
 
 from .core import Bot, JSONResponse
 
@@ -66,6 +68,7 @@ class MetBullBot(Bot):
 
 class MetBullResponse(JSONResponse):
     """Defines methods to parse MetBull HTML to JSON"""
+    _cached_json = {}
 
     def __init__(self, response, **kwargs):
         kwargs.setdefault('results_path', [])
@@ -73,17 +76,39 @@ class MetBullResponse(JSONResponse):
 
 
     def cast_to_json(self):
-        """Casts HTML to JSON"""
+        """Casts HTML returned by MetBull to JSON"""
         meteorites = []
-        for response in self._responses:
-            soup = BeautifulSoup(response.text, 'html5lib')
+
+        text = self._response.text
+        key = hashlib.md5(text.encode()).hexdigest()
+
+        # Get timestamp from response
+        fmt = "%a, %d %b %Y %H:%M:%S %Z"
+        timestamp = datetime.strptime(self._response.headers["Date"], fmt)
+
+        try:
+            return self._cached_json[key][:]
+        except KeyError:
+            meteorites = []
+
+            strainer = SoupStrainer('table', attrs={'id': 'maintable'})
+            soup = BeautifulSoup(text, 'lxml', parse_only=strainer)
             trs = soup.find(id='maintable').find_all('tr')
             keys = [th.text.strip().lower() for th in trs[0].find_all('th')]
+
             for tr in trs[1:]:
+
                 vals = [td.text.strip() for td in tr.find_all('td')]
                 rowdict = dict(zip(keys, vals))
+
+                # Get URL for the canonical record
+                url = tr.find('a', href=True)["href"]
+                rowdict['metbull_id'] = int(re.search(r"code=(\d+)", url).group(1))
+
                 # Clean up keys
                 rowdict['name'] = rowdict['name'].strip('* ')
+                rowdict['timestamp'] = timestamp
+
                 lat_lng = rowdict['(lat,long)'].strip('()').split(',')
                 try:
                     coords = [s.strip() for s in lat_lng]
@@ -93,5 +118,8 @@ class MetBullResponse(JSONResponse):
                     rowdict['lng'] = ''
                 del rowdict['(lat,long)']
                 meteorites.append(rowdict)
+
             logger.debug('{:,} meteorites parsed'.format(len(meteorites)))
-        return meteorites
+
+            self._cached_json[key] = meteorites[:]
+            return meteorites

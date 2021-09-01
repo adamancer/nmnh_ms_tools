@@ -63,7 +63,10 @@ class Cluster:
 
         # Format string to simplify matches
         callback = lambda match: match.group(1).lower().strip(' -')
-        val = re.sub('-? ?([A-z], ?[A-z](, ?[A-Z]))', callback, val)
+        val = re.sub(r'-? ?([A-z], ?[A-z](, ?[A-Z]))', callback, val)
+
+        # Treat ampersand as a hard delimiter
+        val = re.sub(r' *& *', '; ', val)
 
         # Check if all numbers are followed by one or more spaces
         if len(re.findall(r'\d ', val)) == len(re.findall(r'\d', val)):
@@ -144,10 +147,30 @@ class Cluster:
                 logger.debug('Aborted: All values are vaid catalog numbers')
                 return '; '.join(valid)
 
-        # Leave values with range keywords as-is
-        if (re.search(self.regex['join_range'], val)
-            and self.suf_range.search(val) is None):
-                logger.debug('Aborted: Value may be a range')
+        # Cluster ranges separately
+        if (
+            re.search(self.regex['join_range'], val)
+            and self.suf_range.search(val) is None
+        ):
+            # Are substrings well formed?
+            if (
+                self.all_valid_catnums(re.split(r" +", val))
+                or self.all_valid_catnums(re.split(r"[- ]+", val))
+            ):
+                logger.debug('Aborted: Value is well-formed range(s)')
+                return val
+
+            # Try to clean up simple ranges
+            parts = re.split(self.regex['join_range'], val)
+            if len(parts) == 3 and '/' not in parts[-1]:
+                vals = []
+                for part in parts:
+                    clustered = self.cluster(part)
+                    vals.append(clustered if clustered else part)
+                return "".join(vals)
+            else:
+                # Punt on anything complicated
+                logger.debug('Aborted: Value appears to be a range')
                 return val
 
         # Split into runs of alphanumeric characters

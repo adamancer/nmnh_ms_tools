@@ -53,7 +53,9 @@ class Parser:
 
     def cluster(self, val):
         """Clusters lists of numbers and expands alpha suffixes"""
-        return self._cluster.cluster(self.fix_ocr_errors(val))
+        if self.from_ocr:
+            return self._cluster.cluster(self.fix_ocr_errors(val))
+        return val
 
 
     def findall(self, text):
@@ -68,7 +70,7 @@ class Parser:
         return sorted(matches, key=len)
 
 
-    def clean_text(self, text):
+    def clean_text(self, text, split_codes=True):
         """Removes periods and spaces from museum codes in text"""
         def clean_codes(match):
             if match.group().count(".") == 1 and match.group().endswith("."):
@@ -79,17 +81,19 @@ class Parser:
         pattern = r"\b({})(\.|\b)".format("|".join(codes))
         text = re.sub(pattern, clean_codes, text, flags=re.I)
 
-        # Split text on codes
-        pattern = r'({})'.format('|'.join(self.codes))
-        parts = re.split(pattern, text)
-        combined = []
-        for i, part in enumerate(parts[1:]):
-            if parts[i] in self.codes:
-                coded = f'{parts[i]}{part}'.strip(';. ')
-                coded = re.sub(r'(?<=\d)([\. ]+)(?=[A-Z]$)', '-', coded)
-                combined.append(coded)
+        # Split text on codes. Useful for matching but disrupts the string.
+        if split_codes:
+            pattern = r'({})'.format('|'.join(self.codes))
+            parts = re.split(pattern, text)
+            combined = []
+            for i, part in enumerate(parts[1:]):
+                if parts[i] in self.codes:
+                    coded = f'{parts[i]}{part}'.strip(';. ')
+                    coded = re.sub(r'(?<=\d)([\. ]+)(?=[A-Z]$)', '-', coded)
+                    combined.append(coded)
+            return '; '.join(combined)
 
-        return '; '.join(combined)
+        return text
 
 
     def snippets(self,
@@ -105,8 +109,9 @@ class Parser:
         elif isinstance(mask, str):
             mask = re.compile(mask)
 
+        orig = text
         if clean:
-            text = self.clean_text(text)
+            text = self.clean_text(text, split_codes=False)
 
         snippets = {}
         for match in mask.finditer(text):
@@ -129,7 +134,7 @@ class Parser:
                 i -= 1
 
             # Get index for start of string based on the number of characters,
-            # seeking forwards to find the nearest word break.
+            # seeking forward to find the nearest word break.
             j = min([i + len(val) + num_chars_before + num_chars, len(text)])
             while j < len(text):
                 if re.match(r'\W', text[j], flags=re.U):
@@ -141,7 +146,7 @@ class Parser:
             # non-alphanumeric characters from each end.
             # FIXME: Do not strip closing parentheses
             snippet = ''.join([
-                '...' if i else '',                          # leading ellipsis
+                '...' if i > 0 else '',                      # leading ellipsis
                 re.sub(r'(^\W+|\W+$)', "", text[i:j]),
                 '...' if j < len(text) else ''               # trailing ellpsis
             ])
@@ -215,13 +220,17 @@ class Parser:
         # Clean up the string a little to simplify parsing
         val = val.replace('--', '-') \
                  .replace('^', '') \
-                 .replace(' and ', ' & ') \
                  .strip('()[],;&? ')
+        val = re.sub(r'\band\b', '&', val)
+        val = val.strip('()[],;&? ')
         # Remove the museum code, wherever it may be
         try:
             self.code = re.findall(self.regex['code'], val)[0].strip()
         except IndexError:
             pass
+        # Clean up special numbers so they're easier to recognize
+        pattern = r'(?<=[A-Z] )(loc(\.|ality)?|slide|type)(?= \d)'
+        val = re.sub(pattern, r"\1 no.", val)
         # Check for high-quality numbers and bail
         if self.simple.search(val):
             return [val]
@@ -292,9 +301,8 @@ class Parser:
         #val = re.sub(self.regex['filler'], '', val, flags=re.I)
         pattern = self.regex['filler'] + r"(?=[A-Z]{,3}\d{3,})"
         val = re.sub(pattern, '', val, flags=re.I)
-
-        prefix = re.match(r'\b(' + self.regex['prefix'] + r')(?![a-zA-z])', val)
-        prefix = prefix.group() if prefix is not None else ''
+        #prefix = re.match(r'\b(' + self.regex['prefix'] + r')(?![a-zA-z])', val)
+        #prefix = prefix.group() if prefix is not None else ''
         discrete = self.discrete.search(val)
         if discrete is None:
             val = self.cluster(val)
@@ -332,17 +340,33 @@ class Parser:
                         spec_nums.extend(rng)
                         # Ensure that this chunk is not in spec_nums
                         spec_nums = [n for n in spec_nums if n != chunk]
-                spec_nums = sorted(set(spec_nums))
+                # Fill numbers
+                prefix = None
                 for spec_num in spec_nums:
                     spec_num = self.remove_museum_code(spec_num)
-                    if not spec_num.startswith(prefix):
-                        spec_num = prefix + spec_num
+
+                    # Check for prefix
+                    if spec_num[0].isalpha():
+                        num = self.parse_num(spec_num)
+                        prefix = (num.prefix, len(str(num.number)))
+
+                    # Apply the prefix from the previous number if similar
+                    elif prefix is not None:
+                        num = self.parse_num(spec_num)
+                        if len(str(num.number)) == prefix[1]:
+                            num.prefix = prefix[0]
+                            spec_num = self.stringify(num)
+                        else:
+                            prefix = None
+
                     if self.is_range(spec_num):
                         nums.extend(self.fill_range(spec_num))
                     elif self.is_catnum(spec_num.strip()):
                         nums.append(self.parse_num(spec_num.replace(' ', '')))
                     else:
                         nums.append(self.parse_num(spec_num))
+
+                nums = [n for i, n in enumerate(nums) if n not in nums[:i]]
         if nums:
             num_strings = [self.stringify(n) for n in nums]
             logger.debug('Parsed discrete: %s', num_strings)
@@ -547,6 +571,10 @@ class Parser:
             or suffix in stopwords
         ):
             suffix = ''
+        else:
+            # Strip stopwords that directly follow a number
+            pattern = r'(?<=\d)({})'.format('|'.join(stopwords))
+            suffix = re.sub(pattern, "", suffix)
         try:
             return SpecNum(code, prefix, int(number), suffix.upper())
         except ValueError as e:

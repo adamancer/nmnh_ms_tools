@@ -61,14 +61,12 @@ from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
         ('USNM Coll. No. 72339', ['USNM 72339']),
         ('USNM 192947-50 164359-60', ['USNM 164359', 'USNM 164360', 'USNM 192947', 'USNM 192948', 'USNM 192949', 'USNM 192950']),
         ('USNM 144786a', ['USNM 144786A']),
-        #'USNM115418-22-2', ['USNM 115418', 'USNM 115419', 'USNM 115420', 'USNM 115421', 'USNM 115422']),
         ('USNMNo. 3883A-2', ['USNM 3883A-2']),
         ('USNM204287 204288', ['USNM 204287', 'USNM 204288']),
         ('Carapace USNM 528 543 (Pl. 3 Fig. 10a). Par...',  ['USNM 528543']),
         ('USNM 159331-2 165090', ['USNM 159331', 'USNM 159332', 'USNM 165090']),
         ('...97; 4 July 1984; USNM 23 4297 (paratype 1 ovigero...', ['USNM 234297']),
         ('USNM 222269--73 247305--11 247632--3 343241 268946--53', ['USNM 222269', 'USNM 222270', 'USNM 222271', 'USNM 222272', 'USNM 222273', 'USNM 247305', 'USNM 247306', 'USNM 247307', 'USNM 247308', 'USNM 247309', 'USNM 247310', 'USNM 247311', 'USNM 247632', 'USNM 247633', 'USNM 343241', 'USNM 268946', 'USNM 268947', 'USNM 268948', 'USNM 268949', 'USNM 268950', 'USNM 268951', 'USNM 268952', 'USNM 268953']),
-        #'USNM5312-1 381-3 51-2 3 19 5 8': []
         ('USNM 3369 13823 345225 346582 489406', ['USNM 3369', 'USNM 13823', 'USNM 345225', 'USNM 346582', 'USNM 489406']),
         ('USNM 9731 1 - 13', ['USNM 97311', 'USNM 97312', 'USNM 97313']),
         ('USNM 1081 0.106 44.766', ['USNM 1081']),
@@ -95,10 +93,8 @@ from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
         ('USNM P4833, P4861, P4862 and P4863', ['USNM P 4833', 'USNM P 4861', 'USNM P 4862', 'USNM P 4863']),
         ('AMNH 1021, 3519, 3520', ['AMNH 1021', 'AMNH 3519', 'AMNH 3520']),
         ('NMNH 18279, Fig. lb', ['NMNH 18279']),
-        #'FMNH 23-X-19B0': [FMNH 23-X-19B0]),  # not set up to handle values with no number
         ('USNM 97174-5, Behr, 1915', ['USNM 97174', 'USNM 97175']),
         ('USNM 14344.  lb', ['USNM 14344']),
-        ('...Tobago. A. USNM 228125- B. USNM 228124. C. USNM 228123- D, E, F. South American mainland....', ['USNM 228125B', 'USNM 228124C', 'USNM 228123D', 'USNM 228123E', 'USNM 228123F']),
         ('USNM P4430a-d', ['USNM P 4430A', 'USNM P 4430B', 'USNM P 4430C', 'USNM P 4430D']),
         ('...legans), USNM 40886  (syntypes of Protaster miamiensis), USNM 87166 (syntypes of T.  meafordensis), USNM 92604, USNM 92607, USNM 92617, USNM  92627, USNM 92639, USNM 161520, NYSM 7784 (holotype of T.  schohariae), MCZ 470 (holotype of Protaster? gramdiferus; ex MCZ 21),  CSC 1404 (h...', ['USNM 40886', 'USNM 87166', 'USNM 92604', 'USNM 92607', 'USNM 92617', 'USNM 92627', 'USNM 92639', 'USNM 161520', 'MCZ 470', 'MCZ 21']),
         ('NMNH 194383-85/87/92/93/99', ['NMNH 194383', 'NMNH 194384', 'NMNH 194385', 'NMNH 194387', 'NMNH 194392', 'NMNH 194393', 'NMNH 194399']),
@@ -116,11 +112,22 @@ from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
         ('...21, 1968 from the same locality; USNM 192877 is a male collected on June 30, 1968...', ['USNM 192877']),
         ('USNM 113027/43, 113027/353, 113028/0103, 113028/05', ['USNM 113027-353', 'USNM 113027-43', 'USNM 113028-0103', 'USNM 113028-05']),
         ('..Junin: Same data as holotype: FMNH 34242/1-23, 34247, 11 males, 4 females, 9 juveniles...', ['FMNH 34242-1', 'FMNH 34242-10', 'FMNH 34242-11', 'FMNH 34242-12', 'FMNH 34242-13', 'FMNH 34242-14', 'FMNH 34242-15', 'FMNH 34242-16', 'FMNH 34242-17', 'FMNH 34242-18', 'FMNH 34242-19', 'FMNH 34242-2', 'FMNH 34242-20', 'FMNH 34242-21', 'FMNH 34242-22', 'FMNH 34242-23', 'FMNH 34242-3', 'FMNH 34242-4', 'FMNH 34242-5', 'FMNH 34242-6', 'FMNH 34242-7', 'FMNH 34242-8', 'FMNH 34242-9', 'FMNH 34247']),
+        ('USNM 3 9 5 8 3 9 - 3 9 5 8 4 8', ['USNM 395839', 'USNM 395840', 'USNM 395841', 'USNM 395842', 'USNM 395843', 'USNM 395844', 'USNM 395845', 'USNM 395846', 'USNM 395847', 'USNM 395848']),
+        ('History, Washington, D.C., USA accession number USNM slide 223101.  Type locality', ['USNM slide no. 223101']),
+        ('ALH85003 from NASA, Johnson Space Center, Houston; USNM 6264-1 of Colony, USNM', ['USNM 6264-1']),
+        ('paratypes (USNM 234314, 1099 and 10~<~)have been deposited', ['USNM 1099', 'USNM 234314']),
+        ('International mineral and obsidian standards such as USNM 7285, KN18, and KE12 (Nielsen', ['USNM 7285']),
+        ('NMNH G9875, 148089, and 148090', ['NMNH G 9875', 'NMNH 148089', 'NMNH 148090']),
+        ('NMNH C6648 and G9977', ['NMNH C 6648', 'NMNH G 9977']),
         # No results expected
         ('NMNH 1234567890', []),
         ('Dyak coll. 190010408-9 (USNM)', []),
-        # Incomplete results
+        # Confusing or ambiguous citations
         #("...Philippines: Luzon, Camarines Province, Lake Buhi, cas 60947; USNM 1197697-98, 197844M8, 197851-197857. No data: bmnh 1946.1.7.24-...", [])
+        #('FMNH 23-X-19B0': [FMNH 23-X-19B0]),
+        #('...Tobago. A. USNM 228125- B. USNM 228124. C. USNM 228123- D, E, F. South American mainland....', ['USNM 228125B', 'USNM 228124C', 'USNM 228123D', 'USNM 228123E', 'USNM 228123F']),
+        #'USNM115418-22-2', ['USNM 115418', 'USNM 115419', 'USNM 115420', 'USNM 115421', 'USNM 115422']),
+        #'USNM5312-1 381-3 51-2 3 19 5 8': []
     ],
 )
 def test_parse_numbers(test_input, expected):

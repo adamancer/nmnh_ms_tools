@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 
-DEFAULT_PARSER = Parser(from_ocr=False)
+DEFAULT_PARSER = Parser(expand_short_ranges=False, from_ocr=False)
 
 
 
@@ -300,7 +300,10 @@ class CatNum(Record):
             attrs = ['coll_id', 'prefix', 'number', 'suffix']
         keyed = []
         for attr in attrs:
-            val = getattr(self, attr).strip()
+            try:
+                val = getattr(self, attr).strip()
+            except AttributeError:
+                val = ""
             if attr in ['number', 'suffix'] or re.match(r'^\d+$', val):
                 keyed.append(val.zfill(length))
             else:
@@ -537,13 +540,17 @@ class CatNums(Records):
             for prefix in keys:
                 cluster = []
                 for catnum in prefixes[prefix]:
+
                     # Suffixes make this very complicated, so ignore for now
                     if catnum.suffix:
                         if cluster:
                             clusters.append([cluster[0], cluster[-1]])
                             cluster = []
                         clusters.append([catnum])
-                    elif cluster and catnum.number - cluster[-1].number > 1:
+                    elif (
+                        cluster
+                        and int(catnum.number) - int(cluster[-1].number) > 1
+                    ):
                         clusters.append([cluster[0], cluster[-1]])
                         cluster = [catnum]
                     else:

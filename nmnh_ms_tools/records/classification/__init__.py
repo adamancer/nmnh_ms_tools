@@ -31,7 +31,7 @@ def get_tree(src=None):
         # Rebuild tree if src is different from the current JSON file
         if is_different(src, json_path):
             taxmu = TaXMu(src)
-            shutil.copy2(os.path.splitext(src) + '.json', json_path)
+            shutil.copy2(os.path.splitext(src)[0] + '.json', json_path)
             if not taxmu.check():
                 raise ValueError('Incongruities found in hierarchy! Please'
                                  ' import update_{timestamp}.xml into EMu'

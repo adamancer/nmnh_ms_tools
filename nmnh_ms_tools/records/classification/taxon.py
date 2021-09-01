@@ -177,7 +177,7 @@ class Taxon(BaseDict):
         # Get the base name. For some records, this will be the same as the
         # scientific name.
         name = rec('ClaOtherValue_tab')[0]
-        if name.count(',') == 1:
+        if name.count(',') == 1 and not name[0].isnumeric():
             name = ' '.join([s.strip() for s in name.split(',')][::-1])
             if self.key(name) == self.key(self['sci_name']):
                 name = self['sci_name']
@@ -364,7 +364,7 @@ class Taxon(BaseDict):
                 if parent.rank == 'mineral':
                     name = '{} (var. {})'.format(parent.name, taxon.name)
                     break
-        if name.count(',') == 1:
+        if name.count(',') == 1 and not name[0].isnumeric():
             name = ' '.join([s.strip() for s in name.split(',') if s][::-1])
         return self.tree.capped(name, ucfirst=ucfirst)
 

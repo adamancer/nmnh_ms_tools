@@ -196,23 +196,30 @@ class Reference(Record):
 
     def same_as(self, other, strict=True):
         """Tests if two references are the same"""
+
+        if self.doi and other.doi:
+            return self.doi == other.doi
+
         try:
             assert isinstance(other, self.__class__)
             # Ensure that certain basic data is present in both records
-            assert self.authors
             assert self.title
             assert self.year
-            assert other.authors
             assert other.title
             assert other.year
         except AssertionError:
             return False
-        if self.doi and other.doi:
-            return self.doi == other.doi
 
-        same_first_author = self.authors[0].first == other.authors[0].first
-        same_year = self.year == other.year
         similar_title = self.std.similar(self.title, other.title, minlen=2)
+        same_year = self.year[:4] == other.year[:4]
+
+        same_first_author = None
+        if self.authors and other.authors:
+            same_first_author = self.authors[0].last == other.authors[0].last
+
+        # Match on title-year if authors on one or both are missing
+        if not strict and same_first_author is None:
+            return same_year and similar_title
 
         return same_first_author and same_year and similar_title
 
@@ -238,7 +245,9 @@ class Reference(Record):
                 if response.text.startswith('@'):
                     return response.text
 
-            except ValueError:
+            except ValueError as err:
+                if "user agent" in str(err).lower():
+                    raise
                 logger.warning(f"Could not resolve {doi}")
 
 
@@ -298,7 +307,7 @@ class Reference(Record):
                 'BibRecordType': source_type,
                 '{}Title'.format(parent): self.publication
             }
-        # Add fields specific to or excluded from a given type
+        # Adjust fields based on publication type
         if prefix == 'Oth':
             del rec['{}PublicationDates']
             del rec['{}Volume']
@@ -315,6 +324,7 @@ class Reference(Record):
             del rec['{}PublicationDate']
         # Add GUIDs
         if self.doi:
+            rec['AdmGUIDIsPreferred_tab'] = ['Yes']
             rec['AdmGUIDType_tab'] = ['DOI']
             rec['AdmGUIDValue_tab'] = [self.doi]
             rec['NotNotes'] = self.resolve_doi()
@@ -468,7 +478,24 @@ class Reference(Record):
             self.number = rec('{}Issue'.format(prefix))
         except KeyError:
             pass
-        self.pages = rec('{}Pages'.format(prefix)).replace('--', '-')
+        # Get pages. Articles in EMu may store pages in either ArtPages or
+        # ArtIssuePages, the other publication types have only one field.
+        pages = []
+        for mask in ('{}Pages', '{}IssuePages'):
+            key = mask.format(prefix)
+            try:
+                pages.append(rec(key).replace('--', '-'))
+            except KeyError:
+                pass
+        pages = list(set([p for p in pages if p]))
+        # Keep the range if both a range and a count found
+        if len(pages) > 1:
+            hyphenated = [p for p in pages if "-" in p]
+            if not hyphenated:
+                raise ValueError(f"Multiple page counts found: {pages}")
+            pages = hyphenated
+        self.pages = pages[0] if pages else ""
+        # Get the DOI
         self.doi = rec.get_guid('DOI')
         if self.doi:
             self.url = 'https://doi.org/{}'.format(self.doi)

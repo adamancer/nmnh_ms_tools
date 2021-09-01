@@ -11,7 +11,7 @@ class CSEFormatter(BaseFormatter):
 
     def __str__(self):
         masks = {
-            "article": "{authors}. {year}. {title}. {publication}. {volume}({number}):{pages}. Available from: {url}. DOI: {doi}.",
+            "article": "{authors}. {year}. {title}. {publication}. {volume}({number}):{pages}. Available from: {url}. doi:{doi}.",
             "book": "{authors}. {year}. {title}. {volume}({number}). {city} ({state}): {publisher} {pages} p.",
             "chapter": "{authors}. {year}. {title}. In: {publication}. {pages}.",
             "mastersthesis": "{authors}. {year}. {title} [thesis]. {publisher}. {pages} p.",
@@ -53,6 +53,7 @@ class CSEFormatter(BaseFormatter):
                              .replace(".:", ".") \
                              .lstrip(". ") \
                              .rstrip(":. ") + "."
+        formatted = re.sub(r"\.\. ", ". ", formatted)
 
         return formatted
 

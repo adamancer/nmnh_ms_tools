@@ -424,7 +424,6 @@ class MatchAnnotator(MatchEvaluator):
             if site.site_kind.isupper():
                 source = f'{site.site_kind}: {source}'
         elif site.site_source:
-            input(site.url)
             source = f'via {site.site_source}'
         return '{} ({})'.format(loc, source) if source else loc
 

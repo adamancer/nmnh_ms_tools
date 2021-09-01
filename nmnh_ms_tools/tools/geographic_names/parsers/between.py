@@ -47,7 +47,7 @@ class BetweenParser(Parser):
     def name(self):
         """Returns a string describing the parsed locality"""
         if self.features and not self.inclusive:
-            return '"Between {}"'.format(self.feature)
+            return 'Between {}'.format(self.feature)
         elif self.features:
             return self.feature
         return ''

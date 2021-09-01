@@ -77,7 +77,7 @@ class ModifiedParser(Parser):
         """Returns a string describing the most likely locality"""
         if self.modifier is None:
             return self.feature
-        mask = '"{modifier} {feature}"'
+        mask = '{modifier} {feature}'
         if self.adj:
             mod = ucfirst(expand_direction(self.modifier, True))
         elif self.long:
@@ -85,7 +85,7 @@ class ModifiedParser(Parser):
         else:
             mod = self.modifier
             if self.modifier in {'center', 'near'}:
-                mask = '"{feature} ({modifier})"'
+                mask = '{feature} ({modifier})'
         return mask.format(feature=self.feature, modifier=mod)
 
 

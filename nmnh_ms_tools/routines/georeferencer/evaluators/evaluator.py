@@ -234,9 +234,6 @@ class MatchEvaluator:
         if sites is None or sites == self.sites:
             sites = self.sites[:]
 
-        for site in sites:
-            input(site)
-
         # Standardize keys that use compass directions
         keys = {}
         for site in sites:
@@ -521,6 +518,12 @@ class MatchEvaluator:
             if terr and self.smallest_encompassing:
                 field, polygon = self.smallest_encompassing
                 for site in sorted(terr, key=lambda s: -s.radius_km):
+                    # Do not constrain to sites similar to encompassing
+                    if (
+                        field == site.field
+                        and site.overlap(polygon, True) >= 0.9
+                    ):
+                        continue
                     geom = self.constrain(site.geometry, polygon, field)
                     # The first line in the conditional verifies that
                     # constrain is actually making the site geometry smaller
@@ -741,10 +744,7 @@ class MatchEvaluator:
         if sites is None:
             sites = self.sites[:]
 
-        # City check is invalid for sites parsed using the ModifiedParser
-        for site in sites:
-            print(site)
-        input()
+        # FIXME: City check invalid for sites parsed using the ModifiedParser
 
         capitals = [s for s in sites if re.match(r'^PPL[AC]', s.site_kind)]
         if capitals:

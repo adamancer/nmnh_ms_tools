@@ -50,6 +50,15 @@ def evaluator():
     return MatchEvaluator(ref_site, None, [ref_site])
 
 
+@pytest.fixture
+def site():
+    site = Site()
+    site.field = 'locality'
+    site.filter['name'] = 'test'
+    return site
+
+
+
 def test_missing_attribute(evaluator):
     with pytest.raises(AttributeError):
         evaluator.fakeattr
@@ -104,6 +113,7 @@ def test_key(evaluator, helpers):
 
 def test_select(evaluator, helpers):
     site = helpers.search_json('oahu')[0]
+    evaluator.sites = [site]
     assert evaluator.select([site]) == evaluator.select([site], site.geometry)
 
 
@@ -174,9 +184,9 @@ def test_reject_interpreted(evaluator, helpers):
     assert helpers.same_as(evaluator.inactive(), rej)
 
 
-def test_too_many_sites(evaluator):
+def test_too_many_sites(evaluator, site):
     with pytest.raises(ValueError):
-        evaluator.encompass([Site({})] * 500)
+        evaluator.encompass([site] * 500)
 
 
 def test_encompass_name(evaluator, helpers):

@@ -458,6 +458,9 @@ class Site(Record):
         else:
             self._parse(data)
 
+        # Map marine features to proper fields
+        self.map_marine_features()
+
         # Set URL mask based on the identifier
         if not self.url_mask and re.match(r'^Q\d+$', self.location_id):
             self.url_mask = 'https://www.wikidata.org/wiki/{location_id}'
@@ -720,7 +723,7 @@ class Site(Record):
                 if ocean and other:
                     assert ocean == other
             except (AssertionError, AttributeError):
-                logger.debug('Ocean mismatch: {} != {}'.format(ocean, other))
+                logger.debug(f'Ocean mismatch: "{ocean}" != "{other}"')
                 return False
             resize = 1.5
         # Otherwise verify that the polygons intersect

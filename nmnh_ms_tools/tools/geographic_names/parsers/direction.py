@@ -197,12 +197,12 @@ class DirectionParser(Parser):
         if feature.startswith(('Border of', 'Junction of')):
             feature = lcfirst(feature)
         if dist and self.unit and self.bearing and self.feature:
-            return '"{} {} {} of {}"'.format(dist,
+            return '{} {} {} of {}'.format(dist,
                                              self.unit,
                                              self.bearing,
                                              feature)
         elif not self.unit and not dist and self.bearing and self.feature:
-            return '"{} of {}"'.format(self.bearing, feature)
+            return '{} of {}'.format(self.bearing, feature)
         raise ValueError('Could not derive name: "{}"'.format(repr(self)))
 
 

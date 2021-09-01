@@ -662,13 +662,13 @@ class NaiveGeoMetry:
         return 0.
 
 
-    def similar_to(self, other, *args, **kwargs):
+    def similar_to(self, other, *args, dist_km=0.1, **kwargs):
         """Tests if centroid and radius of two shapes are within 100 m"""
         other = self.attune(other)
         if args or kwargs:
             return self._similar_to(other, *args, **kwargs)
-        if self.centroid_dist_km(other) <= 0.1:
-            return abs(self.radius_km - other.radius_km) <= 0.1
+        if self.centroid_dist_km(other) <= dist_km:
+            return abs(self.radius_km - other.radius_km) <= dist_km
         return False
 
 

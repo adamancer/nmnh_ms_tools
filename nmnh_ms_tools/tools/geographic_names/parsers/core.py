@@ -22,9 +22,9 @@ class Parser:
 
 
     def __init__(self, val=None, **kwargs):
-        self.verbatim = None           # original text passed to the parser
-        self.unconsumed = None         # fragment remaining after parsing
-        self.feature = None            # parsed feature name
+        self.verbatim = None     # original text passed to the parser
+        self.unconsumed = None   # fragment remaining after parsing
+        self.feature = None      # parsed feature name
         self._hints = {}
         if val is not None:
             self.parse(val, **kwargs)
@@ -88,7 +88,7 @@ class Parser:
                     names.append(feat)
 
         return [n for n in names if n]
-
+        
 
     def reset(self):
         """Resets all attributes to defaults"""

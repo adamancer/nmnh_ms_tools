@@ -47,7 +47,6 @@ def dedupe(lst, lower=True):
     return [val for i, val in enumerate(lst) if not prep(val) in lst_[:i]]
 
 
-
 def oxford_comma(lst, lowercase=False, delim=', ', conj='and'):
     """Formats list as comma-delimited string
 

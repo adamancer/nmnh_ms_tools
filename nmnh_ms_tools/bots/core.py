@@ -91,7 +91,7 @@ class Bot:
 
 
     def download(self, url, path, ext=None, chunk_size=8192):
-        # FIXME: Get path if not provided
+        """Downloads content at url to path"""
         with requests.get(url, stream=True) as r:
             r.raise_for_status()
             with open(path, 'wb') as f:
@@ -100,7 +100,9 @@ class Bot:
 
 
     def handle_error(self, response):
-        raise ValueError('Could not parse response: {}'.format(response.text))
+        raise ValueError(
+            f'Could not parse response from {response.url}: {response.text}'
+        )
 
 
     @staticmethod
@@ -196,9 +198,11 @@ class Bot:
                 return responses
             else:
                 return response
+
             # Update start and limit parameters
             key = 'payload' if args[0].__name__ == 'post' else 'params'
             params = kwargs.get(key, {})
+
             # Check if available records exhausted
             wrapped = self.wrapper(response)
             if len(responses) == 1:
@@ -206,11 +210,13 @@ class Bot:
                     limit = self.limit_param(response)
                 else:
                     limit = params.get(self.limit_param, len(wrapped))
+
             total = wrapped.total()
-            if limit > total:
+            if total is not None and limit > total:
                 limit = total
             if limit and len(responses) >= limit:
                 return responses
+
             # Update start and make new request
             start = params.get(self.start_param, 0)
             start += 1 if self.paged else len(wrapped)
@@ -234,7 +240,6 @@ class Bot:
             if reset < 0:
                 reset = 0
             self.wait = reset / remaining
-            print(f'Twitter rate limit: {self.wait}')
             return self.wait
 
         # GitHub style
@@ -250,7 +255,6 @@ class Bot:
             if reset < 0:
                 reset = 0
             self.wait = reset / remaining
-            print(f'GitHub rate limit: {self.wait}')
             return self.wait
 
         # CrossRef style
@@ -263,10 +267,9 @@ class Bot:
             pass
         else:
             self.wait = interval / limit
-            print(f'CrossRef rate limit: {self.wait}')
             return self.wait
 
-        logger.error(str(response.headers))
+        logger.warning(f"No rate limit found: {response.headers}")
         return self.wait
 
 
@@ -414,7 +417,7 @@ class JSONResponse:
                                           results_path=self._results_path,
                                           result_wrapper=self._result_wrapper) \
                                           .all())
-        mask = 'Wrapped {} records from {} responses with {}'
+        mask = 'Wrapped {:,} records from {:,} responses with {}'
         logger.debug(mask.format(len(self),
                                  len(responses),
                                  self.__class__.__name__))

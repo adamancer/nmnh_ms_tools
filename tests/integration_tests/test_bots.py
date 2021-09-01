@@ -122,15 +122,20 @@ def test_geogallery_get_specimen_by_guid(test_input):
 
 def test_geogallery_get_specimens():
     kwargs = {
-        'collection': 'Smithsonian Microbeam Standards',
+        #'collection': 'Smithsonian Microbeam Standards',  # not indexed
         'classification': 'olivine',
         'location_id': '1055203',
         'country': 'United States',
         'state': 'Arizona',
-        'limit': 1,
+        'limit': 100,
     }
     response = GeoGalleryBot().get_specimens(**kwargs)
-    assert response.one()['occurrenceID'] == '7d5368b985824980b2c18231f7965356'
+    for rec in response:
+        if rec['occurrenceID'] == '7d5368b985824980b2c18231f7965356':
+            break
+    else:
+        assert False
+    assert True
 
 
 @pytest.mark.parametrize(

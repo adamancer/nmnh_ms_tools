@@ -1,1 +1,1 @@
-include README.md
+recursive-include nmnh_ms_tools/_files *.csv *.json *.txt *.yml

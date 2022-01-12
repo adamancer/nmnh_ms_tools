@@ -59,5 +59,11 @@ def download(url=None):
 
 
 
+# Download non-repo data but allow script to proceed if download fails
 if not os.path.exists(os.path.join(DATA_DIR, 'downloads')):
-    download_missing()
+    try:
+        download()
+    except Exception as exc:
+        print("Could not download %s" %list(HASHES.keys())[-1])
+        logger.error(
+            "Could not download %s" %list(HASHES.keys())[-1], exc_info=exc)

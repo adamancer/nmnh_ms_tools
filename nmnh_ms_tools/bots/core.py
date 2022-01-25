@@ -1,8 +1,9 @@
 """Defines generic bot for making requests with retry"""
+from functools import wraps
 import logging
 import pprint as pp
+import random
 import time
-from functools import wraps
 
 import requests
 import requests_cache
@@ -31,7 +32,7 @@ class Bot:
         self._headers = {}
         self.wrapper = wrapper
         self.start_param = start_param
-        self.limit_param = limit_param  # either a key or func(response)
+        self.limit_param = limit_param  # either a key or func(resp)
         self.paged = paged
 
 
@@ -56,9 +57,9 @@ class Bot:
         def wrapper(inst, *args, **kwargs):
             start_param = inst.start_param
             inst.start_param = None
-            response = func(inst, *args, **kwargs)
+            resp = func(inst, *args, **kwargs)
             inst.start_param = start_param
-            return response
+            return resp
         return wrapper
 
 
@@ -69,9 +70,9 @@ class Bot:
         def wrapper(inst, *args, **kwargs):
             wrapper = inst.wrapper
             inst.wrapper = None
-            response = func(inst, *args, **kwargs)
+            resp = func(inst, *args, **kwargs)
             inst.wrapper = wrapper
-            return response
+            return resp
         return wrapper
 
 
@@ -85,8 +86,8 @@ class Bot:
         return self._retry(requests.post, *args, **kwargs)
 
 
-    def validate(self, response):
-        """Placeholder function to validate response"""
+    def validate(self, resp):
+        """Placeholder function to validate resp"""
         return True
 
 
@@ -99,9 +100,9 @@ class Bot:
                     f.write(chunk)
 
 
-    def handle_error(self, response):
+    def handle_error(self, resp):
         raise ValueError(
-            f'Could not parse response from {response.url}: {response.text}'
+            f'Could not parse response from {resp.url}: {resp.text}'
         )
 
 
@@ -137,14 +138,14 @@ class Bot:
     def _retry(self, *args, **kwargs):
         """Routes requests to use single or paged"""
         if self.start_param and self.wrapper:
-            response = self._retry_paged(*args, **kwargs)
+            resp = self._retry_paged(*args, **kwargs)
         else:
-            response = self._retry_one(*args, **kwargs)
-        if not response:
-            self.handle_error(response)
+            resp = self._retry_one(*args, **kwargs)
+        if not resp:
+            self.handle_error(resp)
         if self.wrapper:
-            return self.wrapper(response)
-        return response
+            return self.wrapper(resp)
+        return resp
 
 
     def _retry_one(self, func, *args, **kwargs):
@@ -158,13 +159,20 @@ class Bot:
                 kwargs['headers'][key] = val
         if not kwargs['headers']['User-Agent']:
             raise ValueError('User agent is required')
-        # Make the request, repeating the call as necessary
-        for i in range(8):
+        # Make the request, repeating it if a resolvable error is encountered
+        for i in range(7):
             try:
-                response = func(*args, **kwargs)
+                resp = func(*args, **kwargs)
+                # Retry if status code indicates a temporary problem
+                if resp.status_code in (429, 503):
+                    raise requests.exceptions.ConnectionError(
+                        f"Request failed: {resp.url} (status_code={resp.status_code})"
+                    )
             except (requests.exceptions.ConnectionError,
                     requests.exceptions.Timeout):
-                wait = 30 * 2 ** i
+                # Add a random number of milliseconds to the wait time to prevent
+                # multiple retries from synchronizing
+                wait = 2 ** i + random.randint(1, 1000) / 1000
                 req = [func.__name__] + list(args) + [f'{k}={v}' for k, v in kwargs.items()]
                 logger.warning(
                     'Retrying in {:,} seconds (request={})...'.format(wait, req)
@@ -172,18 +180,18 @@ class Bot:
                 time.sleep(wait)
             else:
                 # Ensure that the response has the from_cache attribute
-                if not hasattr(response, 'from_cache'):
-                    response.from_cache = None
-                # Enforce the minimum wait if response from server
-                local = response.url.startswith(('http://localhost',
+                if not hasattr(resp, 'from_cache'):
+                    resp.from_cache = None
+                # Enforce the minimum wait only if response is from an external server
+                local = resp.url.startswith(('http://localhost',
                                                  'http://127.0.0.1'))
-                if not local and not response.from_cache:
-                    logger.info('New request: {}'.format(response.url))
+                if not local and not resp.from_cache:
+                    logger.info('New request: {}'.format(resp.url))
                     # Update wait based on rate limit
-                    time.sleep(self.wait_from_rate_limit(response))
-                # Validate the response, returning the response oject if OK
-                if self.validate(response):
-                    return response
+                    time.sleep(self.wait_from_rate_limit(resp))
+                # Validate the response, returning the response object if OK
+                if self.validate(resp):
+                    return resp
         raise Exception('Maximum retries exceeded')
 
 
@@ -191,23 +199,23 @@ class Bot:
         """Repeats request with retry across paginated content"""
         responses = []
         while True:
-            response = self._retry_one(*args, **kwargs)
-            if response:
-                responses.append(response)
+            resp = self._retry_one(*args, **kwargs)
+            if resp:
+                responses.append(resp)
             elif responses:
                 return responses
             else:
-                return response
+                return resp
 
             # Update start and limit parameters
             key = 'payload' if args[0].__name__ == 'post' else 'params'
             params = kwargs.get(key, {})
 
             # Check if available records exhausted
-            wrapped = self.wrapper(response)
+            wrapped = self.wrapper(resp)
             if len(responses) == 1:
                 if callable(self.limit_param):
-                    limit = self.limit_param(response)
+                    limit = self.limit_param(resp)
                 else:
                     limit = params.get(self.limit_param, len(wrapped))
 
@@ -223,9 +231,9 @@ class Bot:
             kwargs[key][self.start_param] = start
 
 
-    def wait_from_rate_limit(self, response):
-        """Updates wait based on rate limit headers in response"""
-        headers = response.headers
+    def wait_from_rate_limit(self, resp):
+        """Updates wait based on rate limit headers in resp"""
+        headers = resp.headers
 
         # Twitter style
         try:
@@ -259,9 +267,9 @@ class Bot:
 
         # CrossRef style
         try:
-            limit = int(response.headers.get('x-rate-limit-limit'))
+            limit = int(resp.headers.get('x-rate-limit-limit'))
             interval = int(
-                response.headers.get('x-rate-limit-interval').rstrip('s')
+                resp.headers.get('x-rate-limit-interval').rstrip('s')
             )
         except (AttributeError, KeyError, TypeError, ValueError):
             pass
@@ -269,7 +277,7 @@ class Bot:
             self.wait = interval / limit
             return self.wait
 
-        logger.warning(f"No rate limit found: {response.headers}")
+        logger.info(f"No rate limit found: {resp.headers}")
         return self.wait
 
 
@@ -278,7 +286,7 @@ class Bot:
 class JSONResponse:
     """Wraps JSON response to add methods for retrieving records"""
 
-    def __init__(self, response, results_path,
+    def __init__(self, resp, results_path,
                  result_wrapper=None, total_path=None):
         self._response = None
         self._responses = None
@@ -286,7 +294,7 @@ class JSONResponse:
         self._results_path = results_path if results_path else []
         self._result_wrapper = result_wrapper if result_wrapper else []
         self._total_path = total_path if total_path else []
-        self._wrap(response)
+        self._wrap(resp)
 
 
     def __str__(self):
@@ -412,8 +420,8 @@ class JSONResponse:
             obj = self._json
             for key in self._results_path:
                 obj = obj[key]
-            for response in responses[1:]:
-                obj.extend(self.__class__(response,
+            for resp in responses[1:]:
+                obj.extend(self.__class__(resp,
                                           results_path=self._results_path,
                                           result_wrapper=self._result_wrapper) \
                                           .all())
@@ -428,9 +436,9 @@ class JSONResponse:
 class XMLResponse:
     """Wraps XML response"""
 
-    def __init__(self, response):
-        self._response = response
-        self._xml = etree.fromstring(response.text)
+    def __init__(self, resp):
+        self._response = resp
+        self._xml = etree.fromstring(resp.text)
         self.nsmap = self._find_namespaces()
 
 

@@ -1,0 +1,609 @@
+bots:
+  user_agent: null
+  elsevier_api_key: null
+  geonames_username: null
+  geonames_use_local: False
+data:
+  admin: ~/data/nmnh_ms_tools/geo/admin.sqlite
+  custom: ~/data/nmnh_ms_tools/geo/custom.sqlite
+  geonames: ~/data/nmnh_ms_tools/geo/geonames.sqlite
+  georef_data: ~/data/nmnh_ms_tools/geo/georef_data.sqlite
+  georef_job: job.sqlite
+  natural_earth: ~/data/nmnh_ms_tools/geo/natural_earth.sqlite
+  thesaurus: ~/data/nmnh_ms_tools/geo/thesaurus.yml
+  taxa_tree: ~/data/nmnh_ms_tools/taxa/geotree.json
+  name_index: ~/data/nmnh_ms_tools/taxa/name_index.json
+  stem_index: ~/data/nmnh_ms_tools/taxa/stem_index.json
+georeferencing:
+  params:
+    max_sites_to_evaluate: 150
+    resize_when_testing_intersection: 1.1
+    dist_km_to_extend_sites_offshore: 200
+  ordered_field_list:
+    - field: locality
+      codes:
+        - A
+        - H
+        - L
+        - P
+        - R
+        - S
+        - T
+        - U
+        - V
+    - field: mine
+      codes:
+        - MN
+        - MNAU
+        - MNC
+        - MNCR
+        - MNCU
+        - MNFE
+        - MNN
+        - MNQ
+        - MNQR
+    - field: municipality
+      codes:
+        - P
+    - field: municipality2
+      codes:
+        - ADM3
+        - ADM3H
+        - ADM4
+        - ADM4H
+        - ADM5
+        - ADM5H
+    - field: features
+      codes:
+        - A
+        - H
+        - L
+        - P
+        - R
+        - S
+        - T
+        - U
+        - V
+    - field: municipality3
+      codes:
+        - ADM3
+        - ADM3H
+        - ADM4
+        - ADM4H
+        - ADM5
+        - ADM5H
+        - H
+        - L
+        - P
+        - R
+        - S
+        - T
+        - U
+        - V
+    - field: volcano
+      codes:
+        - CLDA
+        - CONE
+        - CRTR
+        - VLC
+        - VLF
+        - VLS
+    - field: volcano2
+      codes:
+        - HLL
+        - HLLS
+        - MT
+        - MTS
+        - PK
+    - field: maps
+      codes:
+        - A
+        - H
+        - L
+        - P
+        - R
+        - S
+        - T
+        - U
+        - V
+    - field: water_body
+      codes:
+        - BAY
+        - BAYS
+        - BGHT
+        - COVE
+        - INLT
+        - GULF
+        - H
+        - SD
+        - SEA
+        - OCN
+    - field: island
+      codes:
+        - ATOL
+        - ISL
+        - ISLET
+        - ISLF
+        - ISLM
+        - ISLS
+        - ISLT
+        - RK
+        - RKS
+        - SMU
+        - SMSU
+        - TMSU
+        - TMTU
+    - field: mining_district
+      codes:
+        - MNA
+    - field: mining_district2
+      codes:
+        - A
+        - H
+        - L
+        - P
+        - R
+        - S
+        - T
+        - U
+        - V
+    - field: bay_sound
+      codes:
+        - BAY
+        - BAYS
+        - BGHT
+        - COVE
+        - FJD
+        - FJDS
+        - GULF
+        - LGN
+        - LGNS
+        - INLT
+        - INLTQ
+        - SD
+        - SEA
+        - SHOR
+    - field: county
+      codes:
+        - ADM2
+        - ADM2H
+    - field: county2
+      codes:
+        - ADM3
+        - ADM3H
+        - ADM4
+        - ADM4H
+        - ADM5
+    - field: county3
+      codes:
+        - MNA
+    - field: island_group
+      codes:
+        - ATOL
+        - ISL
+        - ISLET
+        - ISLF
+        - ISLM
+        - ISLS
+        - ISLT
+        - RK
+        - RKS
+        - SMU
+        - SMSU
+        - TMSU
+        - TMTU
+    - field: state_province
+      codes:
+        - ADM1
+        - ADM1H
+        - TERR
+        - LAND
+        - RGN
+    - field: state_province2
+      codes:
+        - L
+    - field: country
+      codes:
+        - PCL
+        - PCLD
+        - PCLF
+        - PCLH
+        - PCLI
+        - PCLIX
+        - PCLS
+        - TERR
+    - field: sea_gulf
+      codes:
+        - BAY
+        - BAYS
+        - BGHT
+        - COVE
+        - FJD
+        - FJDS
+        - GULF
+        - LGN
+        - LGNS
+        - INLT
+        - INLTQ
+        - SD
+        - SEA
+        - SHOR
+    - field: ocean
+      codes:
+        - OCN
+    - field: continent
+      codes:
+        - CONT
+        - REG
+classification:
+  colors:
+    - black
+    - blue
+    - brown
+    - dark
+    - golden
+    - gray
+    - grey
+    - green
+    - indigo
+    - light
+    - orange
+    - pink
+    - purple
+    - red
+    - violet
+    - white
+    - yellow
+  modifiers:
+    - coarse
+    - coarsely
+    - dark
+    - fine
+    - finely
+    - light
+    - medium
+    - med\.
+    - pale
+    - poorly
+    - strongly
+    - weakly
+  textures:
+    - altered
+    - anhedral
+    - apophysis
+    - baked
+    - banded
+    - blocks?
+    - botryoidal
+    - boudins?
+    - brecciated
+    - coarse
+    - deformed
+    - dense
+    - detrital
+    - digested
+    - disseminated
+    - equigranular
+    - euhedral
+    - fibrous
+    - fine
+    - float
+    - folded
+    - foliated
+    - fractured
+    - fragments?
+    - fragmentary
+    - gneissic
+    - grained
+    - granular
+    - granulated
+    - grit
+    - gritty
+    - inequigranular
+    - lacy
+    - laminated
+    - lamellae?
+    - lens
+    - lenses
+    - massive
+    - megacrystic
+    - megacrysts?
+    - metamorphosed
+    - microfolded
+    - microfractured
+    - monomict
+    - pebbles?
+    - phenocrystic
+    - phenocrysts?
+    - platy
+    - pleochroic
+    - polymict
+    - porphyroblastic
+    - porphyroblasts?
+    - schistose
+    - schlieren
+    - shatter ?cones?
+    - sheared
+    - shocked
+    - shock-fractured
+    - slaty
+    - slicken-?sided
+    - slicken-?sides?
+    - synhedral
+    - variegated
+    - vitrified
+    - weathered
+  stopwords:
+    - and
+    - assemblage
+    - by
+    - caledonian
+    - coated
+    - coating
+    - cut
+    - cutting
+    - from
+    - in
+    - on
+    - with
+  endings:
+    - ally
+    - ceous
+    - e
+    - ey
+    - ian
+    - ic
+    - ically
+    - iferous
+    - ized
+    - ium
+    - oan
+    - ose
+    - ous
+    - y
+  capex:
+    # Elements
+    - H
+    - He
+    - Li
+    - Be
+    - B
+    - C
+    - N
+    - O
+    - F
+    - Ne
+    - Na
+    - Mg
+    - Al
+    - Si
+    - P
+    - S
+    - Cl
+    - Ar
+    - K
+    - Ca
+    - Sc
+    - Ti
+    - V
+    - Cr
+    - Mn
+    - Fe
+    - Co
+    - Ni
+    - Cu
+    - Zn
+    - Ga
+    - Ge
+    - As
+    - Se
+    - Br
+    - Kr
+    - Rb
+    - Sr
+    - Y
+    - Zr
+    - Nb
+    - Mo
+    - Tc
+    - Ru
+    - Rh
+    - Pd
+    - Ag
+    - Cd
+    #- In
+    - Sn
+    - Sb
+    - Te
+    - I
+    - Xe
+    - Cs
+    - Ba
+    - La
+    - Ce
+    - Pr
+    - Nd
+    - Pm
+    - Sm
+    - Eu
+    - Gd
+    - Tb
+    - Dy
+    - Ho
+    - Er
+    - Tm
+    - Yb
+    - Lu
+    - Hf
+    - Ta
+    - W
+    - Re
+    - Os
+    - Ir
+    - Pt
+    - Au
+    - Hg
+    - Tl
+    - Pb
+    - Bi
+    - Po
+    - At
+    - Rn
+    - Fr
+    - Ra
+    - Ac
+    - Th
+    - Pa
+    - U
+    - 2+
+    - 3+
+    - 4+
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+    - 5
+    - 6
+    - 7
+    - 8
+    - 9
+    # Mutli-element strings
+    - AlCu
+    - AlCuFeH
+    - BaFe
+    - BaNa
+    - BiCuPb
+    - CaFe
+    - CaFeFe
+    - CaFeMg
+    - CaMnFe
+    - CaMnMn
+    - CaMnMg
+    - ClHMn
+    - FeHZn
+    - KFe
+    - KFeNa
+    - KMnNa
+    - KNa
+    - MnFeMg
+    - MnMnFe
+    - MnMnMg
+    - MnMnMn
+    - NaFeMg
+    - NaMnMg
+    - NH
+    - OH
+    - PbFe
+    - SiO
+    - SiO2
+    - SrFe
+    - SrTiZr
+    - ZnS
+    - CaClFeHMnNaNbREEZr
+    - CaClFeHMnNaNbSrZr
+    - CaClFeHMnNaREESrTiZr
+    - CaCeHMnNaNbSrZr
+    - CaClFeHMgMnNaNbZr
+    - CaCeClHMnNaZr
+    - ClHMgMnZn
+    # Meteorites
+    - (CB([0-9]?(\.[0-9]+)?)?)
+    - (CH([0-9]?(\.[0-9]+)?)?)
+    - (CK([0-9]?(\.[0-9]+)?)?)
+    - (CM([0-9]?(\.[0-9]+)?)?)
+    - (CR([0-9]?(\.[0-9]+)?)?)
+    - (CV([0-9]?(\.[0-9]+)?)?)
+    - (CO([0-9]?(\.[0-9]+)?)?)
+    - (CI([0-9]?(\.[0-9]+)?)?)
+    - (EH([0-9]?(\.[0-9]+)?)?)
+    - (EL([0-9]?(\.[0-9]+)?)?)
+    - (H([0-9]?(\.[0-9]+)?)?)
+    - HED
+    - IAB
+    - IA
+    - IB
+    - IC
+    - ID
+    - IE
+    - IIAB
+    - IICD
+    - IIA
+    - IIB
+    - IIC
+    - IID
+    - IIE
+    - IIF
+    - IIG
+    - IIIAB
+    - IIICD
+    - IIIA
+    - IIIB
+    - IIIC
+    - IIID
+    - IIIE
+    - IIIF
+    - IVAB
+    - IVA
+    - IVB
+    - (L([0-9]?(\.[0-9]+)?)?)
+    - (LL([0-9]?(\.[0-9]+)?)?)
+    - SNC
+    - I
+    - II
+    - III
+    - IV
+    - V
+    - VI
+    - VII
+    - VIII
+    - IX
+    - X
+    # Names
+    - Bergholz
+    - Biggs
+    - Cerny
+    - Chen
+    - Chukanov
+    - Frenzel
+    - Hauser
+    - Hogarth
+    - Juve
+    - Köhler
+    - Larsen
+    - Leake
+    - Mazzi
+    - Moore
+    - Munno
+    - Nicol
+    - Rost
+    - Shephard
+    - Voloshin
+    # Words that can be expressed as a string of elements
+    - Uvite
+    # Miscellaneous
+    - MSH
+    - SS
+    - TAS
+    - UK
+speciminer:
+  catnum: ({prefix}(?:\-| {{0,4}})0*{number}{suffix}*)
+  mask: \b((?:{code}(?!B) {{0,4}}{filler}?{catnum}(?=\b)|(?<!{code}[ -]){filler}{catnum} \({code}\))(({join_discrete}|{join_range}){catnum}(?=\b))*)
+  range_mask: \b({catnum}{join_range}{catnum})\b
+  discrete_mask: \b((?:{catnum}(?:{join_range}{catnum})?)({join_discrete}(?:{catnum}(?:{join_range}{catnum})?))+)\b
+  # Museum codes padded to four characters (e.g., USNM)
+  code: (AMNH|FMNH|NMNH|USNH|USNM|MCZ |YPM )
+  # Words found between prefix and number (e.g., USNM No. 12345). This is a non-
+  # capture group that includes whitespace/punctuation before/after.
+  filler: (?:\(?(?:(?:[Ll]oc)(?:\.|ality) |(?:[Tt]ype) |[Ss]lide |(?:(?:[A-z\.]+ )*[Cc]oll(?:\.|ection)? ))?([Nn]os?\.? |[Nn]umbers? |# ?)?|specimens? |[A-z]+ [Cc]oll(?:\.|ection)?)
+  # Uncoded catalog number (e.g., G3551-00, 111234/44, 111123.0001)
+  prefix: (?:[A-Z]{0,3})
+  number: (?:(?:[IlO0-9](?=(?:[IlO0-9]|[A-z]\b|[A-z]-[A-z]\b|\b))){1,7})
+  suffix: (?:(?:[A-z](?:-[A-z])?| ?(?:--?|/|,) ?[A-z0-9]{1,4})(?=\b))
+  simple: '^(AMNH|FMNH|NMNH|USNH|USNM|MCZ |YPM ) {0,4}[A-Z]?[0-9]{6}$'
+  # Identifies non-standard suffixes
+  suffix2: (( \d{1,4}| [A-z] ?\d| [A-z]{1,3}| \d{1,2} \d{1,2}| \d{1,2} [A-z])?[A-z]?)$
+  # Conjunctions that may be used to join multiple numbers (e.g, USNM 123 and 345)
+  join_discrete: '(,? (and|&) |(?:, [A-z](?:--?[A-z])?(?=[,;\b]))+|[,;] ?|(\.? {1,4}(?=[A-Z]?[IlO0-9]{1,6}(?!\.[IlO0-9])[A-z]?\b))+)'
+  join_range: '( thru | through | ?--? ?)'
+  join_interrupted: (AMNH|FMNH|NMNH|USNH|USNM|MCZ |YPM )([0-9] ?)+

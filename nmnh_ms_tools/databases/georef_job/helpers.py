@@ -3,7 +3,7 @@ import logging
 import numpy as np
 
 from .database import Session, Uncertainties
-from ...config import CONFIG
+from ...config import GEOCONFIG
 
 
 
@@ -24,7 +24,7 @@ def use_observed_uncertainties(percentile=68):
     for site_kind in sorted(uncertainties):
         dists_km = [float(d) for d in set(uncertainties[site_kind])]
         if len(dists_km) >= 20:
-            old = CONFIG.get_feature_radius(site_kind)
+            old = GEOCONFIG.get_feature_radius(site_kind)
             # Toss outliers and take mean
             pct10 = np.percentile(dists_km, 5)  # probably georeferences
             pct90 = np.percentile(dists_km, 95)  # probably misses
@@ -33,4 +33,4 @@ def use_observed_uncertainties(percentile=68):
             mask = 'Updated {} from {:.1f} to {:.1f} km (n={})'
             msg = mask.format(site_kind, old, unc, int(len(dists_km)))
             logger.debug(msg)
-            CONFIG.codes[site_kind]['SizeIndex'] = unc
+            GEOCONFIG.codes[site_kind]['SizeIndex'] = unc

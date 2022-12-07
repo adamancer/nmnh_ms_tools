@@ -2,7 +2,7 @@
 import re
 
 from .core import Record
-from .catnums import CatNum, get_catnum, is_antarctic, parse_catnums
+from .catnums import CatNum, parse_catnum, parse_catnums, is_antarctic
 from .references import Reference
 from .sites import Site
 from .stratigraphy import LithoStrat
@@ -462,7 +462,7 @@ class Specimen(Record):
             self.occurrence_id = rec['irn']
         self.basis_of_record = 'OtherSpecimen'
         self.collection_code = rec('CatDepartment')
-        self.catalog_number = get_catnum(rec)
+        self.catalog_number = parse_catnum(rec)
         if self.collection_code:
             self.catalog_number.department = self.collection_code
         elif rec('CatDivision'):

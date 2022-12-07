@@ -27,6 +27,10 @@ class CacheDict:
         self._cache = None
 
 
+    def __str__(self):
+        return str(self.recent)
+
+
     def __setitem__(self, key, val):
         key = self.keyer(key)
         try:

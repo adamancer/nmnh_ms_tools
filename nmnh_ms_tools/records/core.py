@@ -6,7 +6,7 @@ import json
 import os
 import re
 
-from ..config import CONFIG_DIR
+from ..config import DATA_DIR
 from ..utils.standardizers import Standardizer
 from ..utils import (
     as_list,
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 def read_dwc_terms():
     """Reads ordered list of DwC terms based on file from TDWG"""
-    fp = os.path.join(CONFIG_DIR, 'simple_dwc_vertical.csv')
+    fp = os.path.join(DATA_DIR, 'dwc', 'simple_dwc_vertical.csv')
     terms = []
     with open(fp, 'r') as f:
         terms.extend(f.read().splitlines())

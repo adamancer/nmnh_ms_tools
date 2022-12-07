@@ -201,6 +201,9 @@ class CatNum(Record):
         raise ValueError('Could not create prefixed_num (number empty)')
 
 
+    def slug(self):
+        return to_attribute(str(self))
+
 
     def parse(self, data):
         """Parses catalog numbers contained in verbatim"""
@@ -382,8 +385,11 @@ class CatNum(Record):
             self.division = data.get('CatDivision')
             self.delim = '-'
             # Get detailed specimen info from EMu data
-            colls = data.get('CatCollectionName_tab', [])
-            self._collections = [c['CatCollectionName'] for c in colls]
+            self._collections = data.get('CatCollectionName_tab', [])
+            try:
+                self._collections = [c['CatCollectionName'] for c in self._collections]
+            except TypeError:
+                pass
             try:
                 self._primary = data['IdeTaxonRef_tab'][0]['ClaScientificName']
             except (KeyError, TypeError, IndexError):
@@ -420,17 +426,29 @@ class CatNum(Record):
     def _parse_string(self, data):
         """Parses catalog number from string"""
         self.verbatim = data
+
+        # Pull out ugly Antarctic meteorite comma numbers ("1 2", "3-SI") that
+        # are not handled by the parser
+        suffix = None
+        if is_antarctic(data):
+            try:
+                data, suffix = data.split(",")
+            except ValueError:
+                pass
+
         try:
             self._parse_spec_num(self.parser.parse_quick(data))
         except (AttributeError, ValueError):
             raise ValueError('Could not parse {}'.format(data))
 
+        # Reintegrate the ugly suffix if found
+        if suffix is not None:
+            self.suffix = suffix
+
 
     def is_antarctic(self):
         """Tests if catalog number looks like a NASA meteorite number"""
-        return (self._is_antarctic
-                or is_antarctic(str(self.verbatim))
-                or 3 <= len(self.prefix) <= 4)
+        return self._is_antarctic or is_antarctic(str(self.verbatim))
 
 
     def _guess_code(self):
@@ -574,12 +592,12 @@ class CatNums(Records):
 
 
 
-def get_catnum(val, **kwargs):
+def parse_catnum(val, **kwargs):
     """Parses catalog numbers from a string, returning one if appropriate"""
     parsed = parse_catnums(val, **kwargs)
-    if any(parsed) and len(parsed) == 1:
+    if not any(parsed) and len(parsed) == 1:
         return parsed[0]
-    return parsed
+    raise ValueError(f"Could not parse a single catalong number: {val}")
 
 
 def parse_catnums(val, parser=None):
@@ -603,4 +621,5 @@ def parse_catnums(val, parser=None):
 @functools.lru_cache()
 def is_antarctic(val):
     """Tests if catalog number is a NASA meteorite number"""
-    return re.search(r'^[A-Z]{3}[A ]\d{5,6}(,\d+)?$', val) if val else False
+    pattern = r'^[A-Z]{3}[A ]\d{5,6}(,\d+(-SI?| \d+)?)?$'
+    return bool(re.search(pattern, val)) if val else False

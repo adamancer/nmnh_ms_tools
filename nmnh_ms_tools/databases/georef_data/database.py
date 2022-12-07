@@ -75,5 +75,5 @@ def init_db(fp=None, tables=None):
     global Base
     global Session
     if fp is None:  # pragma: no cover
-        fp = CONFIG.data.georef_data
+        fp = CONFIG["data"]["georef_data"]
     init_helper(fp, base=Base, session=Session, tables=tables)

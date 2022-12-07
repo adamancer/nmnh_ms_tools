@@ -419,7 +419,7 @@ class DirectionParser(Parser):
         if bearing is not None:
             for word in ['north', 'south', 'east', 'west']:
                 bearing = bearing.lower().replace(word, word[0])
-            bearing = re.sub('[^NSEW\d]', '', bearing.upper())
+            bearing = re.sub(r'[^NSEW\d]', '', bearing.upper())
             try:
                 self.validate_bearing(bearing)
             except ValueError:

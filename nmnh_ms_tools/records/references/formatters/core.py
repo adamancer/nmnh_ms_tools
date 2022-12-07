@@ -3,10 +3,11 @@ import json
 import os
 import re
 
+import inflect
 from nltk.corpus import stopwords as nltk_stopwords
 from unidecode import unidecode
 
-from nmnh_ms_tools.config import CONFIG_DIR
+from nmnh_ms_tools.config import DATA_DIR
 from nmnh_ms_tools.utils import AbbrDict
 
 
@@ -38,7 +39,7 @@ def issn_abbrs_to_json(fp):
                 abbr = None
             abbrs.setdefault(word, []).append([abbr, langs])
 
-    json_path = os.path.join(CONFIG_DIR, "issn_abbrs.json")
+    json_path = os.path.join(DATA_DIR, "issn", "issn_abbrs.json")
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(abbrs, f, indent=2, sort_keys=True)
 
@@ -46,7 +47,7 @@ def issn_abbrs_to_json(fp):
 
 
 class BaseFormatter:
-    with open(os.path.join(CONFIG_DIR, "issn_abbrs.json"), "r", encoding="utf-8") as f:
+    with open(os.path.join(DATA_DIR, "issn", "issn_abbrs.json"), "r", encoding="utf-8") as f:
         abbrs = AbbrDict(json.load(f))
 
     # Maps ISSN language abbrebiations to full names
@@ -76,9 +77,10 @@ class BaseFormatter:
     stopwords = _load_stopwords(languages)
 
 
+
     def __init__(self, reference):
         self.reference = reference
-        self.default_langs = {"eng", "fre", "ita", "spa"}
+        self.default_langs = {"eng", "fre", "ger", "ita", "spa"}
 
 
     def iso_4_title(self, publication=None):
@@ -99,7 +101,7 @@ class BaseFormatter:
 
         # Check if publication is already abbreviated
         if self.abbrs.is_abbreviation(words):
-            return " ".join([f"{w.capitalize().rstrip('. ')}." for w in words])
+            return " ".join([f"{w.capitalize()}" for w in words])
 
         # Guess most likely language based on how abbreviations resolve
         langs = {}
@@ -133,10 +135,17 @@ class BaseFormatter:
         # Resolve abbreviations using common language
         abbrs = []
         for word in words:
+
             # Include all-caps words as-is
             if word.isupper():
                 abbrs.append(word)
             else:
+
+                # Use the singular form of the word
+                singular = inflect.engine().singular_noun(word)
+                if singular:
+                    word = singular
+
                 # Look for abbreviations in the determined language
                 try:
                     matches = self.abbrs[word]
@@ -149,10 +158,12 @@ class BaseFormatter:
                 except IndexError:
                     print(f"'{word}' not found in {langs}")
                 except KeyError:
-                    # Include non-abbreviated stopwords
+                    # Include the full word if not a stopword
                     if word not in stopwords:
                         abbrs.append(word.title())
                 else:
+                    if abbr and abbr.rstrip(".").lower() == word.lower():
+                        abbr = abbr.rstrip(".")
                     # Include abbrviation if given or as-is if null
                     if abbr:
                         abbrs.append(abbr.title())

@@ -7,8 +7,7 @@ from sqlalchemy import or_
 
 from .core import MatchPipe, Georeference
 from ....bots.geonames import GeoNamesBot, FEATURE_TO_CODES
-from ....config import CONFIG
-from ....databases.cache import CacheDict
+from ....config import CONFIG, GEOCONFIG
 from ....databases.geonames import GeoNamesFeatures
 from ....databases.georef_data import get_preferred
 from ....records import Site
@@ -40,13 +39,13 @@ class MatchGeoNames(MatchPipe):
         super(MatchGeoNames, self).__init__(*args, **kwargs)
         if username is not None:
             MatchGeoNames.bot.username = username
-        self.fields = CONFIG.fields
+        self.fields = GEOCONFIG.fields
         self.local = None
         self._use_local = None
         if use_local is None:
-            use_local = CONFIG.bots.geonames_use_local
+            use_local = CONFIG["bots"]["geonames_use_local"]
         self.use_local = use_local if use_local is not None else use_local
-        self.use_cache = True
+        self.use_cache = False
         self.include_feature_classes = include_feature_classes
         self.hint = self.field        # use to force a particular std function
         self.rows = []
@@ -84,7 +83,7 @@ class MatchGeoNames(MatchPipe):
         matching sites.
         """
         if self.field and codes is None:
-            codes = CONFIG.fields[self.field]
+            codes = GEOCONFIG.fields[self.field]
         sites = []
         names_matched = []
         groups = self.group(feature)
@@ -176,7 +175,7 @@ class MatchGeoNames(MatchPipe):
             kwargs = {}
         # Add feature classes to query based on codes if that option is set
         if self.include_feature_classes:
-            kwargs['featureClass'] = CONFIG.get_feature_classes(codes)
+            kwargs['featureClass'] = GEOCONFIG.get_feature_classes(codes)
         # Check cache to see if this query has been processed before
         min_size = sizes[size]
         key = self.key(name, codes, min_size, **kwargs)
@@ -193,6 +192,7 @@ class MatchGeoNames(MatchPipe):
                 logger.error('Could not restore cached records: {}'.format(key))
             except KeyError:
                 pass
+        logger.debug(f'Searching for {key[:256]}...')
         # Create and filter a list of sites. If no records found, retry the
         # search with fewer constraints but require any remaining records to
         # be larger than a certain size.
@@ -207,7 +207,7 @@ class MatchGeoNames(MatchPipe):
         #mask = 'Search for {} (name={}, codes={}, kwargs={}) matched {} records: {}'
         #logger.debug(mask.format(st_name, name, codes, kwargs, len(records), gids))
         gids = [s.location_id for s in records]
-        logger.debug('Search for "{}" yielded {} records: {}'.format(key, len(gids), gids))
+        logger.debug('Search yielded {:,} records: {}'.format(len(gids), gids))
         if use_cache or (use_cache is None and self.use_cache):
             self.cache[key] = records
         return records
@@ -341,8 +341,8 @@ class MatchGeoNames(MatchPipe):
         if len(codes) > 100:
             alt_codes = []
             for field in self.find(name):
-                if len(CONFIG.fields[field]) < len(codes):
-                    alt_codes.extend(CONFIG.fields[field])
+                if len(GEOCONFIG.fields[field]) < len(codes):
+                    alt_codes.extend(GEOCONFIG.fields[field])
             if alt_codes:
                 return alt_codes
         return codes
@@ -357,6 +357,7 @@ class MatchGeoNames(MatchPipe):
 
     def subsection(self, sites, direction, feature=None):
         if direction:
+            logger.debug(f"Subsectioning {len(sites)} features")
             name = '{1} {0}'.format(*feature)
             return [s.subsection(direction, name) for s in sites]
         return sites

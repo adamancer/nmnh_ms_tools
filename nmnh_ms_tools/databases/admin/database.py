@@ -59,5 +59,5 @@ def init_db(fp=None, tables=None):
     global Base
     global Session
     if fp is None:
-        fp = CONFIG.data.admin
+        fp = CONFIG["data"]["admin"]
     init_helper(fp, base=Base, session=Session, tables=tables)

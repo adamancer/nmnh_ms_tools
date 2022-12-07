@@ -64,5 +64,5 @@ def init_db(fp=None, tables=None):
     global Base
     global Session
     if fp is None:
-        fp = CONFIG.data.georef_job
+        fp = CONFIG["data"]["georef_job"]
     init_helper(fp, base=Base, session=Session, tables=tables)

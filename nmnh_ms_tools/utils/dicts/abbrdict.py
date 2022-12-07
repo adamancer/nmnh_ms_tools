@@ -45,4 +45,4 @@ class AbbrDict(BaseDict):
                 if not self.is_abbreviation(val):
                     return False
             return True
-        return unidecode(val.lower()) + "." in self._abbreviations
+        return unidecode(val.lower()) in self._abbreviations

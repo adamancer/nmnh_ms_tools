@@ -234,6 +234,8 @@ class ModifiedParser(Parser):
         vals = [s for s in re.split(pattern, val) if s.strip(',;() ')]
         if len(vals) > 1:
             raise ValueError('Modifier in middle of string')
+        if not vals:
+            raise ValueError('String is empty')
 
         # Get specificity info from feature
         feature = re.sub(r' +', ' ', vals[0].strip(',;() '))

@@ -59,6 +59,7 @@ class BibTeXMapper:
         bibtex_to_emu = {
             'booktitle': 'Book',
             'inbook': 'Chapter',
+            'incollection': 'Chapter',
             'inproceedings': 'Chapter',
             'mastersthesis': 'Thesis',
             'misc': 'Article',       # USGS uses this for PP(!)

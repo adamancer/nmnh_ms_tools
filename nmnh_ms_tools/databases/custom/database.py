@@ -77,5 +77,5 @@ def init_db(fp=None, tables=None):
     global Base
     global Session
     if fp is None:
-        fp = CONFIG.data.custom
+        fp = CONFIG["data"]["custom"]
     init_helper(fp, base=Base, session=Session, tables=tables)

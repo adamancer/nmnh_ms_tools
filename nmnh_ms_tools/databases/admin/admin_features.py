@@ -103,7 +103,12 @@ class AdminFeatures(GeoNamesFeatures):
 
 
     def get_admin(self, country, state_province=None, county=None, **kwargs):
-        assert country, 'country is required'
+        if not country:
+            raise ValueError("country is required")
+
+        if county and not state_province:
+            raise ValueError("state_province is required when resolving a county")
+
         result = {}
         # Get country info
         resolved = self.resolve_admin(country, 'country')

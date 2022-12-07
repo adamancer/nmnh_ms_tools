@@ -1,5 +1,6 @@
 """Builds and queries tiles representing the global ocean"""
 import re
+from collections import namedtuple
 
 from shapely import wkb
 from shapely.geometry import Polygon
@@ -13,12 +14,16 @@ from ...tools.geographic_operations.geometry import GeoMetry
 
 
 
+Tile = namedtuple("Tile", ["geom", "name"])
+
 class OceanQuery:
     """Tiles and queries the global ocean"""
+    _tree = None
 
     def __init__(self):
         self.oceans = {}
-        self._tree = self.build_tree()
+        if self._tree is None:
+            self.__class__._tree = self.build_tree()
 
 
     @staticmethod

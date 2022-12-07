@@ -42,6 +42,7 @@ LAND_FEATURES = {
     'maar': True,
     'meadow': True,
     'mesa': True,
+    'mine': True,
     'mount': True,
     'mountain': True,
     'mountains': True,
@@ -54,6 +55,7 @@ LAND_FEATURES = {
     'preserve': True,
     'point': True,
     'reserve': True,
+    'ridge': True,
     'river': True,
     'rock': True,
     'spring': True,
@@ -182,7 +184,7 @@ class FeatureParser(Parser):
 
     def parse(self, val, allow_generic=False):
         """Parses string if it looks anything like a feature name"""
-        punc = ':;,.()[] '
+        punc = '|:;,.()[] '
         self.verbatim = val
 
         # Normalize capitalizations of conjunctions
@@ -219,6 +221,11 @@ class FeatureParser(Parser):
         # Reject borders and junctions
         if val.lower().startswith(('border of', 'junction of')):
             mask = 'Could not parse "{}" (border/junction)'
+            raise ValueError(mask.format(val))
+
+        # Reject features that start with certain adjectives or prepositions
+        if val.startwith(('which', 'with')):
+            mask = 'Could not parse "{}" (bad first word)'
             raise ValueError(mask.format(val))
 
         # Ensure that phrases look feature-like

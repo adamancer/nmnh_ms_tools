@@ -148,6 +148,11 @@ def to_dwc_camel(val):
     return re.sub(r'Id$', 'ID', to_camel(val))
 
 
+@functools.lru_cache()
+def natsortable(val):
+    return tuple([int(p) if p.isnumeric() else p.lower() for p in  re.split(r"(\d+)", val)])
+
+
 def to_pattern(val, mask=r'\b{}\b', subs=None, **kwargs):
     """Constructs a re pattern based on a string"""
     if subs is None:

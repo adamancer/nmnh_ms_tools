@@ -2,6 +2,7 @@
 import datetime as dt
 import logging
 import os
+import sqlite3
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import DeferredReflection
@@ -20,12 +21,15 @@ def init_helper(fp, base, session, deferred=False, tables=None):
         fp = ''
     if fp:
         fp = '/' + os.path.realpath(fp).replace(os.sep, os.sep * 2)
-    engine = create_engine('sqlite://{}'.format(fp))
-    if deferred:
-        DeferredReflection.prepare(engine)
-    base.metadata.bind = engine
-    base.metadata.create_all(tables=tables)
-    session.configure(bind=engine)
+    try:
+        engine = create_engine('sqlite://{}'.format(fp))
+        if deferred:
+            DeferredReflection.prepare(engine)
+        base.metadata.bind = engine
+        base.metadata.create_all(tables=tables)
+        session.configure(bind=engine)
+    except Exception as e:
+        raise RuntimeError(f"Could not load {fp}") from e
 
 
 

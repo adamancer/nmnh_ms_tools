@@ -39,7 +39,7 @@ class MatchDirection(MatchPipe):
             if not parsed.min_dist and not parsed.max_dist:
                 dist = None
             kwargs = {'rel_err_distance': precision}
-            geom = refsite.interpret_directions(parsed.bearing, dist, **kwargs)
+            geom = refsite.smart_translate(parsed.bearing, dist, **kwargs)
             site = self.create_site(str(parsed),
                                     location_id=refsite.location_id + '_DIR',
                                     site_kind='direction',

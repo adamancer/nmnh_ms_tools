@@ -12,9 +12,17 @@ class BaseDict(dict):
         self.update(*args, **kwargs)
 
 
+    def __getitem__(self, key):
+        return super().__getitem__(self.format_key(key))
+
+
     def __setitem__(self, key, val):
         """Coereces dictionaries when key is set"""
-        super(BaseDict, self).__setitem__(key, self._coerce_dicts(val))
+        super().__setitem__(self.format_key(key), self._coerce_dicts(val))
+
+
+    def __delitem__(self, key):
+        super().__delitem__(self.format_key(key))
 
 
     def get(self, key, default=None):
@@ -25,10 +33,37 @@ class BaseDict(dict):
             return default
 
 
+    def pop(self, key, *args):
+        return super().pop(self.format_key(key), *args)
+
+
     def update(self, *args, **kwargs):
         """Explicitly routes update through class.__setitem__"""
         for key, val in dict(*args, **kwargs).items():
             self[key] = val
+
+
+    def format_key(self, key):
+        return key
+
+
+    def to_dict(self):
+        """Converts BaseDict to dict"""
+
+        def _recurse(obj):
+            if isinstance(obj, dict):
+                dct = {}
+                for key, val in obj.items():
+                    dct[key] = _recurse(val)
+                return dct
+            elif isinstance(obj, list):
+                lst = []
+                for val in obj:
+                    lst.append(_recurse(val))
+                return lst
+            return obj
+
+        return _recurse(self)
 
 
     def _coerce_dicts(self, val):

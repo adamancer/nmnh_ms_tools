@@ -19,6 +19,10 @@ Session = sessionmaker()
 
 
 
+class Counties(DeferredReflection, Base):
+    __tablename__ = 'ne_10m_admin_2_counties'
+
+
 class Countries(DeferredReflection, Base):
     __tablename__ = 'ne_10m_admin_0_countries'
 
@@ -78,5 +82,5 @@ def init_db(fp=None, tables=None):
     global Base
     global Session
     if fp is None:
-        fp = CONFIG.data.natural_earth
+        fp = CONFIG["data"]["natural_earth"]
     init_helper(fp, base=Base, session=Session, deferred=True, tables=tables)

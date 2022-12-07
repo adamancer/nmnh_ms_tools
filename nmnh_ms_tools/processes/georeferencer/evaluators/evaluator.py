@@ -3,7 +3,8 @@ import logging
 import itertools
 import re
 
-from shapely.geometry import GeometryCollection
+import geopandas as gpd
+from shapely.geometry import GeometryCollection, box
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
@@ -16,10 +17,10 @@ from ....bots.geonames import (
     CODES_SHORES,
     CODES_UNDERSEA,
 )
-from ....config import CONFIG
+from ....config import CONFIG, GEOCONFIG
 from ....databases.georef_data import OceanQuery
 from ....tools.geographic_operations.geometry import GeoMetry
-from ....records import Site
+from ....records import Site, sites_to_geodataframe
 from ....tools.geographic_names.parsers.modified import abbreviate_direction
 from ....utils import as_set, most_common
 
@@ -49,7 +50,7 @@ STATUSES = {
     'rejected (not reconciled)',          # no coherent georeference possible
     'rejected (outlier)',                 # far away from other sites
     'rejected (ancillary match)',         # matched secondary definition
-    'rejected (encompassed)'              #
+    'rejected (encompassed)'
 }
 REJECTED = {
     'rejected (duplicate)',
@@ -175,7 +176,7 @@ class MatchEvaluator:
 
 
     def reset(self):
-        """Resets te evaluator object"""
+        """Resets the evaluator object"""
         clone = self.clone()
         self.site = clone.site
         self.pipes = clone.pipes
@@ -345,27 +346,36 @@ class MatchEvaluator:
                 return self.select([site])
             # Look for directions corresponding to named localities
             for point in points:
-                if site.distance_from(point) <= 20:
+                if site.min_dist_km(point) <= 20:
                     self.interpret(site, 'intersecting')
                     logger.debug('Matched vicinity')
                     return self.select([point])
 
         # Restrict large candidates to intersection with lowest admin polygon
-        logger.debug('Restricting sites to lowest admin')
-        restricted_to_admin = []
-        for site in sites:
-            try:
-                restricted = site.restrict()
-                restricted_to_admin.append(restricted)
-            except ValueError as e:
-                # Failure to map admin is a serious error--does anything
-                # else trigger this?
-                if str(e).startswith('Could not map admin names'):
-                    raise
-                logger.debug('Could not restrict: {}'.format(site))
-                restricted_to_admin.append(site)
-        sites = restricted_to_admin
-        logger.debug('Restricted to admin: {}'.format(self.names(sites)))
+        try:
+            admin = sorted(self.interpreted_as("admin"), key=lambda s: s.radius_km)[0]
+        except IndexError:
+            pass
+        else:
+            logger.debug(f'Restricting sites to lowest admin ({admin.name})')
+            restricted_to_admin = []
+            for site in sites:
+                try:
+                    restricted_to_admin.append(site.restrict(admin))
+                except ValueError as e:
+                    # Failure to map admin is a serious error--does anything
+                    # else trigger this?
+                    if str(e).startswith('Could not map admin names'):
+                        raise
+                    logger.debug('Could not restrict: {}'.format(site))
+            # Filter out sites that couldn't be restricted if a shared name was
+            names = self.names(restricted_to_admin)
+            for name, group in self.group_by_name(sites).items():
+                for site in group:
+                    if self.key(site) in names  and site not in restricted_to_admin:
+                        self.interpret([site], "rejected (disjoint)")
+            sites = self.uninterpreted(sites)
+            logger.debug('Restricted to admin: {}'.format(self.names(sites)))
 
         # Look for most specific names
         names = self.most_specific_names(sites)
@@ -524,7 +534,7 @@ class MatchEvaluator:
                         and site.overlap(polygon, True) >= 0.9
                     ):
                         continue
-                    geom = self.constrain(site.geometry, polygon, field)
+                    geom = self.constrain(site.geometry, polygon, field, name=site.name)
                     # The first line in the conditional verifies that
                     # constrain is actually making the site geometry smaller
                     if (geom.radius_km <= site.geometry.radius_km * 0.9
@@ -535,21 +545,31 @@ class MatchEvaluator:
                             self.interpret(self.sites, 'more specific')
                             return self.select([site], geom)
 
-        # Fall back to smallest encompassing feature
-        try:
-            enc = self.most_specific_sites(self.interpreted_as({'admin', 'encompassing'}))
-            geom = self.encompass_sites(enc)
-            if geom.radius_km <= max_dist_km * 5:
-                self.interpret(self.sites, 'more specific')
-                logger.debug('Matched encompassing feature (fallback)')
-                return self.select(enc, geom)
-        except (IndexError, ValueError):
-            pass
+        # Fall back to smallest encompassing, non-admin feature
+        enc = self.interpreted_as("encompassing")
+        if enc:
+            # If admin polygons are smaller than other features, skip this block
+            admin_radii = [s.radius_km for s in self.site.get_admin_polygons().values()]
+            enc_radii = [s.radius_km for s in enc]
+            if not admin_radii or min(enc_radii) < min(admin_radii):
+                geom = self.encompass_sites(self.most_specific_sites(enc))
+                if geom.radius_km <= max_dist_km * 5:
+                    self.interpret(self.sites, 'more specific')
+                    logger.debug('Matched encompassing feature (fallback)')
+                    return self.select(enc, geom)
 
         # Fall back to admin divisions as a last resort. This fallback is
         # subject to max_dist_km unless there is no info in the record
         # besides admin divisions.
         if not marine:
+
+            # Relax max distance if all admin matched and no other info provided
+            fields = {n.split(":")[0] for n in self.names(self._sites)}
+            all_admin = not (self.missed() or fields - {"continent", "country", "state_province", "county"})
+            if all_admin:
+                logger.debug("Relaxed max_dist_km (admin only)")
+                max_dist_km = 10000
+
             self.interpret(self.uninterpreted(), 'rejected (not reconciled)')
             fields = ('county', 'state_province', 'country')
             # First check for minor admin divisions
@@ -560,6 +580,7 @@ class MatchEvaluator:
                 if geom.radius_km < max_dist_km:
                     logger.debug('Matched minor admin division (fallback)')
                     return self.select([admin[0]], geom)
+
             # Failing that, fall back to major admin divisions
             polygons = self.site.get_admin_polygons()
             for field in fields:
@@ -614,7 +635,7 @@ class MatchEvaluator:
             for field in admin:
                 admin = getattr(self.site, field)
                 if admin and field not in {s.field for s in sites}:
-                    geom = self.constrain(geom, polygons[field], field)
+                    geom = self.constrain(geom, polygons[field], field, name=admin)
 
         # Extend polygon into ocean
         if extend_into_ocean or self.site.is_marine():
@@ -637,12 +658,15 @@ class MatchEvaluator:
             import pprint as pp
             pp.pprint(sorted([self.key(s) for s in self._sites]))
             pp.pprint(self.interpreted)
-            self.geometry.draw([self.geometry.centroid] + self._sites)
+            self.geometry.draw()
+
         return geom
 
 
     def constrain(self, geom, other, field, name=None):
         """Constrains geometry to intersection with another geometry"""
+        if geom.within(other):
+            return geom
         if other.radius_km > 4 * geom.radius_km:
             return geom
         try:
@@ -802,23 +826,55 @@ class MatchEvaluator:
                 #geom = geom.difference(orig)
         return geom
 
+    def to_gdf(self, sites=None, resize=False):
+        """Converts sites to a GeoDataFrame"""
+        logger.debug('Creating GeoDataFrame')
+        if sites is None or sites == self.sites:
+            sites = self.sites[:]
+        return sites_to_geodataframe(sites)
 
     def dedupe(self, sites=None):
         """Removes duplicate sites and geometries"""
         logger.debug('Deduping site list')
         if sites is None or sites == self.sites:
             sites = self.sites[:]
+
+        if not sites:
+            return []
+
         sites.sort(key=lambda s: s.location_id)
         # FIXME: Added to fix a bug where sites repeat at end of list,
         #        but not clear where the repeats are coming from.
         sites = [s for i, s in enumerate(sites) if s not in sites[:i]]
+
+        gdf = self.to_gdf(sites)
+        distinct =[]
+        rejected = []
+        for _, row in gdf.copy().iterrows():
+            if row.id in rejected:
+                continue
+
+            site = self.expand(row.id)
+            distinct.append(site)
+
+            gdf = gdf[gdf['id'] != row.id]
+            xing = gdf.sindex.query(row.geometry, "intersects")
+            for _, row in gdf.iloc[xing].iterrows():
+                other = self.expand(row.id)
+                if site.equals_exact(other, 0.1):
+                    self.interpret(site, 'rejected (duplicate)')
+                    logger.debug(f"{site.name} ({site.geometry} duplicate of {other.name} ({other.geometry})")
+                    rejected.append(row.id)
+        return distinct
+
         # Removes sites with duplicate geometries
         distinct = []
         for site in sites:
             for other in distinct:
-                if site.geometry.almost_equals(other, 2):
+                if site.equals_exact(other, 0.1):
                     #site.geometry.draw([other], site.name)
                     self.interpret(site, 'rejected (duplicate)')
+                    logger.debug(f"{site.name} ({site.geometry} duplicate of {other.name} ({other.geometry})")
                     break
             else:
                 distinct.append(site)
@@ -964,6 +1020,58 @@ class MatchEvaluator:
             # Check which sites occur within the given divisions
             logger.debug('Testing intersection with {}'.format(field))
             in_bounds = []
+
+            sites = terr + marine
+            for site in sites[:]:
+                for rel in site.related_sites:
+                    rel = rel.clone()
+                    rel.location_id = site.location_id
+                    sites.append(rel)
+
+            if sites:
+                gdf = self.to_gdf(sites)
+                eq_area_poly = polygon.to_crs(gdf.crs)
+                gdf['geometry'] = gdf['geometry'].centroid
+                xing = gdf.iloc[gdf.sindex.query(eq_area_poly.geom[0], 'contains')]
+                in_bounds.extend(self.expand([r.id for _, r in xing.iterrows()]))
+                for site in in_bounds:
+                    self.admin_match_type.setdefault(site.location_id, 'centroid')
+                sites = [s for s in sites if s.location_id not in set(xing['id'])]
+
+            if sites:
+                gdf = self.to_gdf(sites)
+                eq_area_poly = polygon.to_crs(gdf.crs)
+                gdf['geometry'] = gdf['geometry'].scale(RESIZE, RESIZE)
+                xing = gdf.iloc[gdf.sindex.query(eq_area_poly.geom[0], 'intersects')]
+                in_bounds.extend(self.expand([r.id for _, r in xing.iterrows()]))
+                for site in in_bounds:
+                    self.admin_match_type.setdefault(site.location_id, 'polygon')
+                sites = [s for s in sites if s.location_id not in set(xing['id'])]
+
+            # Check names
+            for site_ in sites:
+                if (site_.location_id.isnumeric()
+                    and field in {'country', 'state_province', 'county'}
+                    and self.matches_admin(site_)):
+                        in_bounds.append(site_)
+                        self.admin_match_type[site_.location_id] = 'centroid'
+                # Marine sites are checked further elsewhere, so they
+                # aren't rejected here. The conditional checks both
+                # the marine container and the is_marine() method becuase
+                # the methods diverge if the reference site does not
+                # contain a sea or ocean.
+                elif not marine or not site_.is_marine():
+                    mask = '"{}" does not intersect the specified {}'
+                    logger.debug(mask.format(site_.summarize(), field))
+                    self.interpret(site_, 'rejected (disjoint on higher geo)')
+                    if site_.location_id == "6252001":
+                        site_.draw(polygon)
+
+                else:
+                    in_bounds.append(site_)
+
+            '''
+            in_bounds = []
             for site in terr + marine:
                 # Test political geography against both primary and related
                 # sites to account for directions, etc. where the base site is
@@ -973,7 +1081,7 @@ class MatchEvaluator:
                         in_bounds.append(site_)
                         self.admin_match_type[site_.location_id] = 'centroid'
                         break
-                    if site_.hull.resize(RESIZE).intersects(polygon):
+                    if site_.convex_hull.resize(RESIZE).intersects(polygon):
                         in_bounds.append(site_)
                         self.admin_match_type[site_.location_id] = 'polygon'
                         break
@@ -990,10 +1098,10 @@ class MatchEvaluator:
                     # the methods diverge if the reference site does not
                     # contain a sea or ocean.
                     if not marine or not site.is_marine():
-                        #site.draw(polygon, title=site.summarize())
                         mask = '"{}" does not intersect the specified {}'
                         logger.debug(mask.format(site.summarize(), field))
                         self.interpret(site, 'rejected (disjoint on higher geo)')
+        '''
 
         # Extract and interpret admin divisions
         for site in in_bounds:
@@ -1083,7 +1191,7 @@ class MatchEvaluator:
             sites = self.sites[:]
         disjoint = []
         for ref_site in [s for s in self.active() if s.site_kind in codes]:
-            geom = ref_site.geometry.hull
+            geom = ref_site.geometry.convex_hull
             for site in sites:
                 if not site.intersects(geom):
                     try:
@@ -1205,8 +1313,7 @@ class MatchEvaluator:
         geoms = [s.geometry for s in self.expand(sites)]
         if len(geoms) == 1:
             return geoms[0]
-        geoms = geoms[0].normalize(geoms[1:])
-        return GeoMetry(GeometryCollection(geoms).convex_hull)
+        return GeoMetry(GeometryCollection([g.geom[0] for g in geoms]).convex_hull, crs=geoms[0].crs)
 
 
     def encompass_name(self, sites, max_dist_km=100):
@@ -1247,17 +1354,21 @@ class MatchEvaluator:
         """Maps encompassing/encompassed relationships between sites"""
         if sites is None or sites == self.sites:
             sites = self.sites[:]
+
         rel = {s.location_id: {'parents': [], 'children': []} for s in sites}
-        for i, site in enumerate(sites):
-            for other in sites[(i + 1):]:
-                overlaps = site.overlap(other, percent=True) > 0.8
-                if overlaps and site.radius_km > other.radius_km:
-                    rel[other.location_id]['parents'].append(site.location_id)
-                    rel[site.location_id]['children'].append(other.location_id)
-                # Check if other contains site
-                elif overlaps and other.radius_km > site.radius_km:
-                    rel[site.location_id]['parents'].append(other.location_id)
-                    rel[other.location_id]['children'].append(site.location_id)
+        if not sites:
+            return rel
+
+        logger.debug('Mapping relationships')
+        gdf = self.to_gdf(sites)
+        scaled = gdf['geometry'].scale(RESIZE, RESIZE)
+
+        for parent, child in zip(*gdf.sindex.query_bulk(scaled, 'contains')):
+            if parent != child:
+                parent_id = gdf.iloc[parent]['id']
+                child_id = gdf.iloc[child]['id']
+                rel[child_id]['parents'].append(parent_id)
+                rel[parent_id]['children'].append(child_id)
         return rel
 
 
@@ -1268,6 +1379,7 @@ class MatchEvaluator:
         groups = self.group_by_name(sites)
         misses = 0 if allow_miss is None or len(groups) < allow_miss else 1
         if len(groups) > 1:
+            logger.debug("Looking for mutually intersecting site")
             intersections = {}
             for i, site in enumerate(sites):
                 sid = site.location_id
@@ -1324,7 +1436,7 @@ class MatchEvaluator:
                 others = [s for s in sites[i + 1:]
                           if self.key(s) != self.key(site)]
                 for other in others:
-                    dist_km = site.dist_km(other)
+                    dist_km = site.min_dist_km(other)
                     dists.setdefault(site.location_id, []).append(dist_km)
                     dists.setdefault(other.location_id, []).append(dist_km)
             outliers = []
@@ -1571,7 +1683,8 @@ class MatchEvaluator:
                                 'rejected (interpreted elsewhere)'}):
                     ignored.append(key)
 
-        return [s.split(':', 1)[1] for s in ignored]
+        #return [s.split(':', 1)[1] for s in ignored]
+        return ignored
 
 
     def reject_interpreted(
@@ -1625,7 +1738,7 @@ class MatchEvaluator:
             if isinstance(site, str):
                 site = self.lookup[site]
             expanded.append(site)
-        return expanded if isinstance(sites, (dict, list)) else expanded[0]
+        return expanded if isinstance(sites, (dict, list, set)) else expanded[0]
 
 
     def names(self, sites):
@@ -1666,7 +1779,7 @@ class MatchEvaluator:
             # If marine sites are found, increase terrestrial radii to
             # account for changes made by extend_into_ocean
             if marine:
-                dist_km = CONFIG.routines.georeferencing.params.dist_km_to_extend_sites_offshore
+                dist_km = CONFIG["georeferencing"]["params"]["dist_km_to_extend_sites_offshore"]
                 radii = [s.radius_km for s in group if s in marine]
                 radii.extend([s.radius_km + dist_km for s in group if s in terr])
                 radius = min(radii)
@@ -1680,7 +1793,7 @@ class MatchEvaluator:
         rejected = [k.split(':')[0] for k in self.names(self.inactive())]
         missed = [k.split('=')[0] for k in self.missed()]
         for field in set(missed + rejected + list(self.leftovers)):
-            radii.append(CONFIG.min_size(field))
+            radii.append(GEOCONFIG.min_size(field))
         # No radii means the encompass failed, but must return int anyway
         if not radii:
             logger.warning('Unable to estimate a minimum uncertainty')
@@ -1697,7 +1810,7 @@ class MatchEvaluator:
 
     @staticmethod
     def adjacent(shapes):
-        """Calculates the union the largest set of intersecting shapes"""
+        """Calculates the union of the largest set of intersecting shapes"""
         tree = STRtree(shapes)
         neighbors = []
         for shape in shapes:

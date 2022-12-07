@@ -12,7 +12,11 @@ from .clock import (
 )
 from .coords import (
     Coordinate,
-    parse_coordinate
+    Latitude,
+    Longitude,
+    estimate_uncertainty,
+    parse_coordinate,
+    round_to_uncertainty
 )
 from .dicts import (
     AbbrDict,
@@ -40,6 +44,30 @@ from .files import (
     is_older,
     load_dict,
     skip_hashed,
+)
+from .geo import (
+    am_longitudes,
+    azimuth_uncertainty,
+    bounding_box,
+    continuous,
+    crosses_180,
+    draw_circle,
+    draw_polygon,
+    encircle,
+    enhull,
+    epsg_id,
+    fix_shape,
+    get_azimuth,
+    get_dist_km,
+    normalize_shape,
+    pm_longitudes,
+    similar,
+    slope,
+    subhorizontal,
+    subvertical,
+    translate,
+    translate_with_uncertainty,
+    trim,
 )
 from .lists import (
     as_list,
@@ -78,6 +106,7 @@ from .strings import (
     add_article,
     as_str,
     lcfirst,
+    natsortable,
     overlaps,
     plural,
     same_to_length,

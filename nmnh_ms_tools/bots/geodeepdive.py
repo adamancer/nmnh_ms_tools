@@ -28,7 +28,7 @@ class GeoDeepDiveBot(Bot):
 
         # Use the scrollID if given
         if kwargs.get("scroll_id"):
-            return self._get_clustered(url, {"scroll_id": kwargs["scroll_id"]})
+            return self._get_clustered(url, kwargs)
 
         if not term:
             raise ValueError("Must provide either term or scrollID")

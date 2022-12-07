@@ -3,40 +3,100 @@ from .taxon import Taxon
 from .taxalist import TaxaList
 from .taxanamer import TaxaNamer
 from .taxaparser import TaxaParser
-from ...config import DATA_DIR
+from ...config import CONFIG
 from ...utils import is_different
 
 
 
+
 def get_tree(src=None):
-    """Retrieves the taxonomic tree, updating from src if given"""
+
+    import json
     import os
-    import shutil
-    try:
-        from minsci.xmu.tools.etaxonomy import TaXMu
-    except ModuleNotFoundError:
-        raise ModuleNotFoundError(
-            'get_tree requires the minsci module (https://github.com/adamancer/minsci)'
-        )
+    from datetime import datetime
+    from xmu import EMuReader, EMuRecord, write_import
 
-    json_path = os.path.join(DATA_DIR, 'downloads', 'geotree.json')
-    if src is None:
-        taxmu = TaXMu(json_path)
+    timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
+
+    tree = TaxaNamer()
+    Taxon.tree = tree
+    TaxaParser.tree = tree
+
+    tree.disable_index = True
+
+    json_path = CONFIG["data"]["taxa_tree"]
+
+    if not src:
+        with open(json_path, encoding='utf-8') as f:
+            tree.update({k: Taxon(v) for k, v in json.load(f).items()})
     else:
-        # Verify that source format is the right type
-        ext = os.path.splitext(src)[-1].lower()
-        if ext not in ('.json', '.xml'):
-            raise IOError('Invalid file extension')
 
-        # Rebuild tree if src is different from the current JSON file
-        if is_different(src, json_path):
-            taxmu = TaXMu(src)
-            shutil.copy2(os.path.splitext(src)[0] + '.json', json_path)
-            if not taxmu.check():
-                raise ValueError('Incongruities found in hierarchy! Please'
-                                 ' import update_{timestamp}.xml into EMu'
-                                 ' and re-export')
+        # Remove indexes
+        for idx in tree.indexers.values():
+            try:
+                os.remove(idx.path)
+            except OSError:
+                pass
 
-    taxmu.tree.timestamp = taxmu.modified
-    TaxaParser.tree = taxmu.tree
-    return taxmu.tree
+        updates = []
+        errors = []
+
+        reader = EMuReader(src, json_path=os.path.splitext(src)[0] + ".json")
+        for i, rec in enumerate(reader):
+            reader.report_progress()
+            try:
+                rec = Taxon(EMuRecord(rec, module=reader.module))
+                tree[rec['irn']] = rec
+            except:
+                errors.append((rec['irn'], 'Read failed'))
+
+        tree.disable_index = False
+        
+        # Populate relationships
+        tree._assign_synonyms()
+        tree._assign_similar()
+        tree._assign_official()
+
+        # Check current designation
+        for key, taxon in tree.items():
+            if key.isnumeric():
+                try:
+                    rec = taxon.fix_current()
+                    if rec:
+                        updates.append(EMuRecord(rec, module=reader.module))
+                except (AttributeError, KeyError):
+                    errors.append((key, 'taxon.fix_current() failed'))
+
+        # Check for other integrity issues
+        for key, taxon in tree.items():
+            if key.isnumeric():
+                try:
+                    rec = taxon.fix()
+                    if rec:
+                        updates.append(EMuRecord(rec, module=reader.module))
+                except (KeyError, ValueError) as err:
+                    errors.append((key, 'taxon.fix() failed'))
+
+        # Create import file with updates that can be made automatically
+        if updates:
+            write_import(updates, 'update_{}.xml'.format(timestamp))
+
+        # Test relationships if no other errors found
+        if not errors:
+            for key, taxon in tree.items():
+                if key.isnumeric():
+                    try:
+                        taxon.preferred()
+                        taxon.parents()
+                        taxon.official()
+                    except:
+                        errors.append((key, 'Relationship check failed'))
+
+        # List errors if any found
+        if errors:
+            raise ValueError(f'Could not generate tree: {errors}')
+
+        tree.to_json(json_path)
+
+    tree.disable_index = False
+    return tree

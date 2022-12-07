@@ -340,14 +340,27 @@ FEATURE_TO_CODES = {
 class GeoNamesBot(Bot):
     """Defines methods to interact with http://api.geonames.org"""
     geonames_db = GeoNamesFeatures()
-    username = CONFIG.bots.geonames_username
+    username = CONFIG["bots"]["geonames_username"]
 
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault('wait', 3600 / 2000)
+    def __init__(self, *args, username=None, **kwargs):
+        self.credits_per_request = 1
+        self.max_requests_per_day = 20000  # rate limit less than hourly
+
+        kwargs.setdefault('wait', 86400 / self.max_requests_per_day)
         kwargs.setdefault('wrapper', GeoNamesResponse)
-        if not self.username:
-            raise ValueError('GeoNamesBot.username is empty')
+        if username:
+            self.username = username
         super().__init__(*args, **kwargs)
+
+
+    @property
+    def wait(self):
+        return self.credits_per_request * (24 * 60 * 60) / 20000
+
+
+    @wait.setter
+    def wait(self, val):
+        self.credits_per_request = val * 20000 / (24 * 60 * 60)
 
 
     def validate(self, response):
@@ -420,6 +433,7 @@ class GeoNamesBot(Bot):
         Returns:
             JSON representation of matching locations
         """
+        self.credits_per_request = 1
         url = 'http://api.geonames.org/searchJSON'
         valid = {
             'adminCode1',
@@ -460,8 +474,26 @@ class GeoNamesBot(Bot):
         Returns:
             JSON representation of point
         """
+        self.credits_per_request = 4
         url = 'http://api.geonames.org/findNearbyJSON'
         return self._find_latlong(url, lat, lng, dec_places, **kwargs)
+
+
+    def country_code_json(self, lat, lng, dec_places=None):
+        """Returns country code for a lat-long pair
+
+        Args:
+            lat (float): latitide
+            lng (float): longitude
+            dec_places (int): decimal places
+
+        Returns:
+            JSON representation of point
+        """
+        self.credits_per_request = 1
+        url = 'http://api.geonames.org/countryCodeJSON'
+        return self._find_latlong(url, lat, lng, dec_places)
+
 
 
     def country_subdivision_json(self, lat, lng, dec_places=None):
@@ -475,6 +507,7 @@ class GeoNamesBot(Bot):
         Returns:
             JSON representation of point
         """
+        self.credits_per_request = 1
         url = 'http://api.geonames.org/countrySubdivisionJSON'
         return self._find_latlong(url, lat, lng, dec_places)
 
@@ -490,6 +523,7 @@ class GeoNamesBot(Bot):
         Returns:
             JSON representation of point
         """
+        self.credits_per_request = 1
         url = 'http://api.geonames.org/oceanJSON'
         if not dec_places:
             lat, lng = int(lat), int(lng)
@@ -506,6 +540,8 @@ class GeoNamesBot(Bot):
         Returns:
             JSON representation of point
         """
+        self.credits_per_request = 1
+
         url = 'http://api.geonames.org/postalCodeSearchJSON'
 
         if not postal_code or not country:
@@ -533,6 +569,11 @@ class GeoNamesBot(Bot):
         features = ['PCL', 'PCLD', 'PCLH', 'PCLI', 'PCLIX', 'PCLS']
         results = self.search_json(name, featureCode=features)
         return results.first()
+
+
+    def _adjust_wait(self, credits_per_request):
+        """Adjusts wait time based on credits used per request"""
+        self.wait = credits_per_request * (24 * 60 * 60) / 20000
 
 
     def _query_geonames(self, url, **kwargs):

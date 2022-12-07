@@ -12,11 +12,15 @@ import logging
 import re
 
 from .classes import repr_class
+from .geo import get_dist_km
 
 
 
 
 logger = logging.getLogger(__name__)
+
+
+DEG_DIST_KM = 110.567
 
 
 
@@ -35,22 +39,29 @@ class Coordinate:
     ]
 
     def __init__(self, val, kind, validate=True):
-        assert kind in ['latitude', 'longitude']
+        if not val and val != 0:
+            raise ValueError(f'Invalid coordinate: {val}')
+        if kind not in ['latitude', 'longitude']:
+            raise ValueError('kind must be either latitude or longitude')
         if not isinstance(val, (float, int, str)):
             mask = 'Coordinate must be float, int, or str ({} given)'
             raise TypeError(mask.format(type(val)))
+
         self.original = val
         self.kind = kind
         self.verbatim = self._format_verbatim()
         self.hemisphere = None
+
         # Components for decimal degrees
         self.decimal = None
         self.dec_places = None
+
         # Components for degrees-minutes-seconds
         self.dms = None
         self.degrees = None
         self.minutes = None
         self.seconds = None
+
         # Parse verbatim
         try:
             self.parse()
@@ -67,6 +78,21 @@ class Coordinate:
 
     def __repr__(self):
         return repr_class(self)
+
+
+    def __float__(self):
+        return self.decimal
+
+
+    def __format__(self, format_spec):
+        try:
+            return format(str(self), format_spec)
+        except ValueError:
+            return format(float(self), format_spec)
+
+
+    def copy(self):
+        return self.__class__(self.verbatim)
 
 
     def parse(self):
@@ -104,6 +130,14 @@ class Coordinate:
             raise ValueError('Invalid latitude: {}'.format(self.decimal))
 
 
+    def as_decimal(self):
+        return self._format_decimal()
+
+
+    def as_dms(self):
+        return self._format_dms()
+
+
     def is_decimal(self):
         """Tests if a string represents a decimal degree"""
         return re.match(r'^-?\d{1,3}(\.\d+)?(?! ?[NnSsEeWw])$', self.verbatim)
@@ -114,15 +148,33 @@ class Coordinate:
         return not self.is_decimal()
 
 
-    def estimate_precision(self):
-        """Estimates precision in km based on specficity of original value"""
+    def estimate_uncertainty(self, rel_err=0.5, allow_zeroes=True):
+        """Estimates uncertainty radius in km based on original value
+
+        This method is based on distances at the equator, which will be a
+        maximum for longitudes. The estiamte_uncertainty function, which
+        looks at a latitude/longitude pair, will give a better sense of
+        total uncertainty than this method.
+
+        Arguments:
+            rel_err (float): scales the uncertainty by the given amount.
+              The default value of 0.5 produces an error radius of 0.5
+              degrees for a coordinate reported to the degree; a value of
+              1 for a degree would produce an error radius of 1 degree.
+            allow_zeroes (bool): specifies whether to count zero as a valid
+                degree/minute/second hen working with DMS coordinates
+
+        Returns:
+            Uncertainty radius as a float
+        """
+        base_dist_km = DEG_DIST_KM * rel_err
         if self.is_decimal():
-            return 111 / 10 ** self.dec_places
-        if float(self.seconds):
-            return 0.03
-        if float(self.minutes):
-            return 2
-        return 111
+            return base_dist_km / 10 ** self.dec_places
+        if float(self.seconds) and (allow_zeroes or self.seconds):
+            return base_dist_km / 3600
+        if float(self.minutes) and (allow_zeroes or self.minutes):
+            return base_dist_km / 60
+        return base_dist_km
 
 
     def _parse_dms(self):
@@ -189,6 +241,7 @@ class Coordinate:
     def _format_decimal(self):
         """Formats decimal as a string"""
         val = '{{:.{}f}}'.format(self.dec_places).format(self.decimal)
+        return val
         return self._strip_trailing_zeroes(val)
 
 
@@ -217,8 +270,7 @@ class Coordinate:
             except ValueError:
                 return 0
             else:
-                # Max decimal places is 4 (accurate to ~10 m)
-                return len(fractional) if len(fractional) < 4 else 4
+                return len(fractional)
 
 
     def _get_hemisphere(self):
@@ -241,6 +293,16 @@ class Coordinate:
         return val
 
 
+class Latitude(Coordinate):
+
+    def __init__(self, val, **kwargs):
+        super().__init__(val, 'latitude', **kwargs)
+
+
+class Longitude(Coordinate):
+
+    def __init__(self, val, **kwargs):
+        super().__init__(val, 'longitude', **kwargs)
 
 
 def parse_coordinate(coord, kind, delims='|;'):
@@ -256,3 +318,70 @@ def parse_coordinate(coord, kind, delims='|;'):
         else:
             coord = [coord]
     return [Coordinate(c, kind) for c in coord]
+
+
+def estimate_uncertainty(lat, lng, unit="m"):
+    """Estimates uncertainty for a lat/long pair based on number of decimals"""
+
+    if not isinstance(lat, Coordinate):
+        lat = Latitude(lat)
+    if not isinstance(lng, Coordinate):
+        lng = Longitude(lng)
+
+    # Get raw uncertainties for lat and long
+    lat_unc = lat.estimate_uncertainty()
+    lng_unc = lng.estimate_uncertainty()
+
+    # Distance between circles of latitude is consistent (~111 km), but
+    # distance between meridians of longitude varies by latitude. Use the
+    # given latitude to adjust the longitude uncertainty.
+    meridian_dist_km = get_dist_km(
+        lat.decimal,
+        lng.decimal,
+        lat.decimal,
+        lng.decimal + 1 if lng.decimal < 89 else lng.decimal - 1
+    )
+    lng_unc *= meridian_dist_km / DEG_DIST_KM
+
+    # Return the hypotenuse of the two uncertainties scaled to the given unit
+    scalars = {
+        "cm": 1000000,
+        "m": 1000,
+        "km": 1
+    }
+    try:
+        return (lat_unc ** 2 + lng_unc ** 2) ** 0.5 * scalars[unit]
+    except KeyError:
+        raise KeyError(f"Invalid unit: {unit} (must be one of {list(scalars)}")
+
+
+def round_to_uncertainty(lat, lng, dist_m=10):
+    """Rounds coordinates to approximate the given uncertainty
+
+    Parameters
+    ----------
+    lat : str or Latitude
+        latitude
+    lng : str or Longitude
+        longitude
+    dist_m : int
+        uncertainty radius in meters
+
+    Returns
+    -------
+    tuple of (Latitude, Longitude)
+        tuple of rounded coordinates
+    """
+
+    if not isinstance(lat, Coordinate):
+        lat = Latitude(lat)
+    if not isinstance(lng, Coordinate):
+        lng = Longitude(lng)
+
+    dec_places = min([lat.dec_places, lng.dec_places])
+    for dec in range(dec_places, -1, -1):
+        lat.dec_places = dec
+        lng.dec_places = dec
+        unc_m = estimate_uncertainty(lat, lng)
+        if dist_m / 5 < unc_m < dist_m * 5 or unc_m > dist_m:
+            return lat, lng

@@ -17,8 +17,8 @@ from shapely.geometry import (
     box
 )
 
-from ...utils.standardizers import Standardizer
-from ...utils import as_list
+from .lists import as_list
+from .standardizers import Standardizer
 
 
 
@@ -40,14 +40,14 @@ STD = Standardizer(minlen=1, delim='')
 
 
 
-def bounding_box(lat1, lng1, lat2, lng2, close=False):
+def bounding_box(lat1, lon1, lat2, lon2, close=False):
     """Calculates a bounding box from two sets of coordinates"""
-    if lat1 == lat2 or lng1 == lng2:
-        args = lat1, lng1, lat2, lng2
+    if lat1 == lat2 or lon1 == lon2:
+        args = lat1, lon1, lat2, lon2
         raise ValueError('Not a box: {}'.format(args))
     lat1, lat2 = sorted([lat1, lat2])
-    lng1, lng2 = sorted([lng1, lng2])
-    return box(lng1, lat1, lng2, lat2)
+    lon1, lon2 = sorted([lon1, lon2])
+    return box(lon1, lat1, lon2, lat2)
 
 
 def epsg_id(val):
@@ -121,22 +121,22 @@ def get_azimuth(bearing):
     return azimuth
 
 
-def draw_circle(lat, lng, dist_km):
+def draw_circle(lat, lon, dist_km):
     """Calculates a circle using the shapely buffer trick"""
-    lng = pm_longitudes([lng])[0]
-    translated = translate(lat, lng, 45, get_spoke_km(dist_km))
-    slng, slat = translated.coords[0]
-    dist = ((slng - lng) ** 2 + (slat - lat) ** 2) ** 0.5
-    return Point(lng, lat).buffer(dist)
+    lon = pm_longitudes([lon])[0]
+    translated = translate(lat, lon, 45, dist_km)
+    slon, slat = translated.coords[0]
+    dist = ((slon - lon) ** 2 + (slat - lat) ** 2) ** 0.5
+    return Point(lon, lat).buffer(dist)
 
 
-def draw_polygon(lat, lng, dist_km, sides=4):
+def draw_polygon(lat, lon, dist_km, sides=4):
     """Calculates a polygon of a given number of sides around a point"""
     azimuths = [45 + (i * 360 / sides)  for i in range(sides)]
     lats = [lat] * len(azimuths)
-    lngs = [lng] * len(azimuths)
-    dists_km = [get_spoke_km(dist_km)] * len(azimuths)
-    return translate(lats, lngs, azimuths, dists_km)
+    lons = [lon] * len(azimuths)
+    dists_km = [dist_km] * len(azimuths)
+    return translate(lats, lons, azimuths, dists_km)
 
 
 def get_spoke_km(dist_km):
@@ -193,32 +193,38 @@ def fix_shape(shape, multipolygon='largest'):
     return shape
 
 
-def get_dist_km(lat1, lng1, lat2, lng2):
+def get_dist_km(lat1, lon1, lat2, lon2):
     """Calculates the distance in kilometers between two points"""
-    return get_dist_km_pyproj(lat1, lng1, lat2, lng2)
+    try:
+        return get_dist_km_pyproj(lat1, lon1, lat2, lon2)
+    except ValueError:
+        if lat1 == lat2 and lon1 == lon2:
+            return 0
+        raise ValueError(f"Could not calculate distance: {(lat1, lon1, lat2, lon2)}")
 
 
-def get_dist_km_geolib(lat1, lng1, lat2, lng2):
+
+def get_dist_km_geolib(lat1, lon1, lat2, lon2):
     """Calculates distance in km between two points w/ geographiclib.Geodesic"""
-    lng1, lng2 = pm_longitudes([lng1, lng2])
-    result = GEODESIC_GEOLIB.Inverse(lat1, lng1, lat2, lng2)
+    lon1, lon2 = pm_longitudes([lon1, lon2])
+    result = GEODESIC_GEOLIB.Inverse(lat1, lon1, lat2, lon2)
     dist_km = result['s12'] / 1000
     if np.isnan(dist_km):
         mask = 'Invalid distance: {:.2f}, {:.2f}, {:.2f}, {:.2f}'
-        raise ValueError(mask.format(lat1, lng1, lat2, lng2))
+        raise ValueError(mask.format(lat1, lon1, lat2, lon2))
     return dist_km
 
 
-def get_dist_km_haversine(lat1, lng1, lat2, lng2):
+def get_dist_km_haversine(lat1, lon1, lat2, lon2):
     """Calculates distance in km between two points using Haversine formula
 
     From https://nathanrooy.github.io/posts/2016-09-07/haversine-with-python/
     """
-    lng1, lng2 = pm_longitudes([lng1, lng2])
+    lon1, lon2 = pm_longitudes([lon1, lon2])
     phi_1 = math.radians(lat1)
     phi_2 = math.radians(lat2)
     delta_phi = math.radians(lat2 - lat1)
-    delta_lambda = math.radians(lng2 - lng1)
+    delta_lambda = math.radians(lon2 - lon1)
     a = (math.sin(delta_phi / 2) ** 2
          + math.cos(phi_1) * math.cos(phi_2)
          * math.sin(delta_lambda / 2) ** 2)
@@ -226,49 +232,49 @@ def get_dist_km_haversine(lat1, lng1, lat2, lng2):
     dist_km = 6371000 * c / 1000
     if np.isnan(dist_km):
         mask = 'Invalid distance: {:.2f}, {:.2f}, {:.2f}, {:.2f}'
-        raise ValueError(mask.format(lat1, lng1, lat2, lng2))
+        raise ValueError(mask.format(lat1, lon1, lat2, lon2))
     return dist_km
 
 
-def get_dist_km_pyproj(lat1, lng1, lat2, lng2):
+def get_dist_km_pyproj(lat1, lon1, lat2, lon2):
     """Calculates distance in km between two points using pyproj.Geod"""
-    lng1, lng2 = pm_longitudes([lng1, lng2])
-    result = GEODESIC_PYPROJ.inv(lng1, lat1, lng2, lat2)
+    lon1, lon2 = pm_longitudes([lon1, lon2])
+    result = GEODESIC_PYPROJ.inv(lon1, lat1, lon2, lat2)
     dist_km = result[2] / 1000
     if np.isnan(dist_km):
         mask = 'Invalid distance: {:.2f}, {:.2f}, {:.2f}, {:.2f}'
-        raise ValueError(mask.format(lat1, lng1, lat2, lng2))
+        raise ValueError(mask.format(lat1, lon1, lat2, lon2))
     return dist_km
 
 
-def translate(lats, lngs, bearings, dists_km):
+def translate(lats, lons, bearings, dists_km):
     """Calculates point at a distance along a bearing"""
-    return translate_pyproj(lats, lngs, bearings, dists_km)
+    return translate_pyproj(lats, lons, bearings, dists_km)
 
 
-def translate_geolib(lats, lngs, bearings, dists_km):
+def translate_geolib(lats, lons, bearings, dists_km):
     """Calculates point at a distance along a bearing w/ geographiclib"""
-    args = _prep_translate(lats, lngs, bearings, dists_km)
+    args = _prep_translate(lats, lons, bearings, dists_km)
     points = []
-    for lat, lng, azimuth, dist_m in zip(*args):
-        result = GEODESIC_GEOLIB.Direct(lat, lng, azimuth, dist_m)
+    for lat, lon, azimuth, dist_m in zip(*args):
+        result = GEODESIC_GEOLIB.Direct(lat, lon, azimuth, dist_m)
         points.append((result['lon2'], result['lat2']))
     if len(points) == 1:
         return Point(points[0])
     return Polygon([(x, y) for x, y in points])
 
 
-def translate_pyproj(lats, lngs, bearings, dists_km):
+def translate_pyproj(lats, lons, bearings, dists_km):
     """Calculates points at a distance along a bearing with pyproj.Geod"""
-    lats, lngs, azm, dists_km = _prep_translate(lats, lngs, bearings, dists_km)
-    # pyprog.Geod uses lng, lat order
-    lngs, lats, _ = GEODESIC_PYPROJ.fwd(lngs, lats, azm, dists_km)
+    lats, lons, azm, dists_km = _prep_translate(lats, lons, bearings, dists_km)
+    # pyprog.Geod uses lon, lat order
+    lons, lats, _ = GEODESIC_PYPROJ.fwd(lons, lats, azm, dists_km)
     if len(lats) == 1:
-        return Point(lngs[0], lats[0])
-    return Polygon([(x, y) for x, y in zip(lngs, lats)])
+        return Point(lons[0], lats[0])
+    return Polygon([(x, y) for x, y in zip(lons, lats)])
 
 
-def translate_with_uncertainty(lat, lng, bearing, dist_km,
+def translate_with_uncertainty(lat, lon, bearing, dist_km,
                                abs_err_degrees=None, rel_err_distance=0.25):
     """Calculates point with uncertainty for a distance along a bearing"""
     # Calculate uncertainty on azimuth
@@ -289,10 +295,10 @@ def translate_with_uncertainty(lat, lng, bearing, dist_km,
     max_dist = dist_km + rel_err_distance
     # Calculate an envelope
     lats = [lat] * 4
-    lngs = [lng] * 4
+    lons = [lon] * 4
     bearings = [azm1, azm1, azm2, azm2]
     dists_km = [min_dist, max_dist] * 2
-    return translate(lats, lngs, bearings, dists_km)
+    return translate(lats, lons, bearings, dists_km)
 
 
 def azimuth_uncertainty(azimuth, min_uncertainty=5.75):
@@ -309,9 +315,9 @@ def azimuth_uncertainty(azimuth, min_uncertainty=5.75):
     return min_uncertainty
 
 
-def forward_azimuth(lat1, lng1, lat2, lng2):
+def forward_azimuth(lat1, lon1, lat2, lon2):
     """Calculates the inverse geodesic using pyproj"""
-    return GEODESIC_PYPROJ.inv(lng1, lat1, lng2, lat2)[0]
+    return GEODESIC_PYPROJ.inv(lon1, lat1, lon2, lat2)[0]
 
 
 def similar(num, other, threshold=0.01):
@@ -362,28 +368,28 @@ def trim(coords, i, trim_func, both_ends=True):
 def sort_geoms(geoms, direction):
     """Sorts a list geometries by compass direction"""
     if direction in 'NS':
-        return sorted(geoms, key=lambda s: s.centroid.latitudes[0])
+        return sorted(geoms, key=lambda s: as_list(s.centroid.lat)[0])
     elif direction in 'EW':
-        return sorted(geoms, key=lambda s: s.centroid.longitudes[0])
+        return sorted(geoms, key=lambda s: as_list(s.centroid.lon)[0])
     raise ValueError('Bad direction: {}'.format(direction))
 
 
-def encircle(lat_lngs):
-    """Calculates centroid and radius for a circle around a set of lat-lngs"""
-    lat_lngs = normalize_coords(lat_lngs)
-    mpt = MultiPoint([(lng, lat) for lat, lng in lat_lngs])
+def encircle(lat_s):
+    """Calculates centroid and radius for a circle around a set of lat-lons"""
+    lat_lons = normalize_coords(lat_lons)
+    mpt = MultiPoint([(lon, lat) for lat, lon in lat_lons])
     centroid = mpt.centroid
-    clat, clng = centroid.y, centroid.x
+    clat, clon = centroid.y, centroid.x
     hull = mpt.convex_hull.exterior.coords
     # Calculate distance between centroid and each point
-    radius = max([get_dist_km(clat, clng, lat, lng) for lng, lat in hull])
-    return draw_circle(clat, clng, radius)
+    radius = max([get_dist_km(clat, clon, lat, lon) for lon, lat in hull])
+    return draw_circle(clat, clon, radius)
 
 
-def enhull(lat_lngs):
-    """Calculates hull around a set of lat-lngs"""
-    lat_lngs = normalize_coords(lat_lngs)
-    return MultiPoint([(lng, lat) for lat, lng in lat_lngs]).convex_hull
+def enhull(lat_lons):
+    """Calculates hull around a set of lat-lons"""
+    lat_lons = normalize_coords(lat_lons)
+    return MultiPoint([(lon, lat) for lat, lon in lat_lons]).convex_hull
 
 
 def get_coordinates(shape):
@@ -412,83 +418,83 @@ def normalize_shape(shape, to_antimeridian=None):
         shape = list(shape.geoms)
     if isinstance(shape, list):
         if multishape:
-            minlng, _, maxlng, _ = orig.bounds
-            to_antimeridian = crosses_180([minlng, maxlng])
+            minlon, _, maxlon, _ = orig.bounds
+            to_antimeridian = crosses_180([minlon, maxlon])
         else:
             # For lists, normalize to antimeridian if any shape crosses it
-            lngs = []
+            lons = []
             if to_antimeridian is None:
                 to_antimeridian = False
                 for geom in shape:
-                    minlng, _, maxlng, _ = geom.bounds
-                    if crosses_180([minlng, maxlng]):
+                    minlon, _, maxlon, _ = geom.bounds
+                    if crosses_180([minlon, maxlon]):
                         to_antimeridian = True
                         break
                     else:
-                        lngs.extend([minlng, maxlng])
+                        lons.extend([minlon, maxlon])
             # Final check to catch shapes where no individual feature crosses
             # the antimeridian but the group itself does
             if not to_antimeridian:
-                to_antimeridian = crosses_180(lngs)
+                to_antimeridian = crosses_180(lons)
         shapes = [normalize_shape(g, to_antimeridian) for g in shape]
         return multishape(shapes) if multishape is not None else shapes
     # Map transformed coordinates back to original shape
-    lat_lngs = get_coordinates(shape)
-    xy = [(x, y) for y, x in normalize_coords(lat_lngs, to_antimeridian)]
+    lat_lons = get_coordinates(shape)
+    xy = [(x, y) for y, x in normalize_coords(lat_lons, to_antimeridian)]
     return shape.__class__(xy)
 
 
-def normalize_coords(lat_lngs, to_antimeridian=None):
+def normalize_coords(lat_lons, to_antimeridian=None):
     """Calculates longitudes to ensure they are not split by the antimeridian"""
-    lats, lngs = zip(*lat_lngs)
+    lats, lons = zip(*lat_lons)
     if to_antimeridian is None:
-        to_antimeridian = crosses_180(lngs)
-    lngs = am_longitudes(lngs) if to_antimeridian else pm_longitudes(lngs)
-    return list(zip(lats, lngs))
+        to_antimeridian = crosses_180(lons)
+    lons = am_longitudes(lons) if to_antimeridian else pm_longitudes(lons)
+    return list(zip(lats, lons))
 
 
-def crosses_180(lngs):
+def crosses_180(lons):
     """Tests if longitudes cross the antimeridian"""
-    min_lng = min(lngs)
-    max_lng = max(lngs)
-    return abs(max_lng) > 180 or abs(min_lng) > 180 or max_lng - min_lng > 180
+    min_lon = min(lons)
+    max_lon = max(lons)
+    return abs(max_lon) > 180 or abs(min_lon) > 180 or max_lon - min_lon > 180
 
 
-def am_longitudes(lngs):
+def am_longitudes(lons):
     """Normalizes longitudes to between 0 and 360"""
-    #return [(lng + 360 if lng < 0 else lng) for lng in lngs]
-    am_lngs = []
-    for lng in lngs:
-        orig = lng
+    #return [(lon + 360 if lon < 0 else lon) for lon in lons]
+    am_lons = []
+    for lon in lons:
+        orig = lon
         # Convert very negative longitudes to equivalent positive values
-        if lng < -180:
-            lng += 360
+        if lon < -180:
+            lon += 360
         # Normalize negative longitudes (-180 to 0)
-        if lng < 0:
-            lng += 360
-        am_lngs.append(lng)
-    return am_lngs
+        if lon < 0:
+            lon += 360
+        am_lons.append(lon)
+    return am_lons
 
 
-def pm_longitudes(lngs):
+def pm_longitudes(lons):
     """Normalizes longitudes to between -180 and 180"""
-    #return [(lng - 360 if lng > 180 else lng) for lng in lngs]
-    pm_lngs = []
-    for lng in lngs:
-        if lng > 180:
-            lng -= 360
-        elif lng < -180:
-            lng += 360
-        pm_lngs.append(lng)
-    return pm_lngs
+    #return [(lon - 360 if lon > 180 else lon) for lon in lons]
+    pm_lons = []
+    for lon in lons:
+        if lon > 180:
+            lon -= 360
+        elif lon < -180:
+            lon += 360
+        pm_lons.append(lon)
+    return pm_lons
 
 
-def _prep_translate(lats, lngs, bearings, dists_km):
+def _prep_translate(lats, lons, bearings, dists_km):
     """Prepares arguments for a batch of translations"""
     lats = as_list(lats)
-    lngs = pm_longitudes(as_list(lngs))
+    lons = pm_longitudes(as_list(lons))
     azimuths = [get_azimuth(b) for b in as_list(bearings)]
     azimuths *= (len(lats) - len(azimuths) + 1)
     dists_m = [dist_km * 1000 for dist_km in as_list(dists_km)]
     dists_m *= (len(lats) - len(dists_m) + 1)
-    return lats, lngs, azimuths, dists_m
+    return lats, lons, azimuths, dists_m

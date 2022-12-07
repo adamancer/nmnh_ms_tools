@@ -4,6 +4,7 @@ import logging
 import os
 import re
 
+import geopandas as gpd
 from sqlalchemy.exc import UnboundExecutionError
 
 from .core import Record
@@ -12,14 +13,14 @@ from ..databases.admin import AdminFeatures
 from ..databases.cache import CacheDict
 from ..databases.geonames import GeoNamesFeatures
 from ..databases.georef_data import get_alt_geometry
-from ..config import CONFIG
+from ..config import CONFIG, GEOCONFIG
 from ..tools.geographic_names.caches import LocalityCache
 from ..tools.geographic_names.parsers import (
     clean_locality,
     get_leftover,
     parse_localities
 )
-from ..tools.geographic_operations import GeoMetry
+from ..tools.geographic_operations import GeoMetry, geom_to_geoseries
 from ..tools.geographic_operations.kml import write_kml
 from ..utils import (
     StaticDict,
@@ -215,18 +216,22 @@ SEAS = {
     'Canarias Sea': 'Atlantic Ocean',
     'China Sea': 'Pacific Ocean',
     'Coastal Waters Of Southeast Alaska And British Columbia': 'Pacific Ocean',
+    'Gulf Of Aden': 'Indian Ocean',
     'Gulf Cal': 'Pacific Ocean',
     'Gulf of Carpenteria': 'Pacific Ocean',
     'Gulf of Davao': 'Pacific Ocean',
     'Hudson Strait': 'Atlantic Ocean',
+    'Iceland Sea': 'Atlantic Ocean',
     'Joseph Bonaparte Gulf': 'Indian Ocean',
     'Malacca Strait': 'Indian Ocean | Pacific Ocean',
+    'Maluku Sea': 'Pacific Ocean',
+    'North Greenland Sea': 'Atlantic Ocean',
     'Rio De La Plata': 'Atlantic Ocean',
     'Samar Sea': 'Pacific Ocean',
     'Singapore Strait': 'Indian Ocean | Pacific Ocean',
     'South Seas': 'Pacific Ocean',
     'Strait Of Sicilia': 'Atlantic Ocean',
-    'Tirreno Sea': 'Atlantic Ocean'
+    'Tirreno Sea': 'Atlantic Ocean',
 }
 for sea in list(SEAS):
     SEAS[sea.lower()] = SEAS[sea]
@@ -240,7 +245,7 @@ class Site(Record):
     config = CONFIG
     adm = AdminFeatures()
     admin_cache = CacheDict()
-    bot = GeoNamesBot() if CONFIG.bots.geonames_username else None
+    bot = GeoNamesBot() if CONFIG["bots"]["geonames_username"] else None
     cache = {}
     local = GeoNamesFeatures()
     std = LocStandardizer()
@@ -304,7 +309,7 @@ class Site(Record):
         self._features = {}
         self.from_gazetteer = False
         # Generate instance
-        super(Site, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         # Match attributes
         self.field = None
         self.filter = {}
@@ -360,12 +365,9 @@ class Site(Record):
     def geometry(self):
         """Returns the geometry for this site, instantiating it if needed"""
         if self._geometry is None and self.has_coords():
-            kwargs = {}
-            if self.geodetic_datum:
-                kwargs['crs'] = self.geodetic_datum
 
             if self.footprint_wkt:
-                self.geometry = GeoMetry(self.footprint_wkt, **kwargs)
+                self.geometry = self._build_geometry(self.footprint_wkt)
                 return self._geometry
 
             for lat, lng in (
@@ -373,7 +375,7 @@ class Site(Record):
                 (self.verbatim_latitude, self.verbatim_longitude)
             ):
                 if lat and lng:
-                    self.geometry = GeoMetry((lat, lng), **kwargs)
+                    self.geometry = self._build_geometry((lat, lng))
                     return self._geometry
 
             mask = 'Invalid coordinates: {} ({})'
@@ -394,7 +396,7 @@ class Site(Record):
         """Returns the uncertainty radius for this site"""
         if self.geometry.radius_km is None or self.geometry.radius_km < 1:
             try:
-                self.radius_km = CONFIG.get_feature_radius(self.site_kind)
+                self.radius_km = GEOCONFIG.get_feature_radius(self.site_kind)
             except (KeyError, TypeError):
                 return 1  # force the minimum radius for a site to 1 km
         return self.geometry.radius_km
@@ -415,7 +417,7 @@ class Site(Record):
     def site_kind(self, val):
         self._site_kind = val
         try:
-            self.site_class = CONFIG.get_feature_class(val)
+            self.site_class = GEOCONFIG.get_feature_class(val)
         except KeyError:
             pass
 
@@ -699,10 +701,11 @@ class Site(Record):
                 except KeyError:
                     pass
             attributes = set(attributes)
-        clone = super(Site, self).clone(attributes=attributes)
+        clone = super().clone(attributes=attributes)
+        clone.verbatim = self.verbatim
         if attributes is None or set(attributes) == set(self.attributes):
             try:
-                clone.geometry = self.geometry.clone()
+                clone.geometry = self.geometry.copy()
             except AttributeError:
                 pass
             clone.filter = self.filter.copy()
@@ -750,7 +753,7 @@ class Site(Record):
         if other is None:
             # Exclude admin, water and undersea features from the admin check
             try:
-                fcl = CONFIG.get_feature_class(self.site_kind)
+                fcl = GEOCONFIG.get_feature_class(self.site_kind)
                 if fcl not in {'A', 'H', 'U'}:
                     polygons = self.get_admin_polygons()
                     for key in ('county', 'state_province', 'country'):
@@ -768,10 +771,10 @@ class Site(Record):
             not contained
             or (self.geom_type != 'Point' and other.geom_type != 'Point')
         ):
-            try:
-                self.geometry = self.intersection(other)
-            except ValueError:
-                pass
+            xtn = self.intersection(other)
+            if xtn.geom[0].is_empty:
+                raise ValueError(f"Could not restrict {self} to {other}")
+            self.geometry = GeoMetry(xtn, crs=self.crs)
 
         elif contained:
             # Leave the centroid alone and set the radius to the maximum
@@ -787,6 +790,8 @@ class Site(Record):
         """Gets polygons for admin divisions"""
         if not self.country:
             return {}
+        self.map_admin_from_names()
+        # Check cache for polygons
         key = json.dumps([getattr(self, a) for a in self.adm.code_fields])
         try:
             polygons = {k: v.clone() for k, v in self.admin_cache[key].items()}
@@ -795,57 +800,57 @@ class Site(Record):
             return polygons
         except KeyError:
             pass
-        self.map_admin_from_names()
+        # Search for and merge polygons
         fields = [f for f in self.adm.name_fields if getattr(self, f)]
         admin = self.clone([f for f in fields if getattr(self, f)])
         polygons = {}
         if admin:
-            sites = {}
+            sites = []
             for result in results if results else self.pipe.process(admin):
-                # Limit to fields without trailing numbers
+                # Limit to primary fields, that is, fields without trailing numbers
                 if result.sites and result.field in admin:
-                    sites.setdefault(result.field, []).extend(result.sites)
-            # Combine polygons from all matching sites
-            last = None
-            for field in fields:
-                geoms = []
-                missed = []
-                for site in sites.get(field, []):
-                    geom = site.geometry.hull
-                    if last is None or last.intersects(geom):
-                        #geom.draw(last, title=site.summarize())
-                        geoms.append(geom)
-                    else:
-                        #geom.draw(last, title=site.summarize())
-                        missed.append(geom)
-                        mask = '{} polygon outside parent: {}'
-                        logger.warning(mask.format(field, site.summarize()))
-                if not geoms:
-                    polygons = list(polygons.values()) + missed
-                    polygons.sort(key=lambda p: p.area)
-                    #self.draw_admin(polygons, mask='ERROR: {}')
-                    # Catch missing or out-of-bounds admin polygons
-                    names = to_attribute(admin.summarize('admin'))
-                    fn = '{}_{}.kml'.format(names, self.location_id)
-                    fp = os.path.join('errors', fn)
-                    # Convert site dict to list
-                    sitelist = []
-                    for fld in fields:
-                        sitelist.extend(sites.get(fld, []))
-                    write_kml(fp, sitelist)
-                    msg = 'Admin disjoint: {}: {}'
-                    if not sites.get(field):
-                        msg = 'Admin not found: {}: {}'
-                    raise ValueError(msg.format(self.location_id, names))
-                polygons[field] = GeoMetry(geoms)
-                last = polygons[field]
+                    sites.extend(result.sites)
+            gdf = sites_to_geodataframe(sites)
+            gdf["geometry"] = gdf["geometry"].scale(1.1, 1.1)
+            gdf["field"] = [s.field for s in sites]
+            # Keep all polygons that match a county, state, and country
+            results = gdf.sindex.query_bulk(gdf["geometry"], "intersects")
+            xing = {}
+            for in_geom, x_geom in zip(*results):
+                xing.setdefault(in_geom, []).append(x_geom)
+            keep = []
+            for idx, matches in xing.items():
+                if idx not in keep and not set(fields) - {sites[i].field for i in matches}:
+                    keep.extend(matches)
+            dissolved = gdf.iloc[keep].dissolve("field").reset_index()
+            dissolved["geometry"] = dissolved["geometry"].convex_hull.to_crs(sites[0].crs)
+            geoms = {
+                r["field"]: self._build_geometry(r["geometry"], crs=sites[0].crs)
+                for _, r in dissolved.iterrows()
+            }
+        if not geoms:
+            polygons = list(polygons.values()) + missed
+            polygons.sort(key=lambda p: p.area)
+            #self.draw_admin(polygons, mask='ERROR: {}')
+            # Catch missing or out-of-bounds admin polygons
+            names = to_attribute(admin.summarize('admin'))
+            fn = '{}_{}.kml'.format(names, self.location_id)
+            fp = os.path.join('errors', fn)
+            # Convert site dict to list
+            sitelist = []
+            for fld in fields:
+                sitelist.extend(sites.get(fld, []))
+            write_kml(fp, sitelist)
+            msg = 'Admin disjoint: {}: {}'
+            if not sites.get(field):
+                msg = 'Admin not found: {}: {}'
+            raise ValueError(msg.format(self.location_id, names))
         # Rebuild key since it can be changed from mapped names
         key = json.dumps([getattr(self, a) for a in self.adm.code_fields])
-        if not polygons:
+        if not geoms:
             raise ValueError('Could not map polygons: {}'.format(key))
-        self.admin_cache[key] = polygons
-        #return self.admin_cache[key].copy()
-        return {k: v.clone() for k, v in polygons.items()}
+        self.admin_cache[key] = geoms
+        return geoms
 
 
     def map_marine_features(self):
@@ -953,8 +958,8 @@ class Site(Record):
 
     def get_ocean(self):
         """Gets the name of the nearest ocean, if any"""
-        lng, lat = self.centroid.coords[0]
-        response = self.bot.ocean_json(lat, lng, 1, 10)
+        centroid = self.centroid
+        response = self.bot.ocean_json(centroid.y, centroid.x, 1, 10)
         name = response.get('ocean', {}).get('name', '').split(',')[0].strip()
         if name:
             try:
@@ -966,8 +971,8 @@ class Site(Record):
 
     def get_sea(self):
         """Gets the name of the nearest sea"""
-        lng, lat = self.centroid.coords[0]
-        response = self.bot.ocean_json(lat, lng, 0, 100)
+        centroid = self.centroid
+        response = self.bot.ocean_json(centroid.y, centroid.x, 0, 100)
         name = response.get('ocean', {}).get('name').split(',')[0].strip()
         if 'ocean' not in name.lower():
             return name
@@ -1022,6 +1027,12 @@ class Site(Record):
         Site.cache = LocalityCache(path)
 
 
+    def _build_geometry(self, geom, **kwargs):
+        kwargs.setdefault("crs", self.geodetic_datum)
+        kwargs.setdefault("radius_km", GEOCONFIG.get_feature_radius(self.site_kind))
+        return GeoMetry(geom, **kwargs)
+
+
     def _parse_dwc(self, data):
         """Parses site from a Simple Darwin Core record"""
         for key, val in data.items():
@@ -1032,22 +1043,16 @@ class Site(Record):
 
     def _parse_emu(self, data):
         """Constructs a site from an EMu Collections Event record"""
-        try:
-            self.location_id = data('irn')
-        except TypeError:
-            # FIXME: Not ideal
-            from minsci import xmu
-            data = xmu.XMuRecord(data)
-            self.location_id = data('irn')
+        self.location_id = data.get("irn")
         # Map to DwC field names
-        self.continent = data('LocContinent')
-        self.country = data('LocCountry')
-        self.state_province = data('LocProvinceStateTerritory')
-        self.county = data('LocDistrictCountyShire')
-        self.municipality = data('LocTownship')
-        self.island = data('LocIslandName')
-        self.island_group = data('LocIslandGrouping')
-        self.water_body = [data('LocBaySound')]
+        self.continent = data.get("LocContinent")
+        self.country = data.get('LocCountry')
+        self.state_province = data.get('LocProvinceStateTerritory')
+        self.county = data.get('LocDistrictCountyShire')
+        self.municipality = data.get('LocTownship')
+        self.island = data.get('LocIslandName')
+        self.island_group = data.get('LocIslandGrouping')
+        self.water_body = [data.get('LocBaySound')]
         # Map coordinates
         for latkey, lngkey in [
             ('LatLatitudeVerbatim_nesttab', 'LatLongitudeVerbatim_nesttab'),
@@ -1057,35 +1062,35 @@ class Site(Record):
             ('LatCentroidLatitudeDec_tab', 'LatCentroidLongitudeDec_tab'),
         ]:
             try:
-                lats = as_list(data(latkey)[0])
-                lngs = as_list(data(lngkey)[0])
-            except IndexError:
+                lats = as_list(data.get(latkey)[0])
+                lngs = as_list(data.get(lngkey)[0])
+            except (IndexError, TypeError):
                 pass
             else:
                 self.verbatim_latitude = lats
                 self.verbatim_longitude = lngs
                 if lats and len(lats) == len(lngs):
-                    self.geometry = GeoMetry(list(zip(lats, lngs)))
-                    self.georeference_sources = data('LatDetSource_tab')
-                    self.georeference_remarks = data('LatGeoreferencingNotes0')
+                    self.geometry = self._build_geometry(list(zip(lats, lngs)))
+                    self.georeference_sources = data.get('LatDetSource_tab')
+                    self.georeference_remarks = data.get('LatGeoreferencingNotes0')
                     # FIXME: Parse radius
                     break
         # Map custom fields
-        self.mine = data('LocMineName')
-        self.mining_district = data('LocMiningDistrict')
-        self.volcano = data('VolVolcanoName')
+        self.mine = data.get('LocMineName')
+        self.mining_district = data.get('LocMiningDistrict')
+        self.volcano = data.get('VolVolcanoName')
         self.sea_gulf = data.get('LocSeaGulf')
         self.ocean = data.get('LocOcean')
-        self.maps = [data(k) for k in ['LocQUAD', 'MapName'] if data(k)]
+        self.maps = [data.get(k) for k in ['LocQUAD', 'MapName'] if data.get(k)]
         # Map other locations to locality, beginning with PLSS coordinates
         locality = []
-        labels = [s.lower() for s in data('MapOtherKind_tab')]
+        labels = [s.lower() for s in data.get('MapOtherKind_tab', [])]
         if 'section' in labels and 'township range' in labels:
             try:
                 labels = [lbl.split(' ')[0] for lbl in labels]
-                rows = zip(labels, data('MapOtherCoordA_tab'))
+                rows = zip(labels, data.get('MapOtherCoordA_tab'))
                 plss = dict(zip(rows))
-                rows = zip(labels, data('MapOtherCoordB_tab'))
+                rows = zip(labels, data.get('MapOtherCoordB_tab'))
                 plss['range'] = dict(zip(rows))['township']
                 mask = '{quarter} Sec. {section} {township} {range}'
                 div = mask.format(**plss)
@@ -1099,13 +1104,13 @@ class Site(Record):
             'LocGeologicSetting',
             'LocGeomorphologicalLocation'
         ]
-        locality.extend([data[k] for k in keys if k in data])
+        locality.extend([data.get(k) for k in keys if k in data])
         self.locality = [s for s in locality if s]
         # Map site info
-        self.site_kind = data('LocRecordClassification')
-        self.site_num = data('LocSiteStationNumber')
-        self.site_source = data('LocSiteNumberSource')
-        self.site_names = data('LocSiteName_tab')
+        self.site_kind = data.get('LocRecordClassification')
+        self.site_num = data.get('LocSiteStationNumber')
+        self.site_source = data.get('LocSiteNumberSource')
+        self.site_names = data.get('LocSiteName_tab')
         self.synonyms = []
 
 
@@ -1141,21 +1146,21 @@ class Site(Record):
         if not en_names:
             en_names = [data.get('name')]
         self.site_names = en_names
+
         # Check for a more specific geometry
         try:
             geom, source = get_alt_geometry(self.location_id)
         except UnboundExecutionError:
-            print(self.location_id)
             geom = None
         if geom:
-            self.geometry = GeoMetry(geom)
+            self.geometry = self._build_geometry(geom, crs=4326)
             self.sources.append(source)
         else:
             # Map geometry from lat-lng or bbox
             try:
-                self.geometry = GeoMetry(data['bbox'])
+                self.geometry = self._build_geometry(data['bbox'], crs=4326)
             except KeyError:
-                self.geometry = GeoMetry((data['lat'], data['lng']))
+                self.geometry = self._build_geometry((data['lat'], data['lng']), crs=4326)
 
         # Map explicitly defined URL to url_mask
         if data.get('url'):
@@ -1173,7 +1178,8 @@ class Site(Record):
 
 
     def _parse_geoname_id(self, data):
-        return self._parse_geonames(self.local.get_json(data))
+        self.verbatim = self.local.get_json(data)
+        return self._parse_geonames(self.verbatim)
 
 
     def _parse_natural_earth(self, data):
@@ -1251,7 +1257,7 @@ class Site(Record):
                 name = '{} {}'.format(self.site_names[0], self.site_kind)
                 self.site_names.insert(0, name)
         self.site_source = 'Natural Earth'
-        self.geometry = GeoMetry(data['geometry'])
+        self.geometry = self._build_geometry(data['geometry'], crs=4326)
         self.synonyms = []
         for key, val in data.items():
             if key.startswith('name') and val and isinstance(val, str):
@@ -1274,3 +1280,12 @@ class Site(Record):
             self.radius_km = float(radius_km)
 
         return self
+
+
+def sites_to_geodataframe(sites):
+    """Creates a geodataframe of all sites using a coherent equal-area CRS"""
+    sites = as_list(sites)
+    return gpd.GeoDataFrame({
+        "id": [s.location_id for s in sites],
+        "geometry": geom_to_geoseries([s.geometry for s in sites])
+    })

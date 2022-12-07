@@ -4,7 +4,7 @@ import logging
 import pprint as pp
 import os
 import re
-from collections.abc import MutableMapping
+from collections.abc import MutableMapping, MutableSequence
 
 import yaml
 from unidecode import unidecode
@@ -12,6 +12,7 @@ from unidecode import unidecode
 from .taxalist import TaxaList
 from .taxaparser import TaxaParser
 from .taxon import Taxon
+from ...config import CONFIG
 from ...utils import slugify
 
 
@@ -100,18 +101,38 @@ class TaxaIndex(MutableMapping):
         raise KeyError('Multiple matches on "{}"'.format(self.key(key)))
 
 
-    def from_json(self, fp):
-        """Reads data from YAML file"""
+    def from_json(self, fp, encoding="utf-8"):
+        """Reads data from JSON file"""
         if self.timestamp is not None and os.path.getmtime(fp) < self.timestamp:
             raise IOError('Taxa index is older than EMu export')
-        #self.update(yaml.safe_load(open(fp, 'r')))
-        self.update(json.load(open(fp, 'r')))
+        with open(fp, encoding=encoding) as f:
+            self.update(json.load(f))
 
 
-    def to_json(self, fp):
-        """Writes data to YAML file"""
-        #yaml.dump(dict(self.items()), open(fp, 'w'))
-        json.dump(dict(self.items()), open(fp, 'w'))
+    def to_json(self, fp, encoding="utf-8"):
+        """Writes data to JSON file"""
+
+        class _Encoder(json.JSONEncoder):
+
+            def default(self, obj):
+                try:
+                    return json.JSONEncoder.default(self, obj)
+                except TypeError as exc:
+                    for from_class, to_class in (
+                        (MutableMapping, dict),
+                        (MutableSequence, list),
+                    ):
+                        if isinstance(obj, from_class):
+                            return to_class(obj)
+                    raise
+
+        try:
+            os.makedirs(os.path.dirname(fp))
+        except OSError:
+            pass
+
+        with open(fp, "w", encoding=encoding) as f:
+            json.dump(self, f, cls=_Encoder)
 
 
     @staticmethod
@@ -128,6 +149,7 @@ class TaxaTree(TaxaIndex):
 
 
     def __init__(self, *args, **kwargs):
+        self.disable_index = False
         super(TaxaTree, self).__init__(*args, **kwargs)
         self.indexers = {
             'name_index': NameIndex,
@@ -143,18 +165,24 @@ class TaxaTree(TaxaIndex):
             return False
 
 
+    def __getitem__(self, key):
+        return self.find_one(key)
+
+
     def find(self, term, index='name_index'):
         """Finds all matches for a search term"""
-        if index is None:
-            return self[term]
-        return [self[irn] for irn in self.get_index(index)[term]]
+        try:
+            return [super().__getitem__(term)]
+        except KeyError:
+            return [self[irn] for irn in self.get_index(index)[term]]
 
 
     def find_one(self, term, index='name_index'):
         """Finds the best match on a search term"""
         matches = self.find(term, index)
-        if isinstance(matches, list):
-            return TaxaList(matches).best_match(term)
+        if len(matches) == 1:
+            return matches[0]
+        return TaxaList(matches).best_match(term)
 
 
     def place(self, name):
@@ -208,6 +236,8 @@ class TaxaTree(TaxaIndex):
 
     def get_index(self, name):
         """Retrieves the index, creating it if needed"""
+        if self.disable_index:
+            return TaxaIndex()
         index = getattr(self, name)
         if index is None:
             setattr(self.__class__, name, self.indexers[name](self))
@@ -297,14 +327,14 @@ class TaxaTree(TaxaIndex):
 
 class NameIndex(TaxaIndex):
     """Constructs an index of taxon names"""
+    path = CONFIG["data"]["name_index"]
 
     def __init__(self, tree):
         super(NameIndex, self).__init__()
-        fp = 'name_index.json'
         try:
-            self.from_json(fp)
+            self.from_json(self.path)
         except (IOError, OSError):
-            print('Building {} index...'.format(fp.split('_')[0]))
+            print('Building {} index...'.format(self.path.split('_')[0]))
             count = 0
             for obj in (tree.obj, tree.new):
                 for taxon in obj.values():
@@ -315,7 +345,7 @@ class NameIndex(TaxaIndex):
             print('{:,} names processed'.format(count))
             for key, taxa in self.items():
                 self[key] = sorted(set(taxa))
-            self.to_json(fp)
+            self.to_json(self.path)
             print('Done!')
 
 
@@ -330,14 +360,14 @@ class NameIndex(TaxaIndex):
 
 class StemIndex(TaxaIndex):
     """Constructs an index of stemmed taxon names"""
+    path = CONFIG["data"]["name_index"]
 
     def __init__(self, tree):
         super(StemIndex, self).__init__()
-        fp = 'stem_index.json'
         try:
-            self.from_json(fp)
+            self.from_json(self.path)
         except (IOError, OSError):
-            print('Building {} index...'.format(fp.split('_')[0]))
+            print('Building {} index...'.format(self.path.split('_')[0]))
             count = 0
             for obj in (tree.obj, tree.new):
                 for taxon in obj.values():
@@ -348,13 +378,13 @@ class StemIndex(TaxaIndex):
             print('{:,} names processed'.format(count))
             for key, taxa in self.items():
                 self[key] = sorted(set(taxa))
-            self.to_json(fp)
+            self.to_json(self.path)
             print('Done!')
 
 
     def add_taxon(self, taxon):
         """Adds an entry to the index"""
-        self.setdefault(taxon.indexed(), []).append(taxon.irn)
+        self.setdefault(taxon.parsed.indexed, []).append(taxon.irn)
 
 
     @staticmethod

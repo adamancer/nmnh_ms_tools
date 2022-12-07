@@ -57,8 +57,8 @@ class Kml:
 
     def is_new(self, site):
         """Tests if site is new"""
-        lng, lat = site.centroid.coords[0]
-        point = (lat, lng, site.radius_km)
+        centroid = site.centroid
+        point = (centroid.y, centroid.x, site.radius_km)
         if not self._added or point not in self._added[1:]:
             self.sites.append(site)
             self._added.append(point)
@@ -128,7 +128,8 @@ class Kml:
             # Add centroid
             point = etree.SubElement(multigeometry, 'Point')
             coordinates = etree.SubElement(point, 'coordinates')
-            coordinates.text = '{},{}'.format(*site.centroid.coords[0])
+            centroid = site.centroid
+            coordinates.text = f"{centroid.x}, {centroid.y}"
             # Add radius
             if site.radius_km is not None:
                 if site.geom_type == 'LineString':
@@ -143,23 +144,25 @@ class Kml:
         # Large outlines confuse the Google Earth, so do not plot those
         if self.max_radius_km and site.radius_km > self.max_radius_km:
             return self
-        # Construct elements
-        polygon = etree.SubElement(parent, 'Polygon')
-        extrude = etree.SubElement(polygon, 'extrude')
-        altitude_mode = etree.SubElement(polygon, 'altitudeMode')
-        outer_boundary_is = etree.SubElement(polygon, 'outerBoundaryIs')
-        linear_ring = etree.SubElement(outer_boundary_is, 'LinearRing')
-        coordinates = etree.SubElement(linear_ring, 'coordinates')
-        # Populate elements
-        extrude.text = '1'
-        altitude_mode.text = 'relativeToGround'
+
+        drawable = site.geometry.drawable
         try:
-            pts = site.geometry if site.geom_type != 'Point' else site.ellipse
-            mask = '{1},{0}'
+            geoms = drawable.geoms
         except AttributeError:
-            pts = site.exterior.coords
-            mask = '{0},{1}'
-        coordinates.text = ' '.join([mask.format(*pt) for pt in pts])
+            geoms = [drawable]
+
+        for geom in geoms:
+            # Construct elements
+            polygon = etree.SubElement(parent, 'Polygon')
+            extrude = etree.SubElement(polygon, 'extrude')
+            altitude_mode = etree.SubElement(polygon, 'altitudeMode')
+            outer_boundary_is = etree.SubElement(polygon, 'outerBoundaryIs')
+            linear_ring = etree.SubElement(outer_boundary_is, 'LinearRing')
+            coordinates = etree.SubElement(linear_ring, 'coordinates')
+            # Populate elements
+            extrude.text = '1'
+            altitude_mode.text = 'relativeToGround'
+            coordinates.text = ' '.join(['{0},{1}'.format(*pt) for pt in geom.exterior.coords])
         return self
 
 
@@ -176,7 +179,7 @@ class Kml:
         tessellate.text = '1'
         altitude_mode.text = 'relativeToGround'
         mask = '{0},{1}'
-        coordinates.text = ' '.join([mask.format(*p) for p in site.xy])
+        coordinates.text = ' '.join([mask.format(*p) for p in site.coords])
         return self
 
 

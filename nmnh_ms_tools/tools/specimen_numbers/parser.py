@@ -101,7 +101,7 @@ class Parser:
                  mask=None,
                  num_chars=32,
                  highlight=True,
-                 clean=True,
+                 clean=False,
                  pages=None):
         """Find all occurrences of a pattern in text"""
         if mask is None:

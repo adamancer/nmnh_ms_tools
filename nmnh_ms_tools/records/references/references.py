@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 ENTITIES = {
     r'$\mathsemicolon$': ';',
+    r'$\mathplus$': '+',
     r'{\{AE}}': 'Æ',
     r'{\textdegree}': '°' ,
     r'{\textquotesingle}': u"'",
@@ -57,7 +58,7 @@ class Reference(Record):
     std = Standardizer()
 
 
-    def __init__(self, data, resolve_parsed_doi=True):
+    def __init__(self, data=None, resolve_parsed_doi=True):
         # Set lists of original class attributes and reported properties
         self._class_attrs = set(dir(self))
         # Explicitly define defaults for all reported attributes
@@ -79,7 +80,8 @@ class Reference(Record):
         self.resolve_parsed_doi = resolve_parsed_doi
         self.formatter = CSEFormatter
 
-        self.parse(data)
+        if data:
+            self.parse(data)
 
 
     def __str__(self):
@@ -244,7 +246,7 @@ class Reference(Record):
                 response = self.bot.get(url, headers=headers)
                 if response.text.startswith('@'):
                     return response.text
-
+                raise ValueError
             except ValueError as err:
                 if "user agent" in str(err).lower():
                     raise
@@ -287,11 +289,18 @@ class Reference(Record):
         source_type = self._btm.emu_source_type(self.entry_type)
         prefix = self._btm.emu_record_type(self.entry_type, True)
         parent = self._btm.emu_source_type(self.entry_type, True)
+        # Prepare list of authors
+        authors = []
+        for author in self.authors:
+            author = author.to_emu()
+            if "irn" not in author:
+                # New author names are unlisted to avoid cluttering parties
+                author["SecRecordStatus"] = "Unlisted"
+            authors.append(author)        
         # Populate a bibliography record
-        kwargs = {'SecRecordStatus': 'Unlisted'}  # Author names are unlisted
         rec = {
             'BibRecordType': rec_type,
-            '{}AuthorsRef_tab': [a.to_emu(**kwargs) for a in self.authors],
+            '{}AuthorsRef_tab': authors,
             '{}Role_tab': ['Author' for _ in self.authors],
             '{}Title': self.title,
             '{}PublicationDates': self.year,
@@ -381,6 +390,7 @@ class Reference(Record):
         Returns:
             Dict containing reference data
         """
+        self.verbatim = text
         for entity, repl in ENTITIES.items():
             text = text.replace(entity, repl)
         parser = BibTexParser()
@@ -396,7 +406,7 @@ class Reference(Record):
         self.kind = parsed['ENTRYTYPE']
         self.authors = parse_names(parsed.get('author', ''))
         try:
-            self.title = parsed['title']
+            self.title = re.sub(r"\s+", " ", parsed['title'])
         except KeyError:
             logger.warning('No title: {}'.format(parsed))
             self.title = '[NO TITLE PROVIDED]'

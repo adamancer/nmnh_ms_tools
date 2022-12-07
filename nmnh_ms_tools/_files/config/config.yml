@@ -11,7 +11,7 @@ data:
   georef_job: job.sqlite
   natural_earth: databases/natural_earth.sqlite
   natural_earth: databases/thesaurus.yml
-routines:
+processes:
   georeferencing:
     params:
       max_sites_to_evaluate: 150

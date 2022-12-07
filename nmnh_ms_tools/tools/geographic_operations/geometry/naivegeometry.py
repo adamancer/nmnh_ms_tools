@@ -21,7 +21,7 @@ from shapely.geometry import (
 from shapely.ops import nearest_points, split, unary_union
 
 from ....databases.cache import CacheDict
-from ..helpers import (
+from ....utils.geo import (
     am_longitudes,
     bounding_box,
     crosses_180,
@@ -386,7 +386,7 @@ class NaiveGeoMetry:
             return self.derive(self.shape.intersection(other.shape))
         # If shapes do not intersect, try hull
         if try_hull and self.shape != self.verbatim_shape.convex_hull:
-            return self.derive(self.hull.intersection(other.hull))
+            return self.derive(self.convex_hull.intersection(other.convex_hull))
         raise ValueError('Geometries do not intersect')
 
 

@@ -19,7 +19,7 @@ class ElsevierBot(Bot):
     """Defines methods to interact with https://api.elsevier.com"""
 
     def __init__(self, *args, **kwargs):
-        api_key = kwargs.pop('api_key', CONFIG.bots.elsevier_api_key)
+        api_key = kwargs.pop('api_key', CONFIG["bots"]["elsevier_api_key"])
         if not api_key:
             raise ValueError('Elsevier API key required')
         kwargs.setdefault('wrapper', ElsevierReponse)

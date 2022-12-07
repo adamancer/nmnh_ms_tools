@@ -2,11 +2,12 @@
 import logging
 import csv
 import os
-import shutil
+from collections.abc import MutableMapping
+from pprint import pformat
 
 import yaml
 
-from ..utils import AttrDict, skip_hashed
+from ..utils import skip_hashed
 
 
 
@@ -26,69 +27,224 @@ TEST_DIR = os.path.join(FILE_DIR, 'tests')
 
 
 
-class MinSciUtilsConfig:
-    """Reads and interprets the module-wide config file"""
+class MinSciConfig(MutableMapping):
+    """Reads and writes a configuration file
 
-    def __init__(self):
-        self.config = None
+    Automatically loaded when EMuRecord is first accessed. The current configuration
+    can be accessed using the config attribute on each of the EMu classes.
+
+    Parameters
+    ----------
+    path : str
+        path to the config file. If omitted, checks the current and home
+        directories for the file.
+
+    Attributes
+    ----------
+    path : str
+        path to the config file
+    title : str
+        title to write at the top of the config file
+    filename : str
+        default filename for config file
+    classes : list
+        list of classes to add the config object to
+    """
+
+    def __init__(self, path=None):
+        self.path = path
+        self.title = "YAML configuration file for python nmnh_ms_tools package"
+        self.filename = ".nmtrc"
+        self.classes = []
+        self._config = None
+
+        # Options as key: (default, comment)
+        self._options = {}
+
+        self.load_rcfile()
+
+        # Set config parameter on all classes
+        for cl in self.classes:
+            cl.config = self
+
+    def __str__(self):
+        return f"{self.__class__.__name__}({pformat(self._config)})"
+
+    def __repr__(self):
+        return repr(self._config)
+
+    def __getitem__(self, key):
+        return self._config[key]
+
+    def __setitem__(self, key, val):
+        self._config[key] = val
+
+    def __delitem__(self, key):
+        del self._config[key]
+
+    def __len__(self):
+        return len(self._config)
+
+    def __iter__(self):
+        return iter(self._config)
+
+    def load_rcfile(self, path=None):
+        """Loads a configuration file
+
+        Parameters
+        ----------
+        path : str
+            path to the rcfile. If not given, checks the current then home
+            directory for the filename.
+
+        Returns
+        -------
+        dict
+            either a custom configuration loaded from a file or the
+            default configuration defined in this function
+        """
+
+        if path is None:
+            path = self.path
+
+        # Check the current then home directories if path not given
+        if path:
+            paths = [path]
+        else:
+            paths = [os.path.join(CONFIG_DIR), os.path.expanduser("~"), "."]
+
+        # Create a default configuration based on _options attribute
+        self._config = {k: v[0] for k, v in self._options.items()}
+
+        # Check each location for the rcfile
+        for path in paths:
+
+            # Use a default filename if none given
+            if os.path.isdir(path):
+                path = os.path.join(path, self.filename)
+
+            try:
+                with open(path, encoding="utf-8") as f:
+                    self.update(yaml.safe_load(f))
+                self.path = path
+            except (FileNotFoundError, TypeError):
+                pass
+
+        return self._config
+
+    def save_rcfile(self, path=None, overwrite=False):
+        """Saves a configuration file
+
+        Parameters
+        ----------
+        path : str
+            path for the rcfile. If a directory, adds the filename.
+            Defaults to the user's home directory.
+        overwrite : bool
+            whether to overwrite the file if it exists
+        """
+
+        # Default to user home directory
+        if path is None:
+            path = os.path.expanduser("~")
+
+        # Use a default filename if none given
+        if os.path.isdir(path):
+            path = os.path.join(path, self.filename)
+
+        # Check if a file already exists at the path
+        try:
+            with open(path, encoding="utf-8") as f:
+                pass
+            if overwrite:
+                raise FileNotFoundError
+            raise IOError(
+                f"'{path}' already exists. Use overwrite=True to overwrite it."
+            )
+        except FileNotFoundError:
+            pass
+
+        # Write a commented YAML file. Comments aren't supported by pyyaml
+        # and have to be hacked in.
+        content = [f"# {self.title}"]
+        for line in yaml.dump(self._config, sort_keys=False).splitlines():
+            try:
+                comment = self._options[line.split(":")[0]][1]
+                wrapped = "\n".join([f"# {l}" for l in wrap(comment)])
+                content.extend(["", wrapped, line])
+            except KeyError:
+                # Catches keys that are not top-level options
+                content.append(line)
+
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("\n".join(content))
+    
+
+    def update(self, obj, path=None):
+        """Recusrively updates configuration from dict
+        
+        Parameters
+        ----------
+        obj : mixed
+            configuration object. Usually a dict, although the function itself
+            may pass a variety of object types.
+        path : list
+            path to the current item
+
+        Returns
+        -------
+        None
+        """
+        if path is None:
+            path = []
+        
+        if path:
+            config = self._config
+            for key in path[:-1]:
+                try:
+                    config = config[key]
+                except KeyError:
+                    config[key] = {}
+                    config = config[key]
+            
+        if isinstance(obj, dict):
+            for key, val in obj.items():
+                path.append(key)
+                self.update(val, path)
+                path.pop()
+        elif isinstance(obj, list):
+            config[path[-1]] = []
+            for i, val in enumerate(obj):
+                config[path[-1]].append(type(val)())
+                path.append(i)
+                self.update(val, path)
+                path.pop()
+        else:       
+            if isinstance(obj, str) and obj.startswith("~"):
+                obj = os.path.realpath(os.path.expanduser(obj))
+            try:
+                config[path[-1]] = obj
+            except IndexError:
+                config.append(obj)
+
+
+
+class GeoConfig:
+    """Configuration for geographic classes and functions"""
+
+    def __init__(self, config):
+        self.config = config
         self.codes = None    # maps feature codes to data about them
         self.classes = None  # maps feature classes to feature codes
         self.fields = None   # maps DwC-ish fields to feature codes
-        self.load()
 
-
-    def __getattr__(self, attr):
-        try:
-            return getattr(self.config, attr)
-        except AttributeError:
-            mask = "'{}' object has no attribute '{}'"
-            raise AttributeError(mask.format(self.__class__.__name__, attr))
-
-
-    def load(self):
-        """Reads the configuration file"""
-        fp = os.path.join(CONFIG_DIR, 'config.yml')
-        with open(fp, 'r') as f:
-            self.config = AttrDict(yaml.safe_load(f))
-        # Update config if config file found in script directory
-        try:
-            self.update('config.yml')
-        except FileNotFoundError:
-            # Custom config file is not required
-            pass
-        except ValueError:
-            logger.warning('config.yml not for MinSciUtilsConfig')
-        # Read GeoNames feature definitions needed for georeferencing
-        fp = os.path.join(DATA_DIR, 'geonames', 'geonames_feature_codes.csv')
-        self.read_feature_definitions(fp)
-        # Expand all paths
-        for key, path in self.config['data'].items():
-            if path.startswith('~'):
-                path = os.path.join(os.path.expanduser('~'), path.lstrip('~/\\'))
-            self.config['data'][key] = os.path.realpath(path)
-        return self
-
-
-    def copy_config(self, dst=''):
-        """Copies config file to given directory"""
-        shutil.copy2(os.path.join(__file__, '..', 'config.yml'), dst)
-
-
-    def update(self, mixed):
-        """Updates configuration from filepath or dict"""
-        if isinstance(mixed, str):
-            with open(mixed, 'r') as f:
-                mixed = yaml.safe_load(f)
-        # Is this data actually a config dict?
-        if set(mixed.keys()) - set(self.config.keys()):
-            raise ValueError('Data not for MinSciUtilsConfig')
-        self._update(mixed)
+        self.read_feature_definitions()
 
 
     def read_feature_definitions(self, fp=None):
         """Reads GeoNames feature definitions from CSV"""
         if fp is None:
-            fp = os.path.join(DATA_DIR, 'geonames', 'feature_codes.csv')
+            fp = os.path.join(DATA_DIR, 'geonames', 'geonames_feature_codes.csv')
         codes = {}
         classes = {}
         with open(fp, 'r', encoding='utf-8-sig', newline='') as f:
@@ -109,7 +265,7 @@ class MinSciUtilsConfig:
         for code in ['n/a', '', None]:
             codes[code] = {'SizeIndex': 10}
         fields = {}
-        for i, row in enumerate(self.routines.georeferencing.ordered_field_list):
+        for i, row in enumerate(self.config["georeferencing"]["ordered_field_list"]):
             field_codes = []
             for code in row['codes']:
                 try:
@@ -128,7 +284,8 @@ class MinSciUtilsConfig:
                     field_codes.extend(expanded)
             fields[row['field']] = field_codes
             # Expand field codes in config
-            self.routines.georeferencing.ordered_field_list[i]['codes'] = field_codes
+            self.config["georeferencing"]["ordered_field_list"][i]['codes'] = field_codes
+        
         self.codes = codes
         self.classes = classes
         self.fields = fields
@@ -204,23 +361,7 @@ class MinSciUtilsConfig:
         return self.sizes([fcode])[0]
 
 
-    def _update(self, dct, keys=None):
-        """Recursively updates the config dictionary"""
-        if keys is None:
-            keys = []
-        for key, obj in dct.items():
-            keys.append(key)
-            if isinstance(obj, dict):
-                self._update(obj, keys=keys)
-            else:
-                dct = self.config
-                for key_ in keys[:-1]:
-                    dct = dct[key_]
-                dct[keys[-1]] = obj
-            keys.pop()
-        return dct
 
 
-
-
-CONFIG = MinSciUtilsConfig()
+CONFIG = MinSciConfig()
+GEOCONFIG = GeoConfig(CONFIG)

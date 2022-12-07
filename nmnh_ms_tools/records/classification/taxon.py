@@ -18,6 +18,7 @@ class Taxon(BaseDict):
 
     def __init__(self, data):
         super(Taxon, self).__init__()
+        self._parsed = None
         self.errors = []
         try:
             self.verbatim = data.copy()
@@ -56,6 +57,8 @@ class Taxon(BaseDict):
         #        'irn': self.irn,
         #        'sci_name': self.sci_name
         #    })
+        if key == "gen_name":
+            return sorted(set(self.parsed.keywords))
         # Convert to Taxon if dict
         val = super(Taxon, self).__getitem__(key)
         if isinstance(val, dict) and not isinstance(val, self.__class__):
@@ -90,6 +93,15 @@ class Taxon(BaseDict):
         return pp.pformat({k: v for k, v in self.items() if k != 'parsed'})
 
 
+    @property
+    def parsed(self):
+        if self.tree.disable_index:
+            raise ValueError("Indexing has been disabled")
+        if self._parsed is None:
+            self._parsed = TaxaParser(self.sci_name)
+        return self._parsed
+
+
     def get_index(self, name):
         """Retrieves the index, creating it if it does not exist"""
         return self.tree.get_index(name)
@@ -115,7 +127,7 @@ class Taxon(BaseDict):
         try:
             return (self.key(self.sci_name) == self.key(other.sci_name)
                     or self.key(self.name) == self.key(other.name)
-                    or TaxaParser(self).similar_to(other))
+                    or self.parsed.similar_to(other.parsed))
         except AttributeError:
             return (self.key(self.sci_name) == self.key(other)
                     or self.key(self.name) == self.key(other))
@@ -147,7 +159,7 @@ class Taxon(BaseDict):
         return [sp for i, sp in enumerate(faceted) if not sp in faceted[:i]]
 
 
-    def _to_emu(self):
+    def to_emu(self):
         """Converts taxon to EMu etaxonomy record"""
         rec = {
             'ClaScientificName': self.sci_name,
@@ -165,51 +177,53 @@ class Taxon(BaseDict):
 
     def _parse_emu(self, rec):
         """Parses an EMu record"""
-        try:
-            assert len(rec('ClaOtherValue_tab')) == 1
-            assert len(rec('ClaOtherRank_tab')) == 1
-            assert not rec('ClaSpecies')
-        except AssertionError:
-            raise AssertionError('Data integrity error: {}'.format(rec('irn')))
-        self['irn'] = int(rec('irn'))
-        self['sci_name'] = rec('ClaScientificName')
-        self['rank'] = rec('ClaOtherRank_tab')[0]
+        if (
+            len(rec.get('ClaOtherValue_tab', [])) != 1
+            or len(rec.get('ClaOtherRank_tab', [])) != 1
+            or rec.get('ClaSpecies')
+        ):
+            raise ValueError('Data integrity error: {}'.format(rec))
+        self['irn'] = int(rec['irn'])
+        self['sci_name'] = rec['ClaScientificName']
+        self['rank'] = rec['ClaOtherRank_tab'][0]
         # Get the base name. For some records, this will be the same as the
         # scientific name.
-        name = rec('ClaOtherValue_tab')[0]
+        name = rec['ClaOtherValue_tab'][0]
         if name.count(',') == 1 and not name[0].isnumeric():
             name = ' '.join([s.strip() for s in name.split(',')][::-1])
             if self.key(name) == self.key(self['sci_name']):
                 name = self['sci_name']
         self['name'] = name
         # Set parent
-        self['parent'] = None
-        if rec('RanParentRef', 'irn'):
+        try:
             self['parent'] = {
-                'irn': int(rec('RanParentRef', 'irn')),
-                'sci_name': rec('RanParentRef', 'ClaScientificName')
+                'irn': int(rec['RanParentRef.irn']),
+                'sci_name': rec['RanParentRef.ClaScientificName']
             }
+        except (KeyError, TypeError):
+            self['parent'] = None
         # Set current
-        self['_is_preferred'] = rec('ClaCurrentlyAccepted') == 'Yes'
+        self['_is_preferred'] = rec.get('ClaCurrentlyAccepted') == 'Yes'
         if not self['_is_preferred']:
-            if rec('ClaCurrentNameRef', 'irn'):
+            try:
                 self['current'] = {
-                    'irn': int(rec('ClaCurrentNameRef', 'irn')),
-                    'sci_name': rec('ClaCurrentNameRef', 'ClaScientificName')
+                    'irn': int(rec['ClaCurrentNameRef.irn']),
+                    'sci_name': rec['ClaCurrentNameRef.ClaScientificName']
                 }
-            else:
-                self['current'] = None
+            except KeyError:
+                raise KeyError(f'Current taxon not defined: {rec["irn"]}')
         # Set official
-        self['_is_official'] = (rec('TaxValidityStatus') == 'Valid'
-                                and rec('ClaCurrentlyAccepted') == 'Yes')
+        self['_is_official'] = (rec.get('TaxValidityStatus') == 'Valid'
+                                and rec.get('ClaCurrentlyAccepted') == 'Yes')
         # Set authorities
         self['authorities'] = []
-        for kind, val in zip_longest(rec('DesLabel0'), rec('DesDescription0')):
+        for kind, val in zip_longest(
+            rec.get('DesLabel0', []),
+            rec.get('DesDescription0', [])
+        ):
             self.authorities.append({'kind': kind, 'val': val})
         # Set similar
-        parsed = TaxaParser(self.sci_name)
-        self['gen_name'] = sorted(list(parsed.keywords))
-        self['notes'] = rec('NotNotes')
+        self['notes'] = rec.get('NotNotes', "")
 
 
     def _parse_name(self, name):
@@ -221,8 +235,8 @@ class Taxon(BaseDict):
             self['_is_preferred'] = True
             self['_is_official'] = False
             self['authorities'] = []
-            parsed = TaxaParser(name)
-            name = self.tree.capped(parsed.name)
+            self._parsed = TaxaParser(name)
+            name = self.tree.capped(self.parsed.name)
             self['name'] = name
             self['sci_name'] = name
             self['parent'] = self.tree.guess_parent(name)
@@ -235,7 +249,6 @@ class Taxon(BaseDict):
                 })
                 self['rank'] = 'unknown'
             self['irn'] = None
-            self['gen_name'] = sorted(list(parsed.keywords))
             self['notes'] = ''
 
 
@@ -345,11 +358,6 @@ class Taxon(BaseDict):
         """Gets classification codes from authorities"""
         return [a['code'] for a in self.authorities
                 if name is None or name.lower() in a['source'].lower()]
-
-
-    def indexed(self):
-        """Gets the indexed form of the name"""
-        return TaxaParser(self.sci_name).indexed
 
 
     def autoname(self, ucfirst=True, use_preferred=True):

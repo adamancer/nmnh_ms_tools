@@ -10,7 +10,6 @@ from shapely.geometry import LineString, Point
 from .core import StratRecord
 from .utils import (
     CHRONOSTRAT_RANKS,
-    MODIFIERS,
     parse_strat_package,
     split_strat,
     split_strat_dict
@@ -18,7 +17,7 @@ from .utils import (
 from .range import StratRange
 from .unit import StratUnit, parse_strat_unit
 from ...bots.adamancer import AdamancerBot
-from ...config import CONFIG_DIR
+from ...config import DATA_DIR
 from ...utils import (
     as_list,
     dedupe,
@@ -47,7 +46,7 @@ def read_keywords(path):
 class ChronoStrat(StratRecord):
     """Defines methods for storing a single chronostratigraphic unit"""
     bot = AdamancerBot()
-    keywords = read_keywords(os.path.join(CONFIG_DIR, 'chronostrat.txt'))
+    keywords = read_keywords(os.path.join(DATA_DIR, 'chronostrat', 'chronostrat.txt'))
     terms = [
         'eonothem',
         'erathem',

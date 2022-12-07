@@ -146,7 +146,7 @@ class MatchAnnotator(MatchEvaluator):
             mask = 'the intersection between {}'
             result = mask.format(oxford_comma(selected, delim='; '))
         else:
-            mask = '{}' if len(selected) == 1 else 'a circle encompassing {}'
+            mask = '{}' if len(selected) == 1 else 'a polygon encompassing {}'
             result = mask.format(oxford_comma(selected, delim='; '))
         return 'Coordinates and uncertainty based on {}'.format(result)
 
@@ -163,12 +163,12 @@ class MatchAnnotator(MatchEvaluator):
             if group:
                 desc.append(name)
                 for site in group:
-                    lng, lat = site.centroid.coords[0]
+                    centroid = site.centroid
                     summary = mask.format(site.name,
                                           site.location_id,
                                           site.site_kind,
-                                          lat,
-                                          lng,
+                                          float(centroid.y),
+                                          float(centroid.x),
                                           site.radius_km)
                     desc.append('+ {}'.format(summary))
             else:
@@ -217,7 +217,7 @@ class MatchAnnotator(MatchEvaluator):
         }
         master = {codes.get(k, k): v for k, v in master.items() if v}
         logger.debug('Final filter: {}'.format(master))
-        ordered = CONFIG.routines.georeferencing.ordered_field_list
+        ordered = CONFIG["georeferencing"]["ordered_field_list"]
         fltr = [f['field'] for f in ordered if f['field'] in master]
         fltr = [self.field(f).replace('_', '/') for f in fltr]
         if fltr:

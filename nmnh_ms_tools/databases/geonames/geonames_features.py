@@ -7,6 +7,7 @@ import os
 import re
 
 from requests.structures import CaseInsensitiveDict
+from shapely import wkt
 from sqlalchemy import case, func, or_
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.schema import Index
@@ -41,7 +42,6 @@ logger = logging.getLogger(__name__)
 class GeoNamesFeatures:
     """Fills and searches a SQLite db based on the GeoNames text dump file"""
     std = LocStandardizer()
-
 
     def __init__(self):
         self.features = AllCountries
@@ -151,6 +151,7 @@ class GeoNamesFeatures:
 
     def search_json(self, st_name, limit=100, **kwargs):
         """Searches for a feature by name"""
+        logger.debug(f"Searching for {st_name} ({kwargs})")
         session = self.session()
         # Map kwargs used by the GeoNames webservice to those needed here
         kwarg_map = {
@@ -203,6 +204,7 @@ class GeoNamesFeatures:
             #time_query(query)
             results.extend(query)
         session.close()
+        logger.debug(f"Search complete")
         return to_geonames_api(dedupe(results))
 
 
@@ -450,6 +452,12 @@ class GeoNamesFeatures:
         """Builds or rebuilds indexes on the self.names table"""
         if create and not drop:
             drop = True
+
+        indexes = {
+            "idx_alt_cont": ["continent_code", "country_code"],
+        }
+
+
         primary = [
             self.names.fcl,
             self.names.fcode,
@@ -708,7 +716,10 @@ def to_geonames_api(result):
         except TypeError:
             del rowdict['bbox']
         except json.JSONDecodeError:
-            if not rowdict['bbox'].startswith('PO'):
-                raise
+            # WKT strings may be hacked into the bbox field, so check for that
+            try:
+                wkt.loads(rowdict['bbox'])
+            except ValueError:
+                raise ValueError(rowdict)
 
         return rowdict

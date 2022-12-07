@@ -139,7 +139,7 @@ class MatchPipe:
         self.interpreted = {}
         self.populated = {}
         self.leftovers = {}
-        for field in CONFIG.routines.georeferencing.ordered_field_list:
+        for field in CONFIG["georeferencing"]["ordered_field_list"]:
             self.prepare(field)
         self.interpret()
         for field, features in self.prepared.items():
@@ -214,7 +214,7 @@ class MatchPipe:
             self.prepare_all()
         results = []
         fields = {}
-        for field in CONFIG.routines.georeferencing.ordered_field_list:
+        for field in CONFIG["georeferencing"]["ordered_field_list"]:
             if field['field'].rstrip('0123456789') in self.populated:
                 results.extend(self.process_one(field, **kwargs))
         if not self.populated:
@@ -229,7 +229,7 @@ class MatchPipe:
         if site is not None:
             self.site = site
         features = {}
-        for field in CONFIG.routines.georeferencing.ordered_field_list:
+        for field in CONFIG["georeferencing"]["ordered_field_list"]:
             field = field['field']
             if not field.endswith(tuple('0123456789')):
                 vals = getattr(site, field)
@@ -289,7 +289,7 @@ class MatchPipe:
     def find(self, val, attributes=None):
         """Finds all fields containing a given value"""
         found = {}
-        for field in CONFIG.routines.georeferencing.ordered_field_list:
+        for field in CONFIG["georeferencing"]["ordered_field_list"]:
             attr = field['field'].strip('0123456789')
             refval = getattr(self.site, attr)
             if val == refval:

@@ -1,5 +1,6 @@
 import csv
 import datetime as dt
+import hashlib
 import json
 import logging
 import os
@@ -396,7 +397,7 @@ class Georeferencer:
             location_id = self.get_location_id(site)
             if not location_id:
                 location_id = site
-            logger.error(location_id + ': ' + str(exc), exc_info=exc)
+            logger.error(f'{location_id}: {exc}', exc_info=exc)
             return
         if evaluator is not None:
             rec = {k: v for k, v in site.verbatim.items() if v}
@@ -410,7 +411,7 @@ class Georeferencer:
             self.evaluated[self.key] = result
             if self.include_failed:
                 self.results.append(result)
-                evaluator.kml('miss_' + site.location_id, refsite=site)
+                evaluator.kml(f'miss_{site.location_id}', refsite=site)
         # Count misses on admin names
         if 'Could not map admin names:' in str(exc):
             names = [clear_empty(n) for n in json.loads(str(exc).split(': ', 1)[-1])]
@@ -552,7 +553,10 @@ class Georeferencer:
         try:
             return rec[key]
         except KeyError:
-            return re.search(key, str(rec)).group()
+            try:
+                return re.search(key, str(rec)).group()
+            except AttributeError:
+                return hashlib.md5(json.dumps(rec).encode("utf-8")).hexdigest()
 
 
     def configure_log(self, level='WARNING', stream=True):

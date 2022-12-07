@@ -9,7 +9,6 @@ import requests
 import requests_cache
 from lxml import etree
 
-from ..config import CONFIG
 from ..utils import to_attribute
 
 
@@ -22,13 +21,13 @@ logger = logging.getLogger(__name__)
 
 class Bot:
     """Methods to handle and retry HTTP requests"""
-    user_agent = CONFIG.bots.user_agent
+    email = None
 
-    def __init__(self, wait=3, user_agent=None, wrapper=None,
+    def __init__(self, wait=3, email=None, wrapper=None,
                  start_param=None, limit_param=None, paged=False):
         self.wait = wait
-        if user_agent:
-            self.user_agent = user_agent
+        if email:
+            self.email = email
         self._headers = {}
         self.wrapper = wrapper
         self.start_param = start_param
@@ -75,6 +74,10 @@ class Bot:
             return resp
         return wrapper
 
+    @property
+    def user_agent(self):
+        return f"python-requests/{requests.__version__}/{self.email}"
+
 
     def get(self, *args, **kwargs):
         """Makes GET request with retry"""
@@ -107,22 +110,24 @@ class Bot:
 
 
     @staticmethod
+    def get_cache():
+        return requests_cache.get_cache()
+
+
+    @staticmethod
     def install_cache(path='cache'):
         """Activates cache located at path"""
-        try:
-            requests_cache.get_cache()
-        except AttributeError:
-            requests_cache.install_cache(path)
+        if requests_cache.get_cache() is not None:
+            requests_cache.uninstall_cache()
+        requests_cache.install_cache(path)
+        return requests_cache.get_cache()
 
 
     @staticmethod
     def uninstall_cache():
         """Deactives caches"""
-        try:
-            requests_cache.get_cache()
-        except AttributeError:
-            pass
-        else:
+        cache = requests_cache.get_cache()
+        if cache is not None:
             requests_cache.uninstall_cache()
 
 

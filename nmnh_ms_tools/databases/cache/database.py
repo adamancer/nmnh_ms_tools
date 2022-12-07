@@ -10,22 +10,17 @@ from ...config import CONFIG
 from ..helpers import init_helper
 
 
-
-
 logger = logging.getLogger(__name__)
 Base = declarative_base()
 Session = sessionmaker()
 
 
-
-
 class Cache(Base):
     """Defines a generic key-value cache"""
-    __tablename__ = 'cache'
+
+    __tablename__ = "cache"
     key = Column(String, primary_key=True)
     val = Column(String)
-
-
 
 
 def init_db(fp, tables=None):

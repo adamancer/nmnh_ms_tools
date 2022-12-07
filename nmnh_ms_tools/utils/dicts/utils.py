@@ -4,8 +4,6 @@ from ..lists import as_list, dedupe, iterable
 from lxml import etree
 
 
-
-
 def combine(*args):
     """Combines a list of dicts, retaining all unique values"""
     args = list(args)
@@ -49,7 +47,7 @@ def get_first(dct, keys, required=True):
         except KeyError:
             pass
     if required:
-        raise ValueError('No value found in any of {}'.format(keys))
+        raise ValueError("No value found in any of {}".format(keys))
 
 
 def dictify(obj, cols=None, recurse=True):
@@ -57,10 +55,10 @@ def dictify(obj, cols=None, recurse=True):
     if isinstance(obj, dict):
         return obj
     test = obj[0] if (isinstance(obj, list) and obj) else obj
-    if not (isinstance(test, tuple)
-            or hasattr(test, '__table__')
-            or hasattr(test, 'keys')):
-                raise TypeError('Object cannot be converted to dict')
+    if not (
+        isinstance(test, tuple) or hasattr(test, "__table__") or hasattr(test, "keys")
+    ):
+        raise TypeError("Object cannot be converted to dict")
     if isinstance(obj, list):
         return [dictify(obj, cols=cols, recurse=recurse) for obj in obj]
     # Determine columns based on attributes
@@ -74,10 +72,13 @@ def dictify(obj, cols=None, recurse=True):
                 cols = obj.keys()
             except AttributeError:
                 # As a last resort, use list of non-callable public attributes
-                cols = [c for c in dir(obj)
-                        if not (c[0] == '_' or callable(getattr(obj, c)))]
+                cols = [
+                    c
+                    for c in dir(obj)
+                    if not (c[0] == "_" or callable(getattr(obj, c)))
+                ]
     if not cols:
-        raise TypeError('Object cannot be converted to dict')
+        raise TypeError("Object cannot be converted to dict")
     # Convert children to dictionaries as well
     if recurse:
         dct = {}

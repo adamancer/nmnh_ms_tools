@@ -27,15 +27,10 @@ from ...utils import (
 )
 
 
-
-
 logger = logging.getLogger(__name__)
 
 
-
-
 class AdminCache(CacheDict):
-
     @staticmethod
     def keyer(key):
         names, kind, admin = key
@@ -43,64 +38,61 @@ class AdminCache(CacheDict):
         return json.dumps([names, kind, admin], sort_keys=True).lower()
 
 
-
-
 class AdminFeatures(GeoNamesFeatures):
     """Fills and searches a SQLite db based on the user-provided gazetteers"""
+
     cache = AdminCache()
 
     def __init__(self):
         super().__init__()
         self.names = AdminNames
-        #self.names = self.names
+        # self.names = self.names
         self.base = Base
         self.session = Session
         self.keys = [
-            'geoname_id',
-            'name',
-            'ascii_name',
-            'alternate_names',
-            'lat',
-            'lng',
-            'fcl',
-            'fcode',
-            'country_code',
-            'cc2',
-            'admin_code_1',
-            'admin_code_2',
-            'admin_code_3',
-            'admin_code_4',
-            'population',
-            'elevation',
-            'dem',
-            'timezone',
-            'mod_date',
+            "geoname_id",
+            "name",
+            "ascii_name",
+            "alternate_names",
+            "lat",
+            "lng",
+            "fcl",
+            "fcode",
+            "country_code",
+            "cc2",
+            "admin_code_1",
+            "admin_code_2",
+            "admin_code_3",
+            "admin_code_4",
+            "population",
+            "elevation",
+            "dem",
+            "timezone",
+            "mod_date",
         ]
-        self.csv_kwargs = {'delimiter': '\t', 'quotechar': '"'}
-        self.delim = ','
-        self.code_fields = ['country_code', 'admin_code_1', 'admin_code_2']
-        self.name_fields = ['country', 'state_province', 'county']
+        self.csv_kwargs = {"delimiter": "\t", "quotechar": '"'}
+        self.delim = ","
+        self.code_fields = ["country_code", "admin_code_1", "admin_code_2"]
+        self.name_fields = ["country", "state_province", "county"]
         self.fields = self.name_fields + self.code_fields
-        self.kinds = OrderedDict([
-            ('country', 'country_code'),
-            ('state_province', 'admin_code_1'),
-            ('county', 'admin_code_2'),
-        ])
+        self.kinds = OrderedDict(
+            [
+                ("country", "country_code"),
+                ("state_province", "admin_code_1"),
+                ("county", "admin_code_2"),
+            ]
+        )
         self.update_thesaurus = True
         self._std = LocStandardizer()
-
 
     def std(self, val):
         return val if val.isnumeric() else self._std.std_admin(val)
 
-
     def std_names(self, names, std_func=None):
         return std_names(names, std_func=std_func if std_func else self.std)
 
-
     def get(self, *args, **kwargs):
         return self.get_admin(*args, **kwargs)
-
 
     def get_admin(self, country, state_province=None, county=None, **kwargs):
         if not country:
@@ -111,47 +103,46 @@ class AdminFeatures(GeoNamesFeatures):
 
         result = {}
         # Get country info
-        resolved = self.resolve_admin(country, 'country')
+        resolved = self.resolve_admin(country, "country")
         for key, vals in resolved.items():
             result.setdefault(key, []).extend(vals)
         # Get state_province/province info
-        if state_province and 'state_province' in result:
-            logger.warning('state_province from thesaurus supersedes kwarg')
+        if state_province and "state_province" in result:
+            logger.warning("state_province from thesaurus supersedes kwarg")
         elif state_province:
-            resolved = self.resolve_admin(state_province, 'state_province', **result)
+            resolved = self.resolve_admin(state_province, "state_province", **result)
             for key, vals in resolved.items():
                 result.setdefault(key, []).extend(vals)
         # Get county info
-        if county and 'county' in result:
-            logger.warning('county from thesaurus supersedes kwarg')
+        if county and "county" in result:
+            logger.warning("county from thesaurus supersedes kwarg")
         elif county:
-            resolved = self.resolve_admin(county, 'county', **result)
+            resolved = self.resolve_admin(county, "county", **result)
             for key, vals in resolved.items():
                 result.setdefault(key, []).extend(vals)
         result.update(kwargs)
         result = {k: dedupe(v) for k, v in result.items()}
         # Remove the 00 state/province code that GeoNames provides for countries
         try:
-            result['admin_code_1'] = [c for c in result['admin_code_1'] if c != '00']
+            result["admin_code_1"] = [c for c in result["admin_code_1"] if c != "00"]
         except KeyError:
             pass
         return result
 
-
     def resolve_admin(self, names, kind, **admin):
-        assert names, 'no names provided'
+        assert names, "no names provided"
         try:
             return self.cache[(names, kind, admin)]
         except KeyError:
             pass
         # Do not map names that indicate uncertainty
-        if '?' in str(names):
-            raise ValueError('Names uncertain: {}'.format(names))
+        if "?" in str(names):
+            raise ValueError("Names uncertain: {}".format(names))
         rows = self._query(names, kind, **admin)
         unresolved = self.unresolved(names, kind, rows)
         if unresolved:
             args = []
-            keys = ['country', 'state_province', 'county']
+            keys = ["country", "state_province", "county"]
             for key in keys:
                 args.append(admin.get(key, []))
             i = keys.index(kind)
@@ -161,25 +152,22 @@ class AdminFeatures(GeoNamesFeatures):
                     args = args[:-1]
                 admin.update(self.map_deprecated(*args))
                 return self.get_admin(**admin)
-            raise ValueError('{}={} superseded by thesaurus'.format(kind, unresolved))
+            raise ValueError("{}={} superseded by thesaurus".format(kind, unresolved))
         resolved = combine(*[dictify(r) for r in rows])
         # Make result specific to the current division type
-        resolved[kind] = resolved['name']
-        del resolved['name']
-        del resolved['st_name']
+        resolved[kind] = resolved["name"]
+        del resolved["name"]
+        del resolved["st_name"]
         self.cache[(names, kind, admin)] = resolved
         return resolved
-
 
     def get_admin_codes(self, *args, **kwargs):
         admin = self.get_admin(*args, **kwargs)
         return {k: v for k, v in admin.items() if k in self.code_fields}
 
-
     def get_admin_names(self, *args, **kwargs):
         admin = self.get_admin(*args, **kwargs)
         return {k: v for k, v in admin.items() if k in self.name_fields}
-
 
     def unresolved(self, names, kind, rows):
         """Finds unresolved names"""
@@ -188,13 +176,12 @@ class AdminFeatures(GeoNamesFeatures):
         name_map = dict(zip(st_names, names))
         resolved = []
         for row in rows:
-            for attr in ('st_name', self.kinds[kind]):
+            for attr in ("st_name", self.kinds[kind]):
                 val = self.std(getattr(row, attr))
                 if val in name_map:
                     resolved.append(val)
                     break
         return sorted([name_map[k] for k in st_names - set(resolved)])
-
 
     def remove_unwanted_names(self):
         """Removes synonyms that confuse matching
@@ -206,40 +193,38 @@ class AdminFeatures(GeoNamesFeatures):
         SELECT * FROM admin_names
         WHERE
         (name like "North %" AND st_name = substr(name, length("North ") + 1))
-	    OR (name like "South %" AND st_name = substr(name, length("South ") + 1))
-	    OR (name like "East %" AND st_name = substr(name, length("East ") + 1))
-	    OR (name like "West %" AND st_name = substr(name, length("West ") + 1))
+            OR (name like "South %" AND st_name = substr(name, length("South ") + 1))
+            OR (name like "East %" AND st_name = substr(name, length("East ") + 1))
+            OR (name like "West %" AND st_name = substr(name, length("West ") + 1))
         """
         session = self.session()
         for geoname_id, st_name in self.unwanted_names.items():
-            for row in session.query(self.names) \
-                              .filter(self.names.geoname_id == geoname_id,
-                                      self.names.st_name == st_name):
+            for row in session.query(self.names).filter(
+                self.names.geoname_id == geoname_id, self.names.st_name == st_name
+            ):
                 session.delete(row)
         session.commit()
         session.close()
 
-
     def remove_geoname_ids(self, geoname_ids):
         """Removes list of GeoNames features from the database"""
         session = self.session()
-        session.query(self.names) \
-               .filter(self.names.geoname_id.in_(geoname_ids)) \
-               .delete()
+        session.query(self.names).filter(
+            self.names.geoname_id.in_(geoname_ids)
+        ).delete()
         session.commit()
         session.close()
-
 
     def map_deprecated(self, country, state_province=None, county=None):
         vals = [dedupe(as_list(n)) for n in [country, state_province, county]]
         fltr = []
         vals = []
         mapping = {}
-        update_key = 'county'
+        update_key = "county"
         for key, names in (
-            ('country', country),
-            ('state_province', state_province),
-            ('county', county),
+            ("country", country),
+            ("state_province", state_province),
+            ("county", county),
         ):
             names = dedupe(as_list(names))
             if names:
@@ -255,7 +240,7 @@ class AdminFeatures(GeoNamesFeatures):
             try:
                 obj = json.loads(row.mapping)
             except TypeError:
-                raise ValueError('{} resolves to empty mapping'.format(vals))
+                raise ValueError("{} resolves to empty mapping".format(vals))
             except json.decoder.JSONDecodeError:
                 obj = {update_key: row.mapping}
             else:
@@ -267,14 +252,11 @@ class AdminFeatures(GeoNamesFeatures):
             while not vals[-1]:
                 vals = vals[:-1]
             # Exclude amibiguous names like multiple states/multiple counties
-            if (
-                self.update_thesaurus
-                and not any([len(s) > 1 for s in vals[:-1]])
-            ):
+            if self.update_thesaurus and not any([len(s) > 1 for s in vals[:-1]]):
                 vals = [s[0].title().replace("'S", "'s") if s else None for s in vals]
                 session.add(AdminThesaurus(**dict(zip(self.name_fields, vals))))
                 session.commit()
-            raise ValueError('{} does not resolve'.format(vals))
+            raise ValueError("{} does not resolve".format(vals))
         session.close()
         mapping.update(combine(*mappings))
         # Check if mapping points to another row in the thesaurus
@@ -289,7 +271,6 @@ class AdminFeatures(GeoNamesFeatures):
         self.update_thesaurus = update_thesaurus
         return mapping
 
-
     def delete_unmapped_synonyms(self):
         """Deletes thesaurus records that haven't been mapped"""
         update_thesaurus = self.update_thesaurus
@@ -302,11 +283,12 @@ class AdminFeatures(GeoNamesFeatures):
         session.close()
         self.update_thesaurus = update_thesaurus
 
-
     def delete_mappable_synonyms(self):
         """Deletes thesaurus records that can be mapped to known admin divs"""
+
         def disable_map_deprecated(*args, **kwargs):
-            raise ValueError('map_deprecated disabled')
+            raise ValueError("map_deprecated disabled")
+
         update_thesaurus = self.update_thesaurus
         self.update_thesaurus = False
         admin = AdminFeatures()
@@ -318,39 +300,38 @@ class AdminFeatures(GeoNamesFeatures):
             try:
                 self.get_admin(*divs)
             except ValueError:
-                pass#print(divs, 'does not resolve')
+                pass  # print(divs, 'does not resolve')
             else:
                 session.delete(row)
             if i and not i % 100:
-                logger.debug('{} records checked'.format(i))
-                #break
+                logger.debug("{} records checked".format(i))
+                # break
         session.commit()
         session.close()
         self.update_thesaurus = update_thesaurus
-
 
     def verify_mapped(self):
         """Verifies that mapped thesaurus records resolve to a known admin div"""
         update_thesaurus = self.update_thesaurus
         self.update_thesaurus = False
         session = self.session()
-        rows = session.query(AdminThesaurus) \
-                      .filter(AdminThesaurus.mapping != None,
-                              AdminThesaurus.id == 197) \
-                      .order_by(AdminThesaurus.id)
+        rows = (
+            session.query(AdminThesaurus)
+            .filter(AdminThesaurus.mapping != None, AdminThesaurus.id == 197)
+            .order_by(AdminThesaurus.id)
+        )
         for i, row in enumerate(rows):
             vals = [row.country, row.state_province, row.county]
             mapping = self.map_deprecated(*vals)
             admin = {k: v for k, v in mapping.items() if k in self.name_fields}
-            if admin['country']:
+            if admin["country"]:
                 try:
                     self.get_admin(**admin)
                 except ValueError:
                     raise
-                    print('Failed to map {}'.format(admin))
+                    print("Failed to map {}".format(admin))
         session.close()
         self.update_thesaurus = update_thesaurus
-
 
     def from_csv(self, fp):
         """Fills the database from the GeoNames text dump file"""
@@ -358,20 +339,20 @@ class AdminFeatures(GeoNamesFeatures):
         self.delete_existing_records()
         # Read data into tables
         start = dt.datetime.now()
-        with open(fp, 'r', encoding='utf-8-sig', newline='') as f:
+        with open(fp, "r", encoding="utf-8-sig", newline="") as f:
             rows = csv.reader(skip_hashed(f), **self.csv_kwargs)
             # Get keys if not set manually
             if self.keys is None:
                 keys = next(rows)
             else:
-                keys = [k for k in self.keys if k != 'continent_code']
+                keys = [k for k in self.keys if k != "continent_code"]
             # Import data
             features = []
             for i, row in enumerate(rows):
                 if i and not i % 100000:
-                    logger.debug('{:,} records processed'.format(i))
+                    logger.debug("{:,} records processed".format(i))
                 rowdict = {k: v if v else None for k, v in zip(keys, row)}
-                if rowdict['fcl'] != 'A':
+                if rowdict["fcl"] != "A":
                     continue
                 rowdict = self.mapper(rowdict)
                 # The GeoNames dump doesn't provide an easy way to get the short
@@ -384,19 +365,19 @@ class AdminFeatures(GeoNamesFeatures):
                 feature = {k: v for k, v in rowdict.items() if k in cols}
                 for st_name in set(self.std_names(names)):
                     alt_feature = feature.copy()
-                    alt_feature['st_name'] = st_name
+                    alt_feature["st_name"] = st_name
                     features.append(alt_feature)
                 if len(features) >= 10000:
                     td = dt.datetime.now() - start
-                    mask = '{:,} admins processed (t={}s)'
+                    mask = "{:,} admins processed (t={}s)"
                     logger.debug(mask.format(len(features), td))
                     session.bulk_insert_mappings(self.names, features)
                     session.commit()
                     features = []
                     start = dt.datetime.now()
-                    #break
+                    # break
             # Add remaining features
-            logger.debug('{:,} records processed'.format(i))
+            logger.debug("{:,} records processed".format(i))
             session.bulk_insert_mappings(self.names, features)
             session.commit()
             session.close()
@@ -404,12 +385,10 @@ class AdminFeatures(GeoNamesFeatures):
         self.index_names()
         return self
 
-
     def delete_existing_records(self):
         session = self.session()
         session.query(self.names).delete(synchronize_session=False)
         session.commit()
-
 
     def index_names(self, create=True, drop=True):
         """Builds or rebuilds indexes"""
@@ -417,14 +396,14 @@ class AdminFeatures(GeoNamesFeatures):
             drop = True
         for index in [
             Index(
-                'idx_admin_divs',
-                 self.names.country_code,
-                 self.names.admin_code_1,
-                 self.names.admin_code_2,
+                "idx_admin_divs",
+                self.names.country_code,
+                self.names.admin_code_1,
+                self.names.admin_code_2,
             ),
-            Index('idx_names', self.names.st_name),
+            Index("idx_names", self.names.st_name),
             Index(
-                'idx_thesaurus',
+                "idx_thesaurus",
                 AdminThesaurus.mapping,
                 AdminThesaurus.country,
                 AdminThesaurus.state_province,
@@ -444,12 +423,11 @@ class AdminFeatures(GeoNamesFeatures):
                 except OperationalError:
                     logger.debug("Failed to create index '%s'" % index.name)
 
-
     def _query(self, names, kind, is_name=True, **admin):
         fcodes = {
-            'country': ['PCL', 'PCLD', 'PCLF', 'PCLH', 'PCLI', 'PCLIX', 'PCLS', 'TERR'],
-            'state_province': ['ADM1'],
-            'county': ['ADM2'],
+            "country": ["PCL", "PCLD", "PCLF", "PCLH", "PCLI", "PCLIX", "PCLS", "TERR"],
+            "state_province": ["ADM1"],
+            "county": ["ADM2"],
         }
         names = as_list(names)
         st_names = self.std_names(names)
@@ -468,16 +446,18 @@ class AdminFeatures(GeoNamesFeatures):
             try:
                 vals = as_list(admin[code])
             except KeyError:
-                pass#fltr.append(field == None)
+                pass  # fltr.append(field == None)
             else:
                 fltr.append(field.in_(vals))
                 limit *= len(vals)
         session = self.session()
-        result = session.query(self.names.name, self.names.st_name, code_fld) \
-                        .distinct() \
-                        .filter(*fltr) \
-                        .limit(limit) \
-                        .all()
+        result = (
+            session.query(self.names.name, self.names.st_name, code_fld)
+            .distinct()
+            .filter(*fltr)
+            .limit(limit)
+            .all()
+        )
         session.close()
         if is_name and not result:
             return self._query(names, kind, is_name=False, **admin)

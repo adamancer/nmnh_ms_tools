@@ -12,8 +12,6 @@ import yaml
 from PIL import Image
 
 
-
-
 def hasher(filestream, size=8192):
     """Generate MD5 hash for a file
 
@@ -25,7 +23,7 @@ def hasher(filestream, size=8192):
         MD5 hash of file
     """
     if size % 128:
-        raise ValueError('Size must be a multiple of 128')
+        raise ValueError("Size must be a multiple of 128")
     md5_hash = hashlib.md5()
     while True:
         chunk = filestream.read(size)
@@ -44,7 +42,7 @@ def hash_file(path):
     Returns:
         Hash as string
     """
-    with open(path, 'rb') as f:
+    with open(path, "rb") as f:
         return hasher(f)
 
 
@@ -58,12 +56,12 @@ def hash_file_if_exists(path):
         Hash as string
     """
     try:
-        return hasher(open(path, 'rb'))
+        return hasher(open(path, "rb"))
     except IOError:
         return None
 
 
-def hash_image_data(path, output_dir='images'):
+def hash_image_data(path, output_dir="images"):
     """Returns MD5 hash of the image data in a file
 
     Args:
@@ -81,11 +79,11 @@ def hash_image_data(path, output_dir='images'):
         # The derivatives can be compared to ensure that the image hasn't
         # been messed up. Requires ImageMagick.
         fn = os.path.basename(path)
-        jpeg = os.path.splitext(fn)[0] + '_temp.jpg'
+        jpeg = os.path.splitext(fn)[0] + "_temp.jpg"
         cmd = 'magick "{}" "{}"'.format(path, jpeg)
         return_code = subprocess.call(cmd, cwd=output_dir)
         if return_code:
-            raise IOError('Hash failed: {}'.format(fn))
+            raise IOError("Hash failed: {}".format(fn))
         dst = os.path.join(output_dir, jpeg)
         hexhash = hashlib.md5(Image.open(dst).tobytes()).hexdigest()
         os.remove(dst)
@@ -125,7 +123,7 @@ def copy_if(src, dst, newer=True, different=True):
     """Copies source to destination if criteria given in kwargs are met"""
     assert os.path.isfile(src)
     # Ensure that dst is a file
-    if '.' not in os.path.basename(dst):
+    if "." not in os.path.basename(dst):
         dst = os.path.join(dst, os.path.basename(src))
     # Ensure that the destination directory exists
     try:
@@ -134,7 +132,7 @@ def copy_if(src, dst, newer=True, different=True):
         pass
     # Perform tests
     try:
-        open(dst, 'r')
+        open(dst, "r")
     except IOError:
         copy_file = True
     else:
@@ -147,22 +145,22 @@ def copy_if(src, dst, newer=True, different=True):
     return False
 
 
-def load_dict(fp, fp_src=None, encoding='utf-8'):
+def load_dict(fp, fp_src=None, encoding="utf-8"):
     """Attempts to load dict from JSON or YML"""
     if fp_src and is_newer(fp_src, fp):
-        raise IOError('Source file is newer')
+        raise IOError("Source file is newer")
     func = json.load
-    if os.path.splitext(fp)[-1] in {'.yaml', '.yml'}:
+    if os.path.splitext(fp)[-1] in {".yaml", ".yml"}:
         func = yaml.safe_load
     try:
-        with open(fp, 'r', encoding=encoding) as f:
+        with open(fp, "r", encoding=encoding) as f:
             result = func(f)
     except (IOError, OSError, json.JSONDecodeError):
-        raise IOError('Could not load {}'.format(fp))
+        raise IOError("Could not load {}".format(fp))
     else:
         if result:
             return result
-        raise IOError('File empty: {}'.format(fp))
+        raise IOError("File empty: {}".format(fp))
 
 
 def skip_hashed(f):
@@ -176,7 +174,7 @@ def skip_hashed(f):
     # Read the file until first unhashed line
     f.seek(0)
     for line in f:
-        if not line.strip('"').startswith('#'):
+        if not line.strip('"').startswith("#"):
             break
         seek += len(line)
     f.seek(seek)

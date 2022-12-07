@@ -14,37 +14,31 @@ from shapely.geometry import (
     MultiPolygon,
     Point,
     Polygon,
-    box
+    box,
 )
 
 from .lists import as_list
 from .standardizers import Standardizer
 
 
-
-
 logger = logging.getLogger(__name__)
 
 
-
-
 GEODESIC_GEOLIB = Geodesic.WGS84
-GEODESIC_PYPROJ = Geod(ellps='WGS84')
+GEODESIC_PYPROJ = Geod(ellps="WGS84")
 SHAPE_TO_MULTISHAPE = {
-    'LineString': MultiLineString,
-    'Point': MultiPoint,
-    'Polygon': MultiPolygon,
+    "LineString": MultiLineString,
+    "Point": MultiPoint,
+    "Polygon": MultiPolygon,
 }
-STD = Standardizer(minlen=1, delim='')
-
-
+STD = Standardizer(minlen=1, delim="")
 
 
 def bounding_box(lat1, lon1, lat2, lon2, close=False):
     """Calculates a bounding box from two sets of coordinates"""
     if lat1 == lat2 or lon1 == lon2:
         args = lat1, lon1, lat2, lon2
-        raise ValueError('Not a box: {}'.format(args))
+        raise ValueError("Not a box: {}".format(args))
     lat1, lat2 = sorted([lat1, lat2])
     lon1, lon2 = sorted([lon1, lon2])
     return box(lon1, lat1, lon2, lat2)
@@ -54,31 +48,31 @@ def epsg_id(val):
     """Maps name to EPSG identifier"""
     systems = {
         # Full names
-        'Clarke 1858': 'EPSG:4007',  # datum based on EPSG:7007 ellipsoid
-        'Fundamental de Ocotepeque': 'EPSG:5451',
-        'Japanese Geodetic Datum 2000 ': 'EPSG:6612',
-        'Ocotepeque 1935': 'EPSG:5451',
+        "Clarke 1858": "EPSG:4007",  # datum based on EPSG:7007 ellipsoid
+        "Fundamental de Ocotepeque": "EPSG:5451",
+        "Japanese Geodetic Datum 2000 ": "EPSG:6612",
+        "Ocotepeque 1935": "EPSG:5451",
         # Common shorthand
-        'NAD27': 'EPSG:4267',
-        'NAD83': 'EPSG:4269',
-        'PRP-M': 'EPSG:4248',  # not sure about this one
-        'WGS84': 'EPSG:4326',
+        "NAD27": "EPSG:4267",
+        "NAD83": "EPSG:4269",
+        "PRP-M": "EPSG:4248",  # not sure about this one
+        "WGS84": "EPSG:4326",
         # Strings designating no info
-        'not recorded': 'EPSG:4326',
-        'unknown': 'EPSG:4326',
+        "not recorded": "EPSG:4326",
+        "unknown": "EPSG:4326",
     }
     # Return EPSG codes as uppercase
-    if val.lower().startswith('epsg:'):
+    if val.lower().startswith("epsg:"):
         return val.upper()
     # Return WKT definitions as is
-    if val.startswith('PROJCRS'):
+    if val.startswith("PROJCRS"):
         return val
     # Extract parentheticals
-    pattern = r'\((.*?)\)'
+    pattern = r"\((.*?)\)"
     if re.search(pattern, val):
         val = re.search(pattern, val).group(1)
     # Remove 19 from 19xx years
-    val = re.sub(r'19(\d\d)', r'\1', val)
+    val = re.sub(r"19(\d\d)", r"\1", val)
     epsg_id = {STD(k): v for k, v in systems.items()}.get(STD(val), val.upper())
     return epsg_id
 
@@ -91,9 +85,9 @@ def get_azimuth(bearing):
     if isinstance(bearing, (float, int)):
         return bearing
     # Set base values for each compass direction
-    vals = {'N': 0 if 'E' in bearing else 360, 'S': 180, 'E': 90, 'W': 270}
+    vals = {"N": 0 if "E" in bearing else 360, "S": 180, "E": 90, "W": 270}
     # Find the components of the bearing
-    pattern = (r'([NSEW])(\d*)([NSEW]?)([NSEW]?)')
+    pattern = r"([NSEW])(\d*)([NSEW]?)([NSEW]?)"
     match = re.search(pattern, bearing)
     d1, deg, d2, d3 = [match.group(i) for i in range(1, 5)]
     v1, v2, v3 = [float(vals.get(d, 0)) for d in [d1, d2, d3]]
@@ -103,11 +97,11 @@ def get_azimuth(bearing):
         d2, d3 = d3, d2
     deg = float(deg) if deg.isnumeric() else 0
     # Determine the quadrant in which the azimuth falls
-    quad = ('N' if 'N' in bearing else 'S') + ('E' if 'E' in bearing else 'W')
+    quad = ("N" if "N" in bearing else "S") + ("E" if "E" in bearing else "W")
     # The sign of the major direction is postive when the azimuth is NE or SW
-    s2 = 1 if quad in ['NE', 'SW'] else -1
+    s2 = 1 if quad in ["NE", "SW"] else -1
     # The sign of the minor direction is postive when the azimuth is NW or SE
-    s3 = 1 if quad in ['NW', 'SE'] else -1
+    s3 = 1 if quad in ["NW", "SE"] else -1
     # Zero the second major direction if same as first (e.g., ENE) or if
     # a precise bearing is given (e.g., N40E)
     if (d1 == d2 and d3) or deg:
@@ -116,8 +110,8 @@ def get_azimuth(bearing):
     azimuth = v1 + (45 if d2 else 0) * s2 + (22.5 if d3 else 0) * s3 + deg * s2
     if azimuth < 0 or azimuth == 360:
         return 360 - azimuth
-    #mask = 'Calculated azimuth={} from bearing={}'
-    #logger.debug(mask.format(azimuth, bearing))
+    # mask = 'Calculated azimuth={} from bearing={}'
+    # logger.debug(mask.format(azimuth, bearing))
     return azimuth
 
 
@@ -132,7 +126,7 @@ def draw_circle(lat, lon, dist_km):
 
 def draw_polygon(lat, lon, dist_km, sides=4):
     """Calculates a polygon of a given number of sides around a point"""
-    azimuths = [45 + (i * 360 / sides)  for i in range(sides)]
+    azimuths = [45 + (i * 360 / sides) for i in range(sides)]
     lats = [lat] * len(azimuths)
     lons = [lon] * len(azimuths)
     dists_km = [dist_km] * len(azimuths)
@@ -146,13 +140,13 @@ def get_spoke_km(dist_km):
     interpretations of a radius (diagonal or along axis). The MaNIS guidelines
     use the diagonal, and that approach is adopted here.
     """
-    s1 = (2 * dist_km ** 2) ** 0.5  # circle contains square (x along diagonal)
-    #s2 = (dist_km ** 2 / 2) ** 0.5  # square contains circle (x along axes)
-    #return (s1 + s2) / 2            # split the difference
+    s1 = (2 * dist_km**2) ** 0.5  # circle contains square (x along diagonal)
+    # s2 = (dist_km ** 2 / 2) ** 0.5  # square contains circle (x along axes)
+    # return (s1 + s2) / 2            # split the difference
     return s1
 
 
-def fix_shape(shape, multipolygon='largest'):
+def fix_shape(shape, multipolygon="largest"):
     """Fixes invalid shape using shapely buffer trick, then convex hull"""
     shape = normalize_shape(shape)
     if not shape.is_valid:
@@ -181,7 +175,7 @@ def fix_shape(shape, multipolygon='largest'):
         # + Area of Rhode Island: ~3,000 km²
         # + Area of the big island of Hawaii: ~11,000 km²
         if (
-            multipolygon == 'largest'
+            multipolygon == "largest"
             and geoms[-1].area > 2
             and geoms[-1].area / geoms[-2].area > 3
         ):
@@ -203,14 +197,13 @@ def get_dist_km(lat1, lon1, lat2, lon2):
         raise ValueError(f"Could not calculate distance: {(lat1, lon1, lat2, lon2)}")
 
 
-
 def get_dist_km_geolib(lat1, lon1, lat2, lon2):
     """Calculates distance in km between two points w/ geographiclib.Geodesic"""
     lon1, lon2 = pm_longitudes([lon1, lon2])
     result = GEODESIC_GEOLIB.Inverse(lat1, lon1, lat2, lon2)
-    dist_km = result['s12'] / 1000
+    dist_km = result["s12"] / 1000
     if np.isnan(dist_km):
-        mask = 'Invalid distance: {:.2f}, {:.2f}, {:.2f}, {:.2f}'
+        mask = "Invalid distance: {:.2f}, {:.2f}, {:.2f}, {:.2f}"
         raise ValueError(mask.format(lat1, lon1, lat2, lon2))
     return dist_km
 
@@ -225,13 +218,14 @@ def get_dist_km_haversine(lat1, lon1, lat2, lon2):
     phi_2 = math.radians(lat2)
     delta_phi = math.radians(lat2 - lat1)
     delta_lambda = math.radians(lon2 - lon1)
-    a = (math.sin(delta_phi / 2) ** 2
-         + math.cos(phi_1) * math.cos(phi_2)
-         * math.sin(delta_lambda / 2) ** 2)
+    a = (
+        math.sin(delta_phi / 2) ** 2
+        + math.cos(phi_1) * math.cos(phi_2) * math.sin(delta_lambda / 2) ** 2
+    )
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     dist_km = 6371000 * c / 1000
     if np.isnan(dist_km):
-        mask = 'Invalid distance: {:.2f}, {:.2f}, {:.2f}, {:.2f}'
+        mask = "Invalid distance: {:.2f}, {:.2f}, {:.2f}, {:.2f}"
         raise ValueError(mask.format(lat1, lon1, lat2, lon2))
     return dist_km
 
@@ -242,7 +236,7 @@ def get_dist_km_pyproj(lat1, lon1, lat2, lon2):
     result = GEODESIC_PYPROJ.inv(lon1, lat1, lon2, lat2)
     dist_km = result[2] / 1000
     if np.isnan(dist_km):
-        mask = 'Invalid distance: {:.2f}, {:.2f}, {:.2f}, {:.2f}'
+        mask = "Invalid distance: {:.2f}, {:.2f}, {:.2f}, {:.2f}"
         raise ValueError(mask.format(lat1, lon1, lat2, lon2))
     return dist_km
 
@@ -258,7 +252,7 @@ def translate_geolib(lats, lons, bearings, dists_km):
     points = []
     for lat, lon, azimuth, dist_m in zip(*args):
         result = GEODESIC_GEOLIB.Direct(lat, lon, azimuth, dist_m)
-        points.append((result['lon2'], result['lat2']))
+        points.append((result["lon2"], result["lat2"]))
     if len(points) == 1:
         return Point(points[0])
     return Polygon([(x, y) for x, y in points])
@@ -274,8 +268,9 @@ def translate_pyproj(lats, lons, bearings, dists_km):
     return Polygon([(x, y) for x, y in zip(lons, lats)])
 
 
-def translate_with_uncertainty(lat, lon, bearing, dist_km,
-                               abs_err_degrees=None, rel_err_distance=0.25):
+def translate_with_uncertainty(
+    lat, lon, bearing, dist_km, abs_err_degrees=None, rel_err_distance=0.25
+):
     """Calculates point with uncertainty for a distance along a bearing"""
     # Calculate uncertainty on azimuth
     azimuth = bearing
@@ -367,11 +362,11 @@ def trim(coords, i, trim_func, both_ends=True):
 
 def sort_geoms(geoms, direction):
     """Sorts a list geometries by compass direction"""
-    if direction in 'NS':
+    if direction in "NS":
         return sorted(geoms, key=lambda s: as_list(s.centroid.lat)[0])
-    elif direction in 'EW':
+    elif direction in "EW":
         return sorted(geoms, key=lambda s: as_list(s.centroid.lon)[0])
-    raise ValueError('Bad direction: {}'.format(direction))
+    raise ValueError("Bad direction: {}".format(direction))
 
 
 def encircle(lat_s):
@@ -396,7 +391,7 @@ def get_coordinates(shape):
     """Extracts a list of coordinates from a shapely object"""
     if not shape:
         return []
-    if shape.geom_type == 'Point':
+    if shape.geom_type == "Point":
         return [(shape.y, shape.x)]
     try:
         return [(y, x) for x, y in shape.exterior.coords]
@@ -413,7 +408,7 @@ def normalize_shape(shape, to_antimeridian=None):
     """Calculates shape to ensure it is not split by the antimeridian"""
     orig = shape
     multishape = None
-    if hasattr(shape, 'geoms'):
+    if hasattr(shape, "geoms"):
         multishape = shape.__class__
         shape = list(shape.geoms)
     if isinstance(shape, list):
@@ -462,7 +457,7 @@ def crosses_180(lons):
 
 def am_longitudes(lons):
     """Normalizes longitudes to between 0 and 360"""
-    #return [(lon + 360 if lon < 0 else lon) for lon in lons]
+    # return [(lon + 360 if lon < 0 else lon) for lon in lons]
     am_lons = []
     for lon in lons:
         orig = lon
@@ -478,7 +473,7 @@ def am_longitudes(lons):
 
 def pm_longitudes(lons):
     """Normalizes longitudes to between -180 and 180"""
-    #return [(lon - 360 if lon > 180 else lon) for lon in lons]
+    # return [(lon - 360 if lon > 180 else lon) for lon in lons]
     pm_lons = []
     for lon in lons:
         if lon > 180:
@@ -494,7 +489,7 @@ def _prep_translate(lats, lons, bearings, dists_km):
     lats = as_list(lats)
     lons = pm_longitudes(as_list(lons))
     azimuths = [get_azimuth(b) for b in as_list(bearings)]
-    azimuths *= (len(lats) - len(azimuths) + 1)
+    azimuths *= len(lats) - len(azimuths) + 1
     dists_m = [dist_km * 1000 for dist_km in as_list(dists_km)]
-    dists_m *= (len(lats) - len(dists_m) + 1)
+    dists_m *= len(lats) - len(dists_m) + 1
     return lats, lons, azimuths, dists_m

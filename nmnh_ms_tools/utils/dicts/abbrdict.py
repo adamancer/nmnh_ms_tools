@@ -4,10 +4,8 @@ from unidecode import unidecode
 from .basedict import BaseDict
 
 
-
-
 class AbbrDict(BaseDict):
-    """Defines dict where values """
+    """Defines dict where values"""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -18,7 +16,6 @@ class AbbrDict(BaseDict):
             for abbr, langs in abbrs:
                 abbreviations.setdefault(abbr, []).extend(langs)
         self._abbreviations = {k: list(set(v)) for k, v in abbreviations.items()}
-
 
     def __getitem__(self, key):
         try:
@@ -37,7 +34,6 @@ class AbbrDict(BaseDict):
                 key = f"{key.rstrip('-')[:-1]}-"
 
         raise KeyError(f"'{orig}' not found")
-
 
     def is_abbreviation(self, val):
         if isinstance(val, (list, tuple)):

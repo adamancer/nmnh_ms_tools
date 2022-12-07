@@ -11,7 +11,6 @@ from nmnh_ms_tools.config import DATA_DIR
 from nmnh_ms_tools.utils import AbbrDict
 
 
-
 def _load_stopwords(langs):
     words = {}
     for abbr, lang in langs.items():
@@ -34,7 +33,7 @@ def issn_abbrs_to_json(fp):
             word, abbr, langs = row
             word = unidecode(word.lower())
             abbr = unidecode(abbr.lower())
-            langs = langs.split(', ')
+            langs = langs.split(", ")
             if abbr == "n.a.":
                 abbr = None
             abbrs.setdefault(word, []).append([abbr, langs])
@@ -44,10 +43,10 @@ def issn_abbrs_to_json(fp):
         json.dump(abbrs, f, indent=2, sort_keys=True)
 
 
-
-
 class BaseFormatter:
-    with open(os.path.join(DATA_DIR, "issn", "issn_abbrs.json"), "r", encoding="utf-8") as f:
+    with open(
+        os.path.join(DATA_DIR, "issn", "issn_abbrs.json"), "r", encoding="utf-8"
+    ) as f:
         abbrs = AbbrDict(json.load(f))
 
     # Maps ISSN language abbrebiations to full names
@@ -76,12 +75,9 @@ class BaseFormatter:
 
     stopwords = _load_stopwords(languages)
 
-
-
     def __init__(self, reference):
         self.reference = reference
         self.default_langs = {"eng", "fre", "ger", "ita", "spa"}
-
 
     def iso_4_title(self, publication=None):
         """Formats title using a loose interpreation of the ISO 4 standard"""

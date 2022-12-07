@@ -1,22 +1,13 @@
 """Defines (mostly) standalone functions and classes"""
-from .classes import (
-    repr_class,
-    str_class
-)
-from .clock import (
-    Clocker,
-    clock,
-    clock_all_methods,
-    clock_snippet,
-    report
-)
+from .classes import repr_class, str_class
+from .clock import Clocker, clock, clock_all_methods, clock_snippet, report
 from .coords import (
     Coordinate,
     Latitude,
     Longitude,
     estimate_uncertainty,
     parse_coordinate,
-    round_to_uncertainty
+    round_to_uncertainty,
 )
 from .dicts import (
     AbbrDict,
@@ -69,14 +60,7 @@ from .geo import (
     translate_with_uncertainty,
     trim,
 )
-from .lists import (
-    as_list,
-    as_set,
-    dedupe,
-    iterable,
-    most_common,
-    oxford_comma
-)
+from .lists import as_list, as_set, dedupe, iterable, most_common, oxford_comma
 from .misc import (
     ABCEncoder,
     clear_empty,
@@ -89,13 +73,7 @@ from .misc import (
     validate_direction,
     write_emu_search,
 )
-from .numeric import (
-    as_numeric,
-    base_to_int,
-    int_to_base,
-    frange,
-    num_dec_places
-)
+from .numeric import as_numeric, base_to_int, int_to_base, frange, num_dec_places
 from .prefixed_num import PrefixedNum
 from .standardizers import (
     LocStandardizer,

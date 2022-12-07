@@ -9,16 +9,12 @@ from .modified import ModifiedParser
 from ....utils import oxford_comma
 
 
-
-
 OFFSHORE = [
-    r'approach(?:es)? to(?: the)?',
-    r'entrance(?:s) (?:of|to)(?: the)?',
-    r'off(?: of)?(?: the)?',
-    r'offshore(?: of)?(?: the)?'
+    r"approach(?:es)? to(?: the)?",
+    r"entrance(?:s) (?:of|to)(?: the)?",
+    r"off(?: of)?(?: the)?",
+    r"offshore(?: of)?(?: the)?",
 ]
-
-
 
 
 class OffshoreParser(Parser):
@@ -29,38 +25,31 @@ class OffshoreParser(Parser):
     as being a likely marine locality and returns the geometry of the
     reference feature. Extending the polygon is handled by evaluator.
     """
-    kind = 'offshore'
-    attributes = [
-        'kind',
-        'verbatim',
-        'feature'
-    ]
+
+    kind = "offshore"
+    attributes = ["kind", "verbatim", "feature"]
 
     def __init__(self, *args, **kwargs):
         super(OffshoreParser, self).__init__(*args, **kwargs)
-
 
     def parse(self, val):
         feature = get_offshore(val)
         if feature:
             self.verbatim = val
             self.feature = feature
-            self.feature_kind = 'offshore'
+            self.feature_kind = "offshore"
             self.specific = True
             return self
         raise ValueError('Could not parse "{}"'.format(val))
 
-
     def name(self):
         """Returns a string describing the parsed locality"""
-        return 'Off of {}'.format(self.feature)
-
-
+        return "Off of {}".format(self.feature)
 
 
 def get_offshore(val):
     """Matches offshore features"""
-    pattern = r'^(?:{}) (.*)$'.format('|'.join(OFFSHORE))
+    pattern = r"^(?:{}) (.*)$".format("|".join(OFFSHORE))
     match = re.match(pattern, val, flags=re.I)
     if match is not None:
         feature = match.group(1)

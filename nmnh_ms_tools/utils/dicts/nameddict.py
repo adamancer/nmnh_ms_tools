@@ -2,8 +2,6 @@
 from .attrdict import AttrDict
 
 
-
-
 class NamedDict:
     """Defines a namedtuple-style dict"""
 
@@ -11,7 +9,6 @@ class NamedDict:
         assert all([isinstance(k, str) for k in keys])
         self._name = name
         self._keys = keys
-
 
     def __call__(self, *args):
         vals = list(args)
@@ -24,8 +21,6 @@ class NamedDict:
         dct._name = self._name
         dct._keys = self._keys
         return dct
-
-
 
 
 def nameddict(name, keys):

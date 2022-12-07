@@ -209,7 +209,7 @@ GEOSCIENCE_KEYWORDS = [
     "Wuchiapingian",
     "Wuliuan",
     "Ypresian",
-    "Zanclean"
+    "Zanclean",
 ]
 
 

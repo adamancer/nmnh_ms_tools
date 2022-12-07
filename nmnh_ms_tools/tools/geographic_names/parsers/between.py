@@ -7,25 +7,15 @@ from .feature import FeatureParser, append_feature_type
 from ....utils.lists import oxford_comma
 
 
-
-
 logger = logging.getLogger(__name__)
-
-
 
 
 class BetweenParser(Parser):
     """Parses localities between two named localities"""
-    kind = 'between'
-    attributes = [
-        'kind',
-        'verbatim',
-        'unconsumed',
-        'features',
-        'inclusive'
-    ]
-    quote = True
 
+    kind = "between"
+    attributes = ["kind", "verbatim", "unconsumed", "features", "inclusive"]
+    quote = True
 
     def __init__(self, *args, **kwargs):
         self.features = None
@@ -33,42 +23,38 @@ class BetweenParser(Parser):
         self.specific = None
         super(BetweenParser, self).__init__(*args, **kwargs)
 
-
     @property
     def feature(self):
         return oxford_comma(self.features)
-
 
     @feature.setter
     def feature(self, features):
         self.features = features
 
-
     def name(self):
         """Returns a string describing the parsed locality"""
         if self.features and not self.inclusive:
-            return 'Between {}'.format(self.feature)
+            return "Between {}".format(self.feature)
         elif self.features:
             return self.feature
-        return ''
-
+        return ""
 
     def parse(self, text):
         """Parses a locality string to extract usable geographic information"""
         self.verbatim = text
         # Extract between string and test feature names
-        delim = r'(?:between|from)(?: the )?'
+        delim = r"(?:between|from)(?: the )?"
         if not re.search(delim, text, flags=re.I):
             self.inclusive = True
             raise ValueError('Could not parse "{}"'.format(text))
         else:
             pre, text = re.split(delim, text, 1, flags=re.I)
             # Check pre for common delimiters
-            if re.search(r'[,;:]', pre):
+            if re.search(r"[,;:]", pre):
                 mask = 'Could not parse: "{}" (too complex)'
                 raise ValueError(mask.format(pre + delim + text))
-        between = text.rstrip('() ')
-        delim = r'(?:\band\b|\bor\b|\bto\b|&|\+|,|;)(?: the )?'
+        between = text.rstrip("() ")
+        delim = r"(?:\band\b|\bor\b|\bto\b|&|\+|,|;)(?: the )?"
         features = re.split(delim, between, flags=re.I)
         features = [s.strip() for s in features if s.strip()]
         if len(features) < 2:

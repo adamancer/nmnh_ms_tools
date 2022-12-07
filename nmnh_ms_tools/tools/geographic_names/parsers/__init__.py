@@ -12,9 +12,4 @@ from .plss import PLSSParser
 from .simple import SimpleParser
 from .uncertain import UncertainParser
 
-from .helpers import (
-    clean_locality,
-    get_leftover,
-    parse_localities,
-    Feature
-)
+from .helpers import clean_locality, get_leftover, parse_localities, Feature

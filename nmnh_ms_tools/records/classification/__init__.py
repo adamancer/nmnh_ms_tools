@@ -7,8 +7,6 @@ from ...config import CONFIG
 from ...utils import is_different
 
 
-
-
 def get_tree(src=None):
 
     import json
@@ -16,7 +14,7 @@ def get_tree(src=None):
     from datetime import datetime
     from xmu import EMuReader, EMuRecord, write_import
 
-    timestamp = datetime.now().strftime('%Y%m%dT%H%M%S')
+    timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
 
     tree = TaxaNamer()
     Taxon.tree = tree
@@ -27,7 +25,7 @@ def get_tree(src=None):
     json_path = CONFIG["data"]["taxa_tree"]
 
     if not src:
-        with open(json_path, encoding='utf-8') as f:
+        with open(json_path, encoding="utf-8") as f:
             tree.update({k: Taxon(v) for k, v in json.load(f).items()})
     else:
 
@@ -46,12 +44,12 @@ def get_tree(src=None):
             reader.report_progress()
             try:
                 rec = Taxon(EMuRecord(rec, module=reader.module))
-                tree[rec['irn']] = rec
+                tree[rec["irn"]] = rec
             except:
-                errors.append((rec['irn'], 'Read failed'))
+                errors.append((rec["irn"], "Read failed"))
 
         tree.disable_index = False
-        
+
         # Populate relationships
         tree._assign_synonyms()
         tree._assign_similar()
@@ -65,7 +63,7 @@ def get_tree(src=None):
                     if rec:
                         updates.append(EMuRecord(rec, module=reader.module))
                 except (AttributeError, KeyError):
-                    errors.append((key, 'taxon.fix_current() failed'))
+                    errors.append((key, "taxon.fix_current() failed"))
 
         # Check for other integrity issues
         for key, taxon in tree.items():
@@ -75,11 +73,11 @@ def get_tree(src=None):
                     if rec:
                         updates.append(EMuRecord(rec, module=reader.module))
                 except (KeyError, ValueError) as err:
-                    errors.append((key, 'taxon.fix() failed'))
+                    errors.append((key, "taxon.fix() failed"))
 
         # Create import file with updates that can be made automatically
         if updates:
-            write_import(updates, 'update_{}.xml'.format(timestamp))
+            write_import(updates, "update_{}.xml".format(timestamp))
 
         # Test relationships if no other errors found
         if not errors:
@@ -90,11 +88,11 @@ def get_tree(src=None):
                         taxon.parents()
                         taxon.official()
                     except:
-                        errors.append((key, 'Relationship check failed'))
+                        errors.append((key, "Relationship check failed"))
 
         # List errors if any found
         if errors:
-            raise ValueError(f'Could not generate tree: {errors}')
+            raise ValueError(f"Could not generate tree: {errors}")
 
         tree.to_json(json_path)
 

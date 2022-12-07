@@ -8,11 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from .database import Session, Cache, init_db
 
 
-
-
 logger = logging.getLogger(__name__)
-
-
 
 
 class CacheDict:
@@ -26,10 +22,8 @@ class CacheDict:
             self[key] = val
         self._cache = None
 
-
     def __str__(self):
         return str(self.recent)
-
 
     def __setitem__(self, key, val):
         key = self.keyer(key)
@@ -51,8 +45,7 @@ class CacheDict:
             self.recent[key] = val
             while len(self.recent) > self.max_recent:
                 self.recent.popitem(last=False)
-            #logger.warning('{}: {} (max={})'.format(self.__class__.__name__, len(self.recent), self.max_recent))
-
+            # logger.warning('{}: {} (max={})'.format(self.__class__.__name__, len(self.recent), self.max_recent))
 
     def __getitem__(self, key):
         key = self.keyer(key)
@@ -70,10 +63,8 @@ class CacheDict:
                     pass
             raise KeyError("'{}' not found".format(key))
 
-
     def __delitem__(self, key):
         raise NotImplementedError
-
 
     def init_db(self, path):
         """Initializes the cache database"""
@@ -84,7 +75,6 @@ class CacheDict:
         init_db(path)
         self.session = Session()
 
-
     def fill_recent(self):
         """Fills the recent dictionary with previously cached entries"""
         if self.session:
@@ -93,18 +83,15 @@ class CacheDict:
             self.recent = OrderedDict((r.key, self.reader(r)) for r in query)
             self._cache = None
 
-
     @staticmethod
     def keyer(key):
         """Defines function to apply when key-val pair is cached"""
         return key
 
-
     @staticmethod
     def writer(val):
         """Defines function to apply when key-val pair is cached"""
         return val
-
 
     @staticmethod
     def reader(row):

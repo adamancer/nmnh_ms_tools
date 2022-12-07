@@ -13,20 +13,16 @@ from ....tools.geographic_names.parsers.plss import PLSSParser
 from ....tools.geographic_names.parsers.simple import SimpleParser
 
 
-
-
 PARSERS = {
-    'BetweenParser': BetweenParser,
-    'BorderParser': BorderParser,
-    'DirectionParser': DirectionParser,
-    'FeatureParser': FeatureParser,
-    'ModifiedParser': ModifiedParser,
-    'MultiFeatureParser': MultiFeatureParser,
-    'PLSSParser': PLSSParser,
-    'SimpleParser': SimpleParser
+    "BetweenParser": BetweenParser,
+    "BorderParser": BorderParser,
+    "DirectionParser": DirectionParser,
+    "FeatureParser": FeatureParser,
+    "ModifiedParser": ModifiedParser,
+    "MultiFeatureParser": MultiFeatureParser,
+    "PLSSParser": PLSSParser,
+    "SimpleParser": SimpleParser,
 }
-
-
 
 
 class LocalityCache(CacheDict):
@@ -37,7 +33,6 @@ class LocalityCache(CacheDict):
         if path is not None:
             self.init_db(path)
 
-
     @staticmethod
     def writer(vals):
         """Stores features as verbatim plus parser and includes leftovers"""
@@ -46,7 +41,6 @@ class LocalityCache(CacheDict):
         features, leftover = vals
         features = [(f.__class__.__name__, f.verbatim) for f in features]
         return json.dumps([features, leftover])
-
 
     @staticmethod
     def reader(row):

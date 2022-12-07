@@ -1,5 +1,6 @@
 """Defines class to match feature names to custom locality records"""
 import logging
+
 logger = logging.getLogger(__name__)
 
 import csv
@@ -11,10 +12,9 @@ from .match_geonames import MatchGeoNames
 from ....databases.custom import CustomFeatures, init_db
 
 
-
-
 class MatchCustom(MatchGeoNames):
     """Matches feature names to custom locality records"""
+
     cache = {}
 
     def __init__(self, fp=None, url_mask=None, **kwargs):
@@ -26,10 +26,8 @@ class MatchCustom(MatchGeoNames):
         self.use_local = True
         self.local = CustomFeatures()
 
-
     def get_preferred(self, name):
         return
-
 
     @staticmethod
     def enable_sqlite_cache(path=None):

@@ -3,40 +3,21 @@ import json
 import logging
 
 from shapely.affinity import scale
-from shapely.geometry import (
-    LineString,
-    MultiLineString,
-    MultiPolygon
-)
+from shapely.geometry import LineString, MultiLineString, MultiPolygon
 
-from .naivegeometry import (
-    NaiveGeoMetry,
-    equal_area,
-    forward,
-    inverse,
-    same_meridian
-)
+from .naivegeometry import NaiveGeoMetry, equal_area, forward, inverse, same_meridian
 from ....databases.cache import CacheDict
 from ....utils.coords import parse_coordinate
-from ....utils.geo import (
-    am_longitudes,
-    crosses_180,
-    epsg_id,
-    pm_longitudes
-)
-
-
+from ....utils.geo import am_longitudes, crosses_180, epsg_id, pm_longitudes
 
 
 logger = logging.getLogger(__name__)
 
 
-
-
 class GeoMetry(NaiveGeoMetry):
     """Subclasses NaiveGeometry to handle common projection operations"""
-    _c180 = {}
 
+    _c180 = {}
 
     def __init__(self, *args, **kwargs):
         super(GeoMetry, self).__init__(*args, **kwargs)
@@ -44,14 +25,13 @@ class GeoMetry(NaiveGeoMetry):
         self._am_shape = None
         self._pm_shape = None
         self._subshapes = None
-        self.cache.extend(['_crosses_180', '_am_shape', '_pm_shape'])
+        self.cache.extend(["_crosses_180", "_am_shape", "_pm_shape"])
         for attr in self.cache[-3:]:
             try:
                 setattr(self, attr, getattr(self.verbatim, attr))
             except AttributeError:
                 pass
-        #self.finalize_shape()
-
+        # self.finalize_shape()
 
     @property
     def subshapes(self):
@@ -59,11 +39,9 @@ class GeoMetry(NaiveGeoMetry):
             self.shape
         return self._subshapes
 
-
     @subshapes.setter
     def subshapes(self, val):
         self._subshapes = val
-
 
     @property
     def centroid(self):
@@ -85,65 +63,53 @@ class GeoMetry(NaiveGeoMetry):
             centroid = self.nearest_points(centroid)[0]
         return centroid
 
-
     @property
     @equal_area
     def area(self):
         pass
 
-
     @same_meridian
     def contains(self, other):
         pass
-
 
     @same_meridian
     def crosses(self, other):
         pass
 
-
     @same_meridian
     def intersection(self, other):
         pass
-
 
     @same_meridian
     def intersects(self, other):
         pass
 
-
     @same_meridian
     def touches(self, other):
         pass
-
 
     @same_meridian
     def within(self, other):
         pass
 
-
     @same_meridian
     def nearest_points(self, other):
         pass
-
 
     @same_meridian
     def overlap(self, other):
         pass
 
-
     @same_meridian
     def split_and_group(self, line):
         pass
 
-
     def finalize_shape(self):
         # Coerce to WGS84
-        if epsg_id(self.crs) != 'EPSG:4326':
-            transformed = self.transform('epsg:4326')
+        if epsg_id(self.crs) != "EPSG:4326":
+            transformed = self.transform("epsg:4326")
             self._crs = transformed.crs
             self.shape = transformed.shape
-
 
     def resize(self, multiplier, min_diff_km=0):
         """Resizes the site by multuplier or desired difference in km"""
@@ -177,7 +143,7 @@ class GeoMetry(NaiveGeoMetry):
             try:
                 resized = shapes[0].resize(multiplier, min_diff_km)
                 geom = inverse(self, resized, trn=trn)
-                #shapes[0].draw(resized, title='resized both axes')
+                # shapes[0].draw(resized, title='resized both axes')
                 if self.validate_resize(geom, multiplier, min_diff_km):
                     self.resized[key] = geom.clone()
                     return geom
@@ -186,7 +152,7 @@ class GeoMetry(NaiveGeoMetry):
         # Scale longitude only if shape plots beyond the poles
         try:
             geom = inverse(self, self.derive(scale(shape, multiplier)), trn=trn)
-            #shapes[0].draw(resized, title='resized longitude only')
+            # shapes[0].draw(resized, title='resized longitude only')
             if self.validate_resize(geom, multiplier, min_diff_km):
                 self.resized[key] = geom.clone()
                 return geom
@@ -198,7 +164,6 @@ class GeoMetry(NaiveGeoMetry):
         self.resized[key] = self.clone()
         return self.clone()
 
-
     def validate_resize(self, other, multiplier, min_diff_km=None):
         """Tests if resize looks reasonable by comparing the areas"""
         if min_diff_km:
@@ -206,10 +171,9 @@ class GeoMetry(NaiveGeoMetry):
             height = self.height_km + min_diff_km
             km_multiplier = (width * height) / (self.width_km * self.height_km)
             multiplier = max([multiplier, km_multiplier])
-        min_diff = 0.5 * multiplier ** 2
-        max_diff = 2.0 * multiplier ** 2
+        min_diff = 0.5 * multiplier**2
+        max_diff = 2.0 * multiplier**2
         return min_diff < other.area / self.area < max_diff
-
 
     @property
     def bounds(self):
@@ -217,7 +181,6 @@ class GeoMetry(NaiveGeoMetry):
         lats = self.latitudes
         lngs = self.pm_longitudes
         return min(lngs), min(lats), max(lngs), max(lats)
-
 
     @property
     def center(self):
@@ -248,7 +211,6 @@ class GeoMetry(NaiveGeoMetry):
             lng -= 360
         return self.derive((lat, lng))
 
-
     def normalize(self, *others):
         """Normalizes shapes to either the prime meridian or antimeridian"""
         geoms = [self]
@@ -259,7 +221,6 @@ class GeoMetry(NaiveGeoMetry):
                 return [g.am_shape for g in geoms]
         return [g.pm_shape for g in geoms]
 
-
     @property
     def am_shape(self):
         """Returns shape with longitudes normalized to between 0 and 360"""
@@ -267,7 +228,6 @@ class GeoMetry(NaiveGeoMetry):
             xy = list(zip(self.am_longitudes, self.latitudes))
             self._am_shape = self.shape.__class__(xy)
         return self._am_shape
-
 
     @property
     def pm_shape(self):
@@ -277,23 +237,19 @@ class GeoMetry(NaiveGeoMetry):
             self._pm_shape = self.shape.__class__(xy)
         return self._pm_shape
 
-
     @property
     def am_longitudes(self):
         """Normalizes longitudes to between 0 and 360"""
         return am_longitudes(self.longitudes)
-
 
     @property
     def pm_longitudes(self):
         """Normalizes longitudes to between -180 to 180"""
         return pm_longitudes(self.longitudes)
 
-
     def parse_coordinate(self, val, *args, **kwargs):
         """Converts a coordinate to a decimal"""
         return parse_coordinate(val, *args, **kwargs)[0].decimal
-
 
     def crosses_180(self):
         """Tests if longitudes cross the antimeridian"""
@@ -302,7 +258,6 @@ class GeoMetry(NaiveGeoMetry):
         if self._crosses_180 and not self._subshapes:
             self.split_at_180()
         return self._crosses_180
-
 
     def split_at_180(self):
         """Splits features that cross the 180th meridian"""
@@ -329,7 +284,7 @@ class GeoMetry(NaiveGeoMetry):
                 x = [c if c < 0 else -c for c in x]
             geoms[i] = self.shape.__class__(zip(x, y))
         if len(geoms) > 1:
-            if self.geom_type == 'LineString':
+            if self.geom_type == "LineString":
                 self.subshapes = MultiLineString(geoms)
             else:
                 self.subshapes = MultiPolygon(geoms)

@@ -3,27 +3,22 @@ from .core import MatchPipe, Georeference
 from .match_border import MatchBorder
 from .match_custom import MatchCustom
 from .match_geonames import MatchGeoNames
-from ....tools.geographic_names.parsers import (
-    DirectionParser, MultiFeatureParser
-)
+from ....tools.geographic_names.parsers import DirectionParser, MultiFeatureParser
 from ....config import CONFIG
-
-
 
 
 class MatchDirection(MatchPipe):
     """Converts direction strings to geometries"""
+
     parser = DirectionParser
 
     def __init__(self, pipes=None):
         super(MatchDirection, self).__init__()
         self.pipes = pipes if pipes else [MatchCustom(), MatchGeoNames()]
 
-
     def test(self, feature):
         """Tests if matcher is applicable to the given locality string"""
-        return feature and feature.kind == 'direction'
-
+        return feature and feature.kind == "direction"
 
     def georeference(self, feature):
         """Georeferences a direction string"""
@@ -38,20 +33,21 @@ class MatchDirection(MatchPipe):
             # features like countries.
             if not parsed.min_dist and not parsed.max_dist:
                 dist = None
-            kwargs = {'rel_err_distance': precision}
+            kwargs = {"rel_err_distance": precision}
             geom = refsite.smart_translate(parsed.bearing, dist, **kwargs)
-            site = self.create_site(str(parsed),
-                                    location_id=refsite.location_id + '_DIR',
-                                    site_kind='direction',
-                                    site_source=parsed.__class__.__name__,
-                                    locality=str(parsed),
-                                    geometry=geom,
-                                    related_sites=[refsite],
-                                    filter=refsite.filter.copy(),
-                                    sources=refsite.sources)
+            site = self.create_site(
+                str(parsed),
+                location_id=refsite.location_id + "_DIR",
+                site_kind="direction",
+                site_source=parsed.__class__.__name__,
+                locality=str(parsed),
+                geometry=geom,
+                related_sites=[refsite],
+                filter=refsite.filter.copy(),
+                sources=refsite.sources,
+            )
             sites.append(site)
         return Georeference(sites)
-
 
     def georeference_feature(self, feature):
         """Georeferences a named feature using GeoNames"""
@@ -62,15 +58,15 @@ class MatchDirection(MatchPipe):
                 # FIXME: Junctions fail here
                 return []
         # FIXME: Implement georeferencing for junctions
-        if str(feature).lower().startswith(('junction of', 'off of')):
+        if str(feature).lower().startswith(("junction of", "off of")):
             return []
-        if str(feature).lower().startswith('border of'):
+        if str(feature).lower().startswith("border of"):
             pipes = MatchBorder(self.pipes)
             kwargs = {}
         else:
             pipes = self.pipes
-            kwargs = {'codes': [], 'size': 'small'}
-        fields = ['country', 'state_province', 'county']
+            kwargs = {"codes": [], "size": "small"}
+        fields = ["country", "state_province", "county"]
         for i in range(len(fields)):
             if i:
                 fields.pop()
@@ -78,6 +74,6 @@ class MatchDirection(MatchPipe):
             matches = self.match_site(feature, refsite, pipes, **kwargs)
             if matches:
                 # Exclude rivers from directions if other locations found
-                nonstreams = [s for s in matches if not s.site_kind.startswith('STM')]
+                nonstreams = [s for s in matches if not s.site_kind.startswith("STM")]
                 return nonstreams if nonstreams else matches
         return []

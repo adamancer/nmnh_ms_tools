@@ -4,9 +4,7 @@ from collections import Counter
 from collections.abc import Iterable, KeysView, ValuesView
 
 
-
-
-def as_list(val, delims='|;'):
+def as_list(val, delims="|;"):
     """Returns a value as a list"""
     if isinstance(val, (bool, float, int)):
         return [val]
@@ -23,12 +21,12 @@ def as_list(val, delims='|;'):
         return [val]
     if isinstance(val, (set, tuple, KeysView, ValuesView)):
         return list(val)
-    #raise TypeError('Cannot coerce {} to list'.format(type(val)))
+    # raise TypeError('Cannot coerce {} to list'.format(type(val)))
     # Fall back to a single-item list
     return [val]
 
 
-def as_set(val, delims='|;'):
+def as_set(val, delims="|;"):
     """Returns a value as a set"""
     return val if isinstance(val, set) else set(as_list(val, delims))
 
@@ -47,7 +45,7 @@ def dedupe(lst, lower=True):
     return [val for i, val in enumerate(lst) if not prep(val) in lst_[:i]]
 
 
-def oxford_comma(lst, lowercase=False, delim=', ', conj='and'):
+def oxford_comma(lst, lowercase=False, delim=", ", conj="and"):
     """Formats list as comma-delimited string
 
     Args:
@@ -62,11 +60,11 @@ def oxford_comma(lst, lowercase=False, delim=', ', conj='and'):
     if lowercase:
         lst = [s[0].upper() + s[1:] for s in lst]
     if len(lst) <= 1:
-        return ''.join(lst)
+        return "".join(lst)
     if len(lst) == 2:
-        return ' {} '.format(conj if conj else delim).join(lst)
+        return " {} ".format(conj if conj else delim).join(lst)
     last = lst.pop()
-    return delim.join(lst) + delim + conj + ' ' + last
+    return delim.join(lst) + delim + conj + " " + last
 
 
 def most_common(lst):

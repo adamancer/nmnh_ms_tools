@@ -14,24 +14,20 @@ from ..utils import (
     coerce,
     get_common_items,
     to_attribute,
-    to_dwc_camel
+    to_dwc_camel,
 )
-
-
 
 
 logger = logging.getLogger(__name__)
 
 
-
-
 def read_dwc_terms():
     """Reads ordered list of DwC terms based on file from TDWG"""
-    fp = os.path.join(DATA_DIR, 'dwc', 'simple_dwc_vertical.csv')
+    fp = os.path.join(DATA_DIR, "dwc", "simple_dwc_vertical.csv")
     terms = []
-    with open(fp, 'r') as f:
+    with open(fp, "r") as f:
         terms.extend(f.read().splitlines())
-    return [to_attribute(t.strip('*')) for t in terms]
+    return [to_attribute(t.strip("*")) for t in terms]
 
 
 def write_csv(fp, records, keep_empty=False):
@@ -44,20 +40,18 @@ def write_csv(fp, records, keep_empty=False):
                 if getattr(rec, key):
                     empty.remove(key)
         keys = [k for k in keys if k not in empty]
-    with open(fp, 'w', encoding='utf-8-sig', newline='') as f:
-        writer = csv.writer(f, dialect='excel')
+    with open(fp, "w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f, dialect="excel")
         writer.writerow([to_dwc_camel(k) for k in keys])
         for rec in records:
             writer.writerow(rec.to_csv(keys))
 
 
-
-
 class Record:
     """Defines base methods for parsing and manipulating natural history data"""
+
     std = Standardizer()
     terms = read_dwc_terms()
-
 
     def __init__(self, data=None, **kwargs):
         # Generate defaults and attributes
@@ -83,9 +77,8 @@ class Record:
                 data = data.to_dict()
             self.parse(data)
 
-
     def __str__(self):
-        rows = [('class', self.__class__.__name__)]
+        rows = [("class", self.__class__.__name__)]
         for attr in self.attributes:
             val = getattr(self, attr)
             if val:
@@ -93,16 +86,14 @@ class Record:
                     val = [val]
                 for val in val:
                     rows.append((attr, val))
-                    attr = ''
+                    attr = ""
         maxlen = max([len(row[0]) for row in rows])
-        val = '\n'.join(['{}: {}'.format(a.ljust(maxlen), v) for a, v in rows])
-        return '-' * 70 + '\n' + val
-
+        val = "\n".join(["{}: {}".format(a.ljust(maxlen), v) for a, v in rows])
+        return "-" * 70 + "\n" + val
 
     def __repr__(self):
-        attrs = ['{}={}'.format(a, getattr(self, a)) for a in self.attributes]
-        return '{}({})'.format(self.__class__.__name__, ', '.join(attrs))
-
+        attrs = ["{}={}".format(a, getattr(self, a)) for a in self.attributes]
+        return "{}({})".format(self.__class__.__name__, ", ".join(attrs))
 
     def __setattr__(self, attr, val):
         try:
@@ -113,32 +104,25 @@ class Record:
         try:
             super(Record, self).__setattr__(attr, val)
         except AttributeError as e:
-            raise AttributeError('{}: {} = {}'.format(e, attr, val))
-
+            raise AttributeError("{}: {} = {}".format(e, attr, val))
 
     def __eq__(self, other):
         return self.same_as(other, strict=True)
 
-
     def __ne__(self, other):
         return not self.same_as(other, strict=True)
-
 
     def __gt__(self, other):
         return self._sortable() > other
 
-
     def __ge__(self, other):
         return self._sortable() >= other
-
 
     def __lt__(self, other):
         return self._sortable() < other
 
-
     def __le__(self, other):
         return self._sortable() <= other
-
 
     def __bool__(self):
         for attr in self.attributes:
@@ -146,16 +130,13 @@ class Record:
                 return True
         return False
 
-
     def __iter__(self):
         return iter(self.to_dict())
-
 
     @property
     def name(self):
         """Returns a name briefly describing the object"""
         raise NotImplementedError
-
 
     @property
     def properties(self):
@@ -164,7 +145,6 @@ class Record:
             return self._properties if self._properties else []
         except AttributeError:
             return []
-
 
     @property
     def indexed(self):
@@ -175,72 +155,66 @@ class Record:
                 for val in as_list(vals):
                     if val:
                         indexed.append(self.std(val))
-            self._indexed = '|'.join(indexed)
+            self._indexed = "|".join(indexed)
         return self._indexed
-
 
     @property
     def cite_sources(self):
         """Returns a statement summarizing references used in this record"""
         if self.sources:
             sources = sorted(set(self.sources))
-            return ('Data from the following sources was used to generate'
-                    ' this record: {}').format('; '.join(sources))
-        return ''
-
+            return (
+                "Data from the following sources was used to generate"
+                " this record: {}"
+            ).format("; ".join(sources))
+        return ""
 
     @property
     def url(self):
         if self._url:
             return self._url
-        if hasattr(self, 'url_mask') and self.url_mask:
+        if hasattr(self, "url_mask") and self.url_mask:
             return self.url_mask.format(**self.to_dict())
-
 
     @url.setter
     def url(self, url):
         self._url = url
 
-
     def parse(self, data):
         """Placeholder function for routing parsing from different sources"""
         raise NotImplementedError
-
 
     def attune(self, other):
         if not isinstance(other, self.__class__):
             return self.__class__(other)
         return other
 
-
-    def update(self, data, append_to=None, delim='; '):
+    def update(self, data, append_to=None, delim="; "):
         """Updates site with the given data"""
         if not isinstance(data, dict):
             data = data.to_dict()
         append_to = {} if append_to is None else set(append_to)
         for key, val in data.items():
             # Verify that key is valid
-            if key.rstrip('+') not in self.attributes:
-                raise KeyError('Illegal key: {}'.format(key))
-            if key in append_to or key.endswith('+'):
-                key = key.rstrip('+')
-                existing = getattr(self, key) if hasattr(self, key) else ''
+            if key.rstrip("+") not in self.attributes:
+                raise KeyError("Illegal key: {}".format(key))
+            if key in append_to or key.endswith("+"):
+                key = key.rstrip("+")
+                existing = getattr(self, key) if hasattr(self, key) else ""
                 if isinstance(existing, list):
                     val = existing + as_list(val)
                 elif isinstance(existing, str):
-                    val = as_str(val, '; ')
+                    val = as_str(val, "; ")
                     val = (existing + delim + val).strip(delim)
                 else:
-                    mask = 'Invalid data type for append: {}'
+                    mask = "Invalid data type for append: {}"
                     raise TypeError(mask.format(type(existing)))
-            setattr(self, key.rstrip('+'), val)
-
+            setattr(self, key.rstrip("+"), val)
 
     def combine(self, *others):
         """Returns common elements shared between list of records"""
         dcts = [self.to_dict()] + [o.to_dict() for o in others]
         return self.__class__(get_common_items(*dcts))
-
 
     def reset(self):
         """Resets all attributes to defaults"""
@@ -248,7 +222,6 @@ class Record:
             if isinstance(default, (list, tuple)) and default:
                 default = type(default)()
             setattr(self, attr, default)
-
 
     def same_as(self, other, strict=True):
         """Tests if object is the same as another object"""
@@ -259,11 +232,9 @@ class Record:
                 return False
         return True
 
-
     def similar_to(self, other):
         """Tests if object is similar to another object"""
         return self.same_as(other, strict=False)
-
 
     def same_attr(self, other, attr, strict=False):
         """Tests if two records have the same value for a given attribute"""
@@ -275,34 +246,29 @@ class Record:
             return val == other
         return val.lower() == other.lower() or bool(val) != bool(other)
 
-
     def summarize(self, mask=None, **kwargs):
         """Summarizes the content of a record"""
         if mask is None:
             return self.name
         return mask.format(**self.to_dict())
 
-
     def match(self, keyword):
         """Tests if keyword occurs in record"""
-        pattern = r'\b{}\b'.format(self.std(keyword))
+        pattern = r"\b{}\b".format(self.std(keyword))
         return bool(re.search(pattern, self.indexed))
-
 
     def clone(self, attributes=None):
         """Clones the current record"""
         return self.__class__(self.to_dict(attributes=attributes))
 
-
     def changed(self, name):
         """Tests if record has been modified"""
         jsonstr = json.dumps(self.to_dict(), sort_keys=True).lower()
-        md5 = hashlib.md5(jsonstr.encode('utf-8')).hexdigest()
+        md5 = hashlib.md5(jsonstr.encode("utf-8")).hexdigest()
         if md5 != self._state.get(name):
             self._state[name] = md5
             return True
         return False
-
 
     def to_dict(self, attributes=None):
         """Converts record to a dict"""
@@ -310,62 +276,55 @@ class Record:
             attributes = self.attributes
         return {a: getattr(self, a) for a in attributes}
 
-
     def to_csv(self, attributes=None):
         """Converts record to a CSV"""
         if attributes is None:
             attributes = self.attributes
         return [as_str(getattr(self, a)) for a in attributes]
 
-
     def to_html(self, attributes=None):
         """Converts record to an HTML table"""
         if attributes is None:
             attributes = self.attributes
         if self.sources:
-            attributes.append('cite_sources')
+            attributes.append("cite_sources")
         html = []
         for attr in attributes:
             val = getattr(self, attr)
             if val:
                 if isinstance(val, list):
-                    val = '; '.join(val)
-                key = attr.title().replace('_', ' ').replace('Id', 'ID')
-                html.append('<strong>{}:</strong> {}'.format(key, val))
-        return '<br />'.join(html)
-
+                    val = "; ".join(val)
+                key = attr.title().replace("_", " ").replace("Id", "ID")
+                html.append("<strong>{}:</strong> {}".format(key, val))
+        return "<br />".join(html)
 
     def to_emu(self, use_irn=True, **kwargs):
         """Converts record to an EMu XML record"""
         if use_irn and self.irn:
-            return {'irn': irn}
+            return {"irn": irn}
         rec = self._to_emu()
         rec.update(kwargs)
         return rec
-
 
     def _parse(self, rec):
         """Parses pre-formatted data into a record object"""
         for key, val in rec.items():
             if key not in self.attributes:
-                raise KeyError('Illegal key: {}'.format(key))
+                raise KeyError("Illegal key: {}".format(key))
             setattr(self, key, val)
         return self
-
 
     def _sortable(self):
         """Returns a sortable version of the object"""
         return str(self)
 
-
     def _to_emu(self):
         raise NotImplementedError
 
 
-
-
 class Records(list):
     """List of records with special methods to test membership"""
+
     item_class = Record
 
     def __init__(self, *args):
@@ -376,15 +335,14 @@ class Records(list):
         # to be expanded.
         if args:
             if len(args) != 1:
-                raise TypeError('Too many arguments')
+                raise TypeError("Too many arguments")
             self.extend(as_list(args[0]))
 
-        self.eq_func = 'similar_to'
-
+        self.eq_func = "similar_to"
 
     def __contains__(self, val):
         val = self._coerce(val)
-        if self.eq_func == 'equals':
+        if self.eq_func == "equals":
             return val in self
 
         # Test membership using a custom method
@@ -394,43 +352,34 @@ class Records(list):
 
         return False
 
-
     def __getitem__(self, i):
         item = super().__getitem__(i)
         return self.__class__(item) if isinstance(item, list) else item
 
-
     def __setitem__(self, i, val):
         super().__setitem__(i, self._coerce(val))
 
-
     def append(self, val):
         super().append(self._coerce(val))
-
 
     def extend(self, vals):
         for val in vals:
             self.append(val)
 
-
     def insert(self, i, val):
         super().insert(i, self._coerce(val))
-
 
     def count(self, val):
         return super().count(self._coerce(val))
 
-
     def copy(self):
         return self.__class__(super.copy())
-
 
     def unique(self, sort_values=True):
         unique = [v for i, v in enumerate(self) if v not in self[:i]]
         if sort_values:
             unique.sort()
         return unique
-
 
     def _coerce(self, val):
         if isinstance(val, self.item_class):

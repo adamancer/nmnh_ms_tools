@@ -1,29 +1,23 @@
 from ..lists import iterable
 
 
-
-
 class BaseDict(dict):
     """Routes dict operations through class-specific item methods"""
 
     def __init__(self, *args, **kwargs):
-        if not hasattr(self, '_coerce_dicts_to'):
+        if not hasattr(self, "_coerce_dicts_to"):
             self._coerce_dicts_to = None
         self.update(*args, **kwargs)
 
-
     def __getitem__(self, key):
         return super().__getitem__(self.format_key(key))
-
 
     def __setitem__(self, key, val):
         """Coereces dictionaries when key is set"""
         super().__setitem__(self.format_key(key), self._coerce_dicts(val))
 
-
     def __delitem__(self, key):
         super().__delitem__(self.format_key(key))
-
 
     def get(self, key, default=None):
         """Explicitly route get through class.__getitem__"""
@@ -32,20 +26,16 @@ class BaseDict(dict):
         except KeyError:
             return default
 
-
     def pop(self, key, *args):
         return super().pop(self.format_key(key), *args)
-
 
     def update(self, *args, **kwargs):
         """Explicitly routes update through class.__setitem__"""
         for key, val in dict(*args, **kwargs).items():
             self[key] = val
 
-
     def format_key(self, key):
         return key
-
 
     def to_dict(self):
         """Converts BaseDict to dict"""
@@ -64,7 +54,6 @@ class BaseDict(dict):
             return obj
 
         return _recurse(self)
-
 
     def _coerce_dicts(self, val):
         """Coerces dicts within value to specified class"""

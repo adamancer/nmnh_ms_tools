@@ -6,27 +6,27 @@ from shapely.geometry import Point
 from nmnh_ms_tools.records.sites import Site
 
 
-
-
 @pytest.fixture
 def site():
-    return Site({
-        'location_id': 5793639,
-        'site_names': ['Ellensburg'],
-        'site_kind': 'PPLA2',
-        'continent': 'North America',
-        'country': 'United States',
-        'state_province': 'Washington',
-        'county': 'Kittitas Co',
-        'municipality': 'Ellensburg',
-        'synonyms': ["Ellen's Burgh", 'Robbers Roost'],
-        'verbatim_latitude': "N 46° 59' 47'",
-        'verbatim_longitude': "W 120° 32' 52''"
-    })
+    return Site(
+        {
+            "location_id": 5793639,
+            "site_names": ["Ellensburg"],
+            "site_kind": "PPLA2",
+            "continent": "North America",
+            "country": "United States",
+            "state_province": "Washington",
+            "county": "Kittitas Co",
+            "municipality": "Ellensburg",
+            "synonyms": ["Ellen's Burgh", "Robbers Roost"],
+            "verbatim_latitude": "N 46° 59' 47'",
+            "verbatim_longitude": "W 120° 32' 52''",
+        }
+    )
 
 
 def test_name(site):
-    assert site.name == 'Ellensburg'
+    assert site.name == "Ellensburg"
 
 
 def test_geometry(site):
@@ -36,16 +36,16 @@ def test_geometry(site):
 
 
 def test_site_class(site):
-    assert site.site_class == 'P'
+    assert site.site_class == "P"
 
 
 def test_summarize(site):
-    assert site.summarize() == 'Ellensburg (5793639)'
+    assert site.summarize() == "Ellensburg (5793639)"
 
 
 def test_summarize_with_admin_mask(site):
-    expected = 'Kittitas Co, Washington, United States'
-    assert site.summarize(mask='admin') == expected
+    expected = "Kittitas Co, Washington, United States"
+    assert site.summarize(mask="admin") == expected
 
 
 def test_validate(site):
@@ -54,30 +54,30 @@ def test_validate(site):
 
 def test_map_admin(site):
     site.map_admin_from_names()
-    assert site.country_code == 'US'
-    assert site.admin_code_1 == ['WA']
-    assert site.admin_code_2 == ['037']
+    assert site.country_code == "US"
+    assert site.admin_code_1 == ["WA"]
+    assert site.admin_code_2 == ["037"]
     # Clear names and remap from codes
-    site.update({'country': None, 'state_province': None, 'county': None})
+    site.update({"country": None, "state_province": None, "county": None})
     site.map_admin_from_codes()
-    assert site.country == 'United States'
-    assert site.state_province == ['Washington']
-    assert site.county == ['Kittitas County']
+    assert site.country == "United States"
+    assert site.state_province == ["Washington"]
+    assert site.county == ["Kittitas County"]
 
 
 def test_map_continent(site):
     site.map_continent()
-    assert site.continent_code == 'NA'
+    assert site.continent_code == "NA"
 
 
 def test_has_name(site):
     assert site.has_name("Ellen's Burgh")
-    assert site.has_name('Robbers Roost')
-    assert not site.has_name('Ellensburgh')
+    assert site.has_name("Robbers Roost")
+    assert not site.has_name("Ellensburgh")
 
 
 def test_subsection(site):
-    subsection = site.clone().subsection('N')
+    subsection = site.clone().subsection("N")
     assert site in subsection.related_sites
     # Shape is a box, so area of subsection should be roughly half the original
     assert subsection.area / site.area == pytest.approx(0.5, rel=1e-2)
@@ -88,7 +88,7 @@ def test_clone(site):
 
 
 def test_partial_clone(site):
-    clone = site.clone( ['country', 'state_province', 'county'])
+    clone = site.clone(["country", "state_province", "county"])
     assert site.country == clone.country
     assert site.state_province == clone.state_province
     assert site.county == clone.county
@@ -96,7 +96,7 @@ def test_partial_clone(site):
     assert not clone.site_names
 
 
-#def test_valid_coordinates(site):
+# def test_valid_coordinates(site):
 #    assert site.has_valid_coordinates()
 #    site.geometry = Point(0, 0)
 #    assert site.has_valid_coordinates()

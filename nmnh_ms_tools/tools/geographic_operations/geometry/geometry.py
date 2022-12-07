@@ -9,7 +9,15 @@ import matplotlib.pyplot as plt
 from shapely import wkb, wkt
 from shapely.affinity import scale, translate
 from shapely.geometry.base import BaseGeometry
-from shapely.geometry import Point, Polygon, LineString, MultiLineString, MultiPoint, MultiPolygon, box
+from shapely.geometry import (
+    Point,
+    Polygon,
+    LineString,
+    MultiLineString,
+    MultiPoint,
+    MultiPolygon,
+    box,
+)
 from shapely.ops import nearest_points, split, unary_union
 
 from ....databases.cache import CacheDict
@@ -36,8 +44,12 @@ logger = logging.getLogger(__name__)
 class GeoMetry:
     """Subclasses NaiveGeometry to handle common projection operations"""
 
-    lat_lon_mask = "+proj=longlat +lat_0={lat} +lon_0={lon} +ellps=WGS84 +datum=WGS84 +no_defs"
-    equal_area_mask = "+proj=eck4 +lon_0={lon} +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
+    lat_lon_mask = (
+        "+proj=longlat +lat_0={lat} +lon_0={lon} +ellps=WGS84 +datum=WGS84 +no_defs"
+    )
+    equal_area_mask = (
+        "+proj=eck4 +lon_0={lon} +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
+    )
     polar_equal_area_mask = "proj=laea +lat_0={lat} +lon_0={lon} +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m no_defs"
 
     geom_cache = CacheDict()
@@ -66,8 +78,7 @@ class GeoMetry:
         self._radius_km = radius_km
         self._resized = {}
 
-        #self.geom = self.validate_shape()
-
+        # self.geom = self.validate_shape()
 
     def validate_shape(self):
         geom = self.geom.to_crs(self.customize_proj_string(self.equal_area_mask))
@@ -81,7 +92,9 @@ class GeoMetry:
         return self.geom
 
     def __str__(self):
-        return f"<GeoMetry geom={self.geom[0]} crs={self.crs} radius_km={self.radius_km}>"
+        return (
+            f"<GeoMetry geom={self.geom[0]} crs={self.crs} radius_km={self.radius_km}>"
+        )
 
     def __repr__(self):
         return str(self)
@@ -284,7 +297,11 @@ class GeoMetry:
 
     def simplify(self, tolerance=0.05, num_points=25):
         if self.geom_type != "Point":
-            geom = self.geom[0] if self.geom_type == "Polygon" else self.convex_hull.geom[0]
+            geom = (
+                self.geom[0]
+                if self.geom_type == "Polygon"
+                else self.convex_hull.geom[0]
+            )
             simplified = None
             coords = None
             while simplified is None or len(coords) > num_points:
@@ -390,7 +407,9 @@ class GeoMetry:
         other = self.match(other)
         # Use centroids where radius is estimated
         geom = (self.centroid if self.geom_type == "Point" else self).geom.unary_union
-        other = (other.centroid if other.geom_type == "Point" else other).geom.unary_union
+        other = (
+            other.centroid if other.geom_type == "Point" else other
+        ).geom.unary_union
         return [self.match(g) for g in nearest_points(geom, other)]
 
     def similar_to(self, other, *args, dist_km=0.1, **kwargs):
@@ -426,7 +445,9 @@ class GeoMetry:
             points.extend(polygon.exterior.coords)
         return self.match(MultiPoint(points).convex_hull)
 
-    def smart_translate(self, bearing, dist_km=None, abs_err_degrees=None, rel_err_distance=0.25):
+    def smart_translate(
+        self, bearing, dist_km=None, abs_err_degrees=None, rel_err_distance=0.25
+    ):
         """Interprets directions based on type of shape"""
         kwargs = {
             "abs_err_degrees": abs_err_degrees,
@@ -482,20 +503,19 @@ class GeoMetry:
             # same geom as the translated geom
             smoothed = geom.translate(bearing, 0, **kwargs)
 
-
             # Create a new geom from the two parallel edges. Reorder the
             # translated edge so that the points are in the right order when
             # the lists are combined.
-            #orig_edge = smoothed.lat_lons
-            #tran_edge = translated.lat_lons[::-1]
-            #translated = self.match(orig_edge + tran_edge)
+            # orig_edge = smoothed.lat_lons
+            # tran_edge = translated.lat_lons[::-1]
+            # translated = self.match(orig_edge + tran_edge)
 
             translated = self.match(translated.difference(smoothed))
 
         # If geometry is a polygon (i.e., if the extent of the geometry is
         # well-constrained), limit the translated object to the portion that
         # does not intersect the original polygon.
-        #if self.geom_type != 'Point':
+        # if self.geom_type != 'Point':
         #    translated = translated.difference(self)
 
         # For simple bearings, crop height or width of the translated geom
@@ -937,4 +957,6 @@ def geom_to_geoseries(geoms):
     """Converts list of geoms to a GeoSeries with a coherenent equal-area CRS"""
     series = gpd.GeoSeries([g.geom[0] for g in geoms], crs=geoms[0].crs)
     ctr = geoms[0].__class__(box(*series.total_bounds), crs=series.crs).center
-    return series.to_crs(geoms[0].__class__.equal_area_mask.format(lat=ctr.y, lon=ctr.x))
+    return series.to_crs(
+        geoms[0].__class__.equal_area_mask.format(lat=ctr.y, lon=ctr.x)
+    )

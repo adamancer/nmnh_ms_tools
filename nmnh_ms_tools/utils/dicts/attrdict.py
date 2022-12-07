@@ -4,8 +4,6 @@ import pprint as pp
 from .basedict import BaseDict
 
 
-
-
 class AttrDict(BaseDict):
     """Defines dict where keys can be accessed as attributes"""
 
@@ -18,10 +16,8 @@ class AttrDict(BaseDict):
         self._coerce_dicts_to = self.__class__
         super(AttrDict, self).__init__(*args, **kwargs)
 
-
     def __str__(self):
-        return '{}({})'.format(self._name, pp.pformat(self))
-
+        return "{}({})".format(self._name, pp.pformat(self))
 
     def __getitem__(self, key):
         self._check_key(key)
@@ -29,15 +25,13 @@ class AttrDict(BaseDict):
             key = self._keys[key]
         return super(AttrDict, self).__getitem__(key)
 
-
     def __setitem__(self, key, val):
         self._check_key(key)
         if self._keys is not None and isinstance(key, int):
             key = self._keys[key]
-        if key.startswith('_'):
-            raise KeyError('Keys cannot start with _')
+        if key.startswith("_"):
+            raise KeyError("Keys cannot start with _")
         super(AttrDict, self).__setitem__(key, val)
-
 
     def __delitem__(self, key):
         self._check_key(key)
@@ -46,22 +40,19 @@ class AttrDict(BaseDict):
             keys = (k for k in self._keys if k != key)
         super(AttrDict, self).__delitem__(key)
 
-
     def __getattr__(self, attr):
         try:
             return super(AttrDict, self).__getitem__(attr)
         except KeyError:
-            raise AttributeError('{} not found'.format(attr))
-
+            raise AttributeError("{} not found".format(attr))
 
     def __setattr__(self, attr, val):
         """Routes set attribute to set item"""
-        if not attr.startswith('_'):
+        if not attr.startswith("_"):
             self[attr] = val
         else:
             super(AttrDict, self).__setattr__(attr, val)
 
-
     def _check_key(self, i):
         if isinstance(i, int) and not self._keys:
-            raise IndexError('Indexes not supported if created from dict')
+            raise IndexError("Indexes not supported if created from dict")

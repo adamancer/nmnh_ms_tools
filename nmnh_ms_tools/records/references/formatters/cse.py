@@ -4,11 +4,7 @@ import re
 from .core import BaseFormatter
 
 
-
-
 class CSEFormatter(BaseFormatter):
-
-
     def __str__(self):
         masks = {
             "article": "{authors}. {year}. {title}. {publication}. {volume}({number}):{pages}. Available from: {url}. doi:{doi}.",
@@ -43,28 +39,29 @@ class CSEFormatter(BaseFormatter):
         formatted = re.sub(r" +", " ", formatted)
         formatted = re.sub(r"\. +\.", ".", formatted)
         formatted = re.sub(r"(?<=[^\d]) p\.$", ".", formatted)
-        formatted = formatted.replace(" Available from: .", "") \
-                             .replace(" DOI: .", "") \
-                             .replace(": .", ".") \
-                             .replace(" :", "") \
-                             .replace(" ()", "") \
-                             .replace("()", "") \
-                             .replace(" .", ".") \
-                             .replace(".:", ".") \
-                             .lstrip(". ") \
-                             .rstrip(":. ") + "."
+        formatted = (
+            formatted.replace(" Available from: .", "")
+            .replace(" DOI: .", "")
+            .replace(": .", ".")
+            .replace(" :", "")
+            .replace(" ()", "")
+            .replace("()", "")
+            .replace(" .", ".")
+            .replace(".:", ".")
+            .lstrip(". ")
+            .rstrip(":. ")
+            + "."
+        )
         formatted = re.sub(r"\.\. ", ". ", formatted)
 
         return formatted
-
 
     def _format_publication(self):
         publication = self.reference.publication
         # Abbreviate journal titles according to the ISO 4 standard
         if self.reference.entry_type == "article":
-            return self.iso_4_title(publication).replace("." , "")
+            return self.iso_4_title(publication).replace(".", "")
         return publication
-
 
     def _format_authors(self):
         author_string = self.reference.author_string(

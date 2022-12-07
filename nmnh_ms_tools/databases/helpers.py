@@ -8,21 +8,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import DeferredReflection
 
 
-
-
 logger = logging.getLogger(__name__)
-
-
 
 
 def init_helper(fp, base, session, deferred=False, tables=None):
     """Creates the database based on the given path"""
-    if fp == ':memory':
-        fp = ''
+    if fp == ":memory":
+        fp = ""
     if fp:
-        fp = '/' + os.path.realpath(fp).replace(os.sep, os.sep * 2)
+        fp = "/" + os.path.realpath(fp).replace(os.sep, os.sep * 2)
     try:
-        engine = create_engine('sqlite://{}'.format(fp))
+        engine = create_engine("sqlite://{}".format(fp))
         if deferred:
             DeferredReflection.prepare(engine)
         base.metadata.bind = engine
@@ -32,11 +28,10 @@ def init_helper(fp, base, session, deferred=False, tables=None):
         raise RuntimeError(f"Could not load {fp}") from e
 
 
-
 def time_query(query):
-    compiled = query.statement.compile(compile_kwargs={'literal_binds': True})
+    compiled = query.statement.compile(compile_kwargs={"literal_binds": True})
     start_time = dt.datetime.now()
     query.all()
-    msg = '{} (t={})'.format(compiled, dt.datetime.now() - start_time)
+    msg = "{} (t={})".format(compiled, dt.datetime.now() - start_time)
     logger.debug(msg)
     print(msg)

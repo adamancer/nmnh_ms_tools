@@ -10,15 +10,15 @@ from ...tools.geographic_operations.geometry import GeoMetry
 
 class LithoStrat(Record):
     """Defines methods for working with lithostratigraphic names"""
-    bot = MacrostratBot()
 
+    bot = MacrostratBot()
 
     def __init__(self, *args, **kwargs):
         # Set lists of original class attributes and reported properties
         self._class_attrs = set(dir(self))
         # Explicitly define defaults for all reported attributes
-        self.unit_id = ''
-        self.macrostrat_id = ''
+        self.unit_id = ""
+        self.macrostrat_id = ""
         self.group = StratUnit()
         self.formation = StratUnit()
         self.member = StratUnit()
@@ -31,44 +31,35 @@ class LithoStrat(Record):
         # Define additional attributes
         self._geometry = None
 
-
     def __str__(self):
         units = [self.group, self.formation, self.member]
-        return ' - '.join([str(u[0]) if u else '' for u in units]).strip('- ')
-
+        return " - ".join([str(u[0]) if u else "" for u in units]).strip("- ")
 
     def __bool__(self):
         return bool(self.group or self.formation or self.member)
 
-
     @property
     def name(self):
-        raise NotImplementedError('name')
-
+        raise NotImplementedError("name")
 
     @property
     def geometry(self):
         """Returns a GeoMetry object for this unit, populating it if needed"""
-        if (self._geometry is None
-            and self.current_latitude
-            and self.current_longitude):
-                self._geometry = GeoMetry((self.current_latitude,
-                                           self.current_longitude))
+        if self._geometry is None and self.current_latitude and self.current_longitude:
+            self._geometry = GeoMetry((self.current_latitude, self.current_longitude))
         return self._geometry
-
 
     def parse(self, data):
         """Parses data from various sources to populate class"""
-        if 'strat_name_id' in data:
+        if "strat_name_id" in data:
             self._parse_macrostrat(data)
-        elif 'min_ma' in data:
+        elif "min_ma" in data:
             self._parse_self(data)
         else:
             self._parse_dwc(data)
         # Clean up empty stratigraphic units
-        for attr in ['group', 'formation', 'member']:
+        for attr in ["group", "formation", "member"]:
             setattr(self, attr, [u for u in getattr(self, attr) if u])
-
 
     def same_as(self, other, strict=True):
         """Tests if object is the same as another object"""
@@ -81,10 +72,9 @@ class LithoStrat(Record):
         except AssertionError:
             return False
 
-
     def similar_to(self, other):
         """Tests if object is similar to another object"""
-        for attr in ['group', 'formation', 'member']:
+        for attr in ["group", "formation", "member"]:
             stop = False
             units = getattr(self, attr)
             if units:
@@ -99,16 +89,14 @@ class LithoStrat(Record):
                     return False
         return True
 
-
     def _to_emu(self, **kwargs):
         """Formats record for EMu"""
-        raise NotImplementedError('to_emu')
-
+        raise NotImplementedError("to_emu")
 
     def augment(self):
         """Searches Macrostrat for related units"""
         matches = []
-        keys = ['member', 'formation', 'group']
+        keys = ["member", "formation", "group"]
         for key in keys:
             units = getattr(self, key)
             if units:
@@ -123,7 +111,7 @@ class LithoStrat(Record):
         if matches:
             # Limit matches to those no more specific than this
             subset = matches[:]
-            for key in keys[:keys.index(key)]:
+            for key in keys[: keys.index(key)]:
                 subset = [m for m in subset if not getattr(m, key)]
             # If all matches have the same strat_name_id, combine them
             if len({m.macrostrat_id for m in subset}) == 1:
@@ -137,13 +125,12 @@ class LithoStrat(Record):
                 if primary.max_ma < children.max_ma:
                     primary.max_ma = children.max_ma
                 # Update sources based on complete list of units checked
-                mask = 'https://macrostrat.org/api/units?strat_name_id={}'
+                mask = "https://macrostrat.org/api/units?strat_name_id={}"
                 macrostrat_ids = [m.macrostrat_id for m in matches]
                 for macrostrat_id in sorted(set(macrostrat_ids)):
                     primary.sources.append(mask.format(macrostrat_id))
                 return primary
         return
-
 
     def combine(self, *others):
         """Combines ages from multiple packages with this one"""
@@ -156,57 +143,52 @@ class LithoStrat(Record):
                 else:
                     combined.setdefault(attr, []).append(val)
         # Reduce lists where possible
-        for key in ['group', 'formation', 'member']:
+        for key in ["group", "formation", "member"]:
             vals = combined[key]
             combined[key] = [v for i, v in enumerate(vals) if v not in vals[:i]]
-        for key in ['macrostrat_id']:
+        for key in ["macrostrat_id"]:
             combined[key] = combined[key][0]
         # Get extremes of top and bottom ages
-        combined['min_ma'] = min(combined['min_ma'])
-        combined['max_ma'] = max(combined['max_ma'])
+        combined["min_ma"] = min(combined["min_ma"])
+        combined["max_ma"] = max(combined["max_ma"])
         return self.__class__(combined)
-
 
     def _parse_dwc(self, data):
         for key in LITHOSTRAT_RANKS:
-            setattr(self, key, [StratUnit(data.get(key, ''), hint=key)])
-
+            setattr(self, key, [StratUnit(data.get(key, ""), hint=key)])
 
     def _parse_macrostrat(self, data):
-        self.macrostrat_id = data['strat_name_id']
-        self.unit_id = data['unit_id']
-        for key in ['Gp', 'Fm', 'Mbr']:
+        self.macrostrat_id = data["strat_name_id"]
+        self.unit_id = data["unit_id"]
+        for key in ["Gp", "Fm", "Mbr"]:
             kind = LITHOSTRAT_ABBRS[key.lower()].lower()
             units = parse_strat_unit(data[key], hint=kind)
             setattr(self, kind, units)
         # Update stratigraphic hierarchy with unit
         # Get additional info about age and locality
-        self.min_ma = float(data['t_age'])
-        self.max_ma = float(data['b_age'])
-        self.current_latitude = float(data['clat'])
-        self.current_longitude = float(data['clng'])
-
+        self.min_ma = float(data["t_age"])
+        self.max_ma = float(data["b_age"])
+        self.current_latitude = float(data["clat"])
+        self.current_longitude = float(data["clng"])
 
     @staticmethod
     def _simplify_macrostrat(data, keys=None):
         if keys is None:
             keys = [
-                'Gp',
-                'Fm',
-                'Mbr',
-                'unit_name',
-                'strat_name_long',
-                'unit_id',
-                'section_id',
-                'strat_name_id'
+                "Gp",
+                "Fm",
+                "Mbr",
+                "unit_name",
+                "strat_name_long",
+                "unit_id",
+                "section_id",
+                "strat_name_id",
             ]
         return {k: data[k] for k in keys}
 
     def _parse_self(self, data):
         for key, val in data.items():
             setattr(self, key, val)
-
-
 
 
 def parse_lithostrat(val):

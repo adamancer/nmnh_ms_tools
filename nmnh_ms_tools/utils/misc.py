@@ -13,10 +13,7 @@ from pytz import timezone
 from .lists import as_list
 
 
-
 logger = logging.getLogger(__name__)
-
-
 
 
 class ABCEncoder(json.JSONEncoder):
@@ -25,27 +22,27 @@ class ABCEncoder(json.JSONEncoder):
     def __init__(self, *args, **kwargs):
         super(ABCEncoder, self).__init__(*args, **kwargs)
 
-
     def default(self, val):
         try:
             return val.obj
         except AttributeError:
             if isinstance(val, dt.date):
-                return val.strftime('%Y-%m-%d')
+                return val.strftime("%Y-%m-%d")
             return json.JSONEncoder.default(self, val)
-
-
 
 
 class NoFontScoreFilter(logging.Filter):
     def filter(self, record):
-        return not record.getMessage().startswith('findfont: ')
+        return not record.getMessage().startswith("findfont: ")
 
 
-
-
-def prompt(text, validator, confirm=False,
-           helptext='No help text provided', errortext='Invalid response!'):
+def prompt(
+    text,
+    validator,
+    confirm=False,
+    helptext="No help text provided",
+    errortext="Invalid response!",
+):
     """Prompts for and validates text provided by user
 
     Args:
@@ -60,21 +57,20 @@ def prompt(text, validator, confirm=False,
         Validated response to prompt
     """
     # Prepare string
-    text = '{} '.format(text.rstrip())
+    text = "{} ".format(text.rstrip())
     # Prepare validator
     if isinstance(validator, str):
         validator = re.compile(validator, re.U)
-    elif isinstance(validator, dict) and sorted(validator.keys()) == ['n', 'y']:
-        text = '{} '.format(text, '/'.join(list(validator.keys())))
+    elif isinstance(validator, dict) and sorted(validator.keys()) == ["n", "y"]:
+        text = "{} ".format(text, "/".join(list(validator.keys())))
     elif isinstance(validator, dict):
         keys = list(validator.keys())
         keys.sort(key=lambda s: s.zfill(100))
-        options = ['{} '.format(key, validator[key]) for key in keys]
+        options = ["{} ".format(key, validator[key]) for key in keys]
     elif isinstance(validator, list):
-        options = ['{} '.format(i + 1, val) for
-                   i, val in enumerate(validator)]
+        options = ["{} ".format(i + 1, val) for i, val in enumerate(validator)]
     else:
-        raise ValueError('Validator must be dict, list, or str')
+        raise ValueError("Validator must be dict, list, or str")
     # Validate response
     loop = True
     num_loops = 0
@@ -85,16 +81,16 @@ def prompt(text, validator, confirm=False,
         except UnboundLocalError:
             pass
         else:
-            print('-' * 60 + '\nOPTIONS\n-------')
+            print("-" * 60 + "\nOPTIONS\n-------")
             for option in options:
                 print(option)
-            print('-' * 60)
+            print("-" * 60)
         # Prompt for value
         val = input(text)
-        if val.lower() == 'q':
-            print('User exited prompt')
+        if val.lower() == "q":
+            print("User exited prompt")
             sys.exit()
-        elif val.lower() == '?':
+        elif val.lower() == "?":
             print(fill(helptext))
             loop = False
         elif isinstance(validator, list):
@@ -126,8 +122,11 @@ def prompt(text, validator, confirm=False,
                 result = str(result)
             except UnicodeEncodeError:
                 result = str(result)
-            loop = prompt('Is this value correct: "{}"?'.format(result),
-                          {'y' : False, 'n' : True}, confirm=False)
+            loop = prompt(
+                'Is this value correct: "{}"?'.format(result),
+                {"y": False, "n": True},
+                confirm=False,
+            )
         elif loop:
             print(fill(errortext))
         num_loops += 1
@@ -135,8 +134,7 @@ def prompt(text, validator, confirm=False,
     return result
 
 
-def localize_datetime(timestamp, timezone_id='US/Eastern',
-                      mask='%Y-%m-%dT%H:%M:%S'):
+def localize_datetime(timestamp, timezone_id="US/Eastern", mask="%Y-%m-%dT%H:%M:%S"):
     """Localize timestamp to specified timezone
 
     Returns:
@@ -148,44 +146,43 @@ def localize_datetime(timestamp, timezone_id='US/Eastern',
     return localized
 
 
-def write_emu_search(vals, field='irn', operator='=',
-                     mask=None, output='search.txt'):
+def write_emu_search(vals, field="irn", operator="=", mask=None, output="search.txt"):
     """Writes EMu search string"""
     vals = sorted({s.strip() for s in vals if s.strip()})
     if mask is None:
-        mask = os.path.join(os.path.dirname(__file__), 'files', 'mask.txt')
-    if mask.endswith('.txt'):
-        mask = open(mask, 'r').read()
+        mask = os.path.join(os.path.dirname(__file__), "files", "mask.txt")
+    if mask.endswith(".txt"):
+        mask = open(mask, "r").read()
     search = []
     for val in vals:
         if isinstance(val, str):
             val = val.replace("'", r"\'")
-        if re.match(r'[a-z]', val, flags=re.I) or operator != '=':
+        if re.match(r"[a-z]", val, flags=re.I) or operator != "=":
             val = "'{}'".format(val)
-        search.append('\t(\n\t\t{} {} {}\n\t)'.format(field, operator, val))
-    with open(output, 'w') as f:
-        f.write(mask.format('\n\tor\n'.join(search)))
+        search.append("\t(\n\t\t{} {} {}\n\t)".format(field, operator, val))
+    with open(output, "w") as f:
+        f.write(mask.format("\n\tor\n".join(search)))
 
 
 def nullify(val, remove_empty=True):
     """Coerces string nulls to None"""
     nulls = {
-        'empty',
-        'n/a',
-        'none',
-        'not applicable',
-        'not provided',
-        'not given',
-        'not stated',
-        'null'
+        "empty",
+        "n/a",
+        "none",
+        "not applicable",
+        "not provided",
+        "not given",
+        "not stated",
+        "null",
     }
     if isinstance(val, list):
         vals = [nullify(val) for val in val]
         return [val for val in vals if val] if remove_empty else vals
-    return None if str(val).lower().strip(' .[]') in nulls else val
+    return None if str(val).lower().strip(" .[]") in nulls else val
 
 
-def coerce(val, coerce_to, delim=' | '):
+def coerce(val, coerce_to, delim=" | "):
     """Coereces val to another data type"""
     val = nullify(val)
     if isinstance(val, type(coerce_to)) or coerce_to is None:
@@ -251,24 +248,24 @@ def coerce(val, coerce_to, delim=' | '):
     if isinstance(val, (list, tuple)) and isinstance(coerce_to, types):
         val = [cast_to(s) for s in val if not isinstance(val, cast_to)]
         return cast_from(val) if any(val) else cast_from()
-    raise TypeError("Could not coerce {} ({}) to {}".format(
-        repr(val), type(val), cast_to)
+    raise TypeError(
+        "Could not coerce {} ({}) to {}".format(repr(val), type(val), cast_to)
     )
 
 
-def configure_log(name=None, level='DEBUG', stream=True):
+def configure_log(name=None, level="DEBUG", stream=True):
     """Convenience function that configures a simple log"""
     if name is None:
         name = __name__
-    fn = name if name.lower().endswith('.log') else '{}.log'.format(name)
-    handlers = [logging.FileHandler(fn, 'w', encoding='utf-8')]
+    fn = name if name.lower().endswith(".log") else "{}.log".format(name)
+    handlers = [logging.FileHandler(fn, "w", encoding="utf-8")]
     if stream:
         handlers.append(logging.StreamHandler())
     # Filter matplotlib font check from debug
     for handler in handlers:
         handler.addFilter(NoFontScoreFilter())
     logging.basicConfig(
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         level=getattr(logging, level.upper()),
         handlers=handlers,
     )
@@ -276,8 +273,8 @@ def configure_log(name=None, level='DEBUG', stream=True):
 
 def read_dwc_archive(fp, limit=None):
     """Reads a DwC archive"""
-    with open(fp, 'r', encoding='utf-8') as f:
-        rows = csv.reader(f, delimiter='\t')
+    with open(fp, "r", encoding="utf-8") as f:
+        rows = csv.reader(f, delimiter="\t")
         keys = next(rows)
         for i, row in enumerate(rows):
             if limit and i > limit:
@@ -287,29 +284,29 @@ def read_dwc_archive(fp, limit=None):
 
 def validate_direction(direction):
     """Validates a compass direction"""
-    full = r'[Nn]orth|[Ss]outh|[Ee]ast|[Ww]est'
+    full = r"[Nn]orth|[Ss]outh|[Ee]ast|[Ww]est"
     patterns = [
-        r'^[NSEW]$',
-        r'^[NS][EW]$',
-        r'^[NSEW][NS][NSEW]$',
-        r'^[NS]\d{1,2}(\.\d+)?[EW]$',
-        r'^({0})(-?({0})){{,2}}$'.format(full)
+        r"^[NSEW]$",
+        r"^[NS][EW]$",
+        r"^[NSEW][NS][NSEW]$",
+        r"^[NS]\d{1,2}(\.\d+)?[EW]$",
+        r"^({0})(-?({0})){{,2}}$".format(full),
     ]
     match = None
     for pattern in patterns:
         if re.match(pattern, direction):
             return True
     else:
-        msg = 'Invalid direction: {}'.format(direction)
-        #logger.debug(msg)
+        msg = "Invalid direction: {}".format(direction)
+        # logger.debug(msg)
         raise ValueError(msg)
 
 
 def get_ocean_name(ocean):
     """Gets the base name of an ocean"""
-    pattern = r'\b(north|south|ocean)\b'
+    pattern = r"\b(north|south|ocean)\b"
     try:
-        return re.sub(pattern, '', ocean, flags=re.I).strip().lower()
+        return re.sub(pattern, "", ocean, flags=re.I).strip().lower()
     except TypeError:
         return
 
@@ -318,16 +315,16 @@ def clear_empty(val):
     """Cleans common phrases signifying that no data is present (e.g., not given)"""
     vals = as_list(val)
     # Split values on hyphen or slash
-    delim = r'(?: (\-|/|or) )'
+    delim = r"(?: (\-|/|or) )"
     if len(vals) == 1 and re.search(delim, vals[0]):
         vals = re.split(delim, vals[0])
     # Remove strings used to denote missing data
     blacklist = [
-        r'([a-z]+ )?((not |il)legible|not stated|(not |un)determined|unknown)',
-        r'locality in multiple [a-z]+',
+        r"([a-z]+ )?((not |il)legible|not stated|(not |un)determined|unknown)",
+        r"locality in multiple [a-z]+",
     ]
     for pattern in blacklist:
-        pattern = r'^\[?{}\]?$'.format(pattern)
+        pattern = r"^\[?{}\]?$".format(pattern)
         vals = [s for s in vals if not re.search(pattern, s, flags=re.I)]
     if vals:
         return vals[0] if isinstance(val, str) else vals

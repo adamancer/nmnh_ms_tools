@@ -4,8 +4,6 @@ import pprint as pp
 from .basedict import BaseDict
 
 
-
-
 class StaticDict(BaseDict):
     """Defines dict where keys can be accessed as attributes"""
 
@@ -15,10 +13,8 @@ class StaticDict(BaseDict):
         self._coerce_dicts_to = self.__class__
         super(StaticDict, self).__init__(*args, **kwargs)
 
-
     def __str__(self):
-        return '{}({})'.format(self._name, pp.pformat(self))
-
+        return "{}({})".format(self._name, pp.pformat(self))
 
     def __setitem__(self, key, val):
         try:
@@ -26,8 +22,7 @@ class StaticDict(BaseDict):
         except KeyError:
             super(StaticDict, self).__setitem__(key, val)
         else:
-            raise KeyError('{} already set'.format(key))
-
+            raise KeyError("{} already set".format(key))
 
     def __delitem__(self, key):
-        raise KeyError('Cannot delete key from StaticDict')
+        raise KeyError("Cannot delete key from StaticDict")

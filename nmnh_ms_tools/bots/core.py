@@ -12,19 +12,23 @@ from lxml import etree
 from ..utils import to_attribute
 
 
-
-
 logger = logging.getLogger(__name__)
-
-
 
 
 class Bot:
     """Methods to handle and retry HTTP requests"""
+
     email = None
 
-    def __init__(self, wait=3, email=None, wrapper=None,
-                 start_param=None, limit_param=None, paged=False):
+    def __init__(
+        self,
+        wait=3,
+        email=None,
+        wrapper=None,
+        start_param=None,
+        limit_param=None,
+        paged=False,
+    ):
         self.wait = wait
         if email:
             self.email = email
@@ -34,24 +38,22 @@ class Bot:
         self.limit_param = limit_param  # either a key or func(resp)
         self.paged = paged
 
-
     @property
     def headers(self):
         """Reads request heaers, populating User-Agent if necessary"""
         headers = self._headers.copy()
-        if 'User-Agent' not in headers:
-            headers['User-Agent'] = self.user_agent
+        if "User-Agent" not in headers:
+            headers["User-Agent"] = self.user_agent
         return headers
-
 
     @headers.setter
     def headers(self, headers):
         self._headers = headers
 
-
     @staticmethod
     def no_paging(func):
         """Defines a decorator to disable paging"""
+
         @wraps(func)
         def wrapper(inst, *args, **kwargs):
             start_param = inst.start_param
@@ -59,12 +61,13 @@ class Bot:
             resp = func(inst, *args, **kwargs)
             inst.start_param = start_param
             return resp
-        return wrapper
 
+        return wrapper
 
     @staticmethod
     def no_wrapper(func):
         """Defines a decorator to disable the response wrapper"""
+
         @wraps(func)
         def wrapper(inst, *args, **kwargs):
             wrapper = inst.wrapper
@@ -72,56 +75,47 @@ class Bot:
             resp = func(inst, *args, **kwargs)
             inst.wrapper = wrapper
             return resp
+
         return wrapper
 
     @property
     def user_agent(self):
         return f"python-requests/{requests.__version__}/{self.email}"
 
-
     def get(self, *args, **kwargs):
         """Makes GET request with retry"""
         return self._retry(requests.get, *args, **kwargs)
-
 
     def post(self, *args, **kwargs):
         """Makes POST request with retry"""
         return self._retry(requests.post, *args, **kwargs)
 
-
     def validate(self, resp):
         """Placeholder function to validate resp"""
         return True
-
 
     def download(self, url, path, ext=None, chunk_size=8192):
         """Downloads content at url to path"""
         with requests.get(url, stream=True) as r:
             r.raise_for_status()
-            with open(path, 'wb') as f:
+            with open(path, "wb") as f:
                 for chunk in r.iter_content(chunk_size=chunk_size):
                     f.write(chunk)
 
-
     def handle_error(self, resp):
-        raise ValueError(
-            f'Could not parse response from {resp.url}: {resp.text}'
-        )
-
+        raise ValueError(f"Could not parse response from {resp.url}: {resp.text}")
 
     @staticmethod
     def get_cache():
         return requests_cache.get_cache()
 
-
     @staticmethod
-    def install_cache(path='cache'):
+    def install_cache(path="cache"):
         """Activates cache located at path"""
         if requests_cache.get_cache() is not None:
             requests_cache.uninstall_cache()
         requests_cache.install_cache(path)
         return requests_cache.get_cache()
-
 
     @staticmethod
     def uninstall_cache():
@@ -130,7 +124,6 @@ class Bot:
         if cache is not None:
             requests_cache.uninstall_cache()
 
-
     @staticmethod
     def delete_cached_url(url):
         """Deletes the given URL from the cache"""
@@ -138,7 +131,6 @@ class Bot:
             requests_cache.get_cache().delete_url(url)
         except AttributeError:
             pass
-
 
     def _retry(self, *args, **kwargs):
         """Routes requests to use single or paged"""
@@ -152,18 +144,17 @@ class Bot:
             return self.wrapper(resp)
         return resp
 
-
     def _retry_one(self, func, *args, **kwargs):
         """Retries failed request using a simple exponential backoff"""
         # Update headers based on defaults
-        kwargs.setdefault('headers', {})
+        kwargs.setdefault("headers", {})
         for key, val in self.headers.items():
             try:
-                kwargs['headers'][key]
+                kwargs["headers"][key]
             except KeyError:
-                kwargs['headers'][key] = val
-        if not kwargs['headers']['User-Agent']:
-            raise ValueError('User agent is required')
+                kwargs["headers"][key] = val
+        if not kwargs["headers"]["User-Agent"]:
+            raise ValueError("User agent is required")
         # Make the request, repeating it if a resolvable error is encountered
         for i in range(7):
             try:
@@ -173,32 +164,33 @@ class Bot:
                     raise requests.exceptions.ConnectionError(
                         f"Request failed: {resp.url} (status_code={resp.status_code})"
                     )
-            except (requests.exceptions.ConnectionError,
-                    requests.exceptions.Timeout):
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
                 # Add a random number of milliseconds to the wait time to prevent
                 # multiple retries from synchronizing
-                wait = 2 ** i + random.randint(1, 1000) / 1000
-                req = [func.__name__] + list(args) + [f'{k}={v}' for k, v in kwargs.items()]
+                wait = 2**i + random.randint(1, 1000) / 1000
+                req = (
+                    [func.__name__]
+                    + list(args)
+                    + [f"{k}={v}" for k, v in kwargs.items()]
+                )
                 logger.warning(
-                    'Retrying in {:,} seconds (request={})...'.format(wait, req)
+                    "Retrying in {:,} seconds (request={})...".format(wait, req)
                 )
                 time.sleep(wait)
             else:
                 # Ensure that the response has the from_cache attribute
-                if not hasattr(resp, 'from_cache'):
+                if not hasattr(resp, "from_cache"):
                     resp.from_cache = None
                 # Enforce the minimum wait only if response is from an external server
-                local = resp.url.startswith(('http://localhost',
-                                                 'http://127.0.0.1'))
+                local = resp.url.startswith(("http://localhost", "http://127.0.0.1"))
                 if not local and not resp.from_cache:
-                    logger.info('New request: {}'.format(resp.url))
+                    logger.info("New request: {}".format(resp.url))
                     # Update wait based on rate limit
                     time.sleep(self.wait_from_rate_limit(resp))
                 # Validate the response, returning the response object if OK
                 if self.validate(resp):
                     return resp
-        raise Exception('Maximum retries exceeded')
-
+        raise Exception("Maximum retries exceeded")
 
     def _retry_paged(self, *args, **kwargs):
         """Repeats request with retry across paginated content"""
@@ -213,7 +205,7 @@ class Bot:
                 return resp
 
             # Update start and limit parameters
-            key = 'payload' if args[0].__name__ == 'post' else 'params'
+            key = "payload" if args[0].__name__ == "post" else "params"
             params = kwargs.get(key, {})
 
             # Check if available records exhausted
@@ -234,7 +226,6 @@ class Bot:
             start = params.get(self.start_param, 0)
             start += 1 if self.paged else len(wrapped)
             kwargs[key][self.start_param] = start
-
 
     def wait_from_rate_limit(self, resp):
         """Updates wait based on rate limit headers in resp"""
@@ -272,10 +263,8 @@ class Bot:
 
         # CrossRef style
         try:
-            limit = int(resp.headers.get('x-rate-limit-limit'))
-            interval = int(
-                resp.headers.get('x-rate-limit-interval').rstrip('s')
-            )
+            limit = int(resp.headers.get("x-rate-limit-limit"))
+            interval = int(resp.headers.get("x-rate-limit-interval").rstrip("s"))
         except (AttributeError, KeyError, TypeError, ValueError):
             pass
         else:
@@ -286,13 +275,10 @@ class Bot:
         return self.wait
 
 
-
-
 class JSONResponse:
     """Wraps JSON response to add methods for retrieving records"""
 
-    def __init__(self, resp, results_path,
-                 result_wrapper=None, total_path=None):
+    def __init__(self, resp, results_path, result_wrapper=None, total_path=None):
         self._response = None
         self._responses = None
         self._json = None
@@ -301,42 +287,33 @@ class JSONResponse:
         self._total_path = total_path if total_path else []
         self._wrap(resp)
 
-
     def __str__(self):
         return pp.pformat(self._json)
-
 
     def __repr__(self):
         return str(self._json)
 
-
     def __getattr__(self, attr):
         return getattr(self._response, attr)
-
 
     def __getitem__(self, key):
         if isinstance(key, int):
             return self.all(default=[])[0]
         return self._json[key]
 
-
     def __iter__(self):
         return iter(self.all(default=[]))
-
 
     def __bool__(self):
         return self._response.status_code == 200
 
-
     def __len__(self):
         return len(self.all(default=[]))
-
 
     @property
     def json(self):
         """Returns the cached JSON representation of the response"""
         return self._json
-
 
     def cast_to_json(self):
         """Returns a JSON representation of the response"""
@@ -348,7 +325,6 @@ class JSONResponse:
             mask = 'Could not cast to JSON: "{} ({})" ({})'
             raise ValueError(mask.format(text, self._response.status_code, url))
 
-
     def one(self, default=None):
         """Returns record if exactly one found along results path"""
         try:
@@ -359,14 +335,12 @@ class JSONResponse:
         except (KeyError, ValueError):
             return default
 
-
     def first(self, default=None):
         """Returns first record found along results path"""
         try:
             return self.all(default)[0]
         except (IndexError, KeyError):
             return default
-
 
     def all(self, default=None):
         """Returns all records all results path as a list"""
@@ -380,7 +354,6 @@ class JSONResponse:
             obj = [row[key] for row in obj]
         return obj
 
-
     def get(self, key, default=None):
         """Returns key from JSON"""
         try:
@@ -388,11 +361,9 @@ class JSONResponse:
         except KeyError:
             return default
 
-
     def append(self, other):
         """Appends another response object"""
         self.extend([other])
-
 
     def extend(self, others):
         """Appends each response object in a list"""
@@ -400,7 +371,6 @@ class JSONResponse:
         for other in others:
             responses.extend(other._responses)
         self._wrap(responses)
-
 
     def total(self, default=None):
         """Returns the total number of records matching the query"""
@@ -411,7 +381,6 @@ class JSONResponse:
             except KeyError:
                 return default
         return int(obj) if self._total_path else default
-
 
     def _wrap(self, responses):
         """Wraps response(s) in instance of class"""
@@ -426,16 +395,15 @@ class JSONResponse:
             for key in self._results_path:
                 obj = obj[key]
             for resp in responses[1:]:
-                obj.extend(self.__class__(resp,
-                                          results_path=self._results_path,
-                                          result_wrapper=self._result_wrapper) \
-                                          .all())
-        mask = 'Wrapped {:,} records from {:,} responses with {}'
-        logger.debug(mask.format(len(self),
-                                 len(responses),
-                                 self.__class__.__name__))
-
-
+                obj.extend(
+                    self.__class__(
+                        resp,
+                        results_path=self._results_path,
+                        result_wrapper=self._result_wrapper,
+                    ).all()
+                )
+        mask = "Wrapped {:,} records from {:,} responses with {}"
+        logger.debug(mask.format(len(self), len(responses), self.__class__.__name__))
 
 
 class XMLResponse:
@@ -446,10 +414,8 @@ class XMLResponse:
         self._xml = etree.fromstring(resp.text)
         self.nsmap = self._find_namespaces()
 
-
     def __str__(self):
-        return etree.tostring(self._xml, encoding='unicode', pretty_print=True)
-
+        return etree.tostring(self._xml, encoding="unicode", pretty_print=True)
 
     def __getattr__(self, attr):
         try:
@@ -457,14 +423,11 @@ class XMLResponse:
         except AttributeError:
             return getattr(self._xml, attr)
 
-
     def __iter__(self):
         return iter(self._xml)
 
-
     def xpath(self, xpath):
         return self._xml.xpath(xpath, namespaces=self.nsmap)
-
 
     def _find_namespaces(self, root=None, nsmap=None):
         """Finds namespaces by iterating over the full tree"""

@@ -10,21 +10,13 @@ import yaml
 from ..utils import skip_hashed
 
 
-
-
 logger = logging.getLogger(__name__)
 
 
-
-
-FILE_DIR = os.path.realpath(
-    os.path.join(os.path.dirname(__file__), '..', '_files')
-)
-CONFIG_DIR = os.path.join(FILE_DIR, 'config')
-DATA_DIR = os.path.join(FILE_DIR, 'data')
-TEST_DIR = os.path.join(FILE_DIR, 'tests')
-
-
+FILE_DIR = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", "_files"))
+CONFIG_DIR = os.path.join(FILE_DIR, "config")
+DATA_DIR = os.path.join(FILE_DIR, "data")
+TEST_DIR = os.path.join(FILE_DIR, "tests")
 
 
 class MinSciConfig(MutableMapping):
@@ -178,11 +170,10 @@ class MinSciConfig(MutableMapping):
 
         with open(path, "w", encoding="utf-8") as f:
             f.write("\n".join(content))
-    
 
     def update(self, obj, path=None):
         """Recusrively updates configuration from dict
-        
+
         Parameters
         ----------
         obj : mixed
@@ -197,7 +188,7 @@ class MinSciConfig(MutableMapping):
         """
         if path is None:
             path = []
-        
+
         if path:
             config = self._config
             for key in path[:-1]:
@@ -206,7 +197,7 @@ class MinSciConfig(MutableMapping):
                 except KeyError:
                     config[key] = {}
                     config = config[key]
-            
+
         if isinstance(obj, dict):
             for key, val in obj.items():
                 path.append(key)
@@ -219,7 +210,7 @@ class MinSciConfig(MutableMapping):
                 path.append(i)
                 self.update(val, path)
                 path.pop()
-        else:       
+        else:
             if isinstance(obj, str) and obj.startswith("~"):
                 obj = os.path.realpath(os.path.expanduser(obj))
             try:
@@ -228,86 +219,83 @@ class MinSciConfig(MutableMapping):
                 config.append(obj)
 
 
-
 class GeoConfig:
     """Configuration for geographic classes and functions"""
 
     def __init__(self, config):
         self.config = config
-        self.codes = None    # maps feature codes to data about them
+        self.codes = None  # maps feature codes to data about them
         self.classes = None  # maps feature classes to feature codes
-        self.fields = None   # maps DwC-ish fields to feature codes
+        self.fields = None  # maps DwC-ish fields to feature codes
 
         self.read_feature_definitions()
-
 
     def read_feature_definitions(self, fp=None):
         """Reads GeoNames feature definitions from CSV"""
         if fp is None:
-            fp = os.path.join(DATA_DIR, 'geonames', 'geonames_feature_codes.csv')
+            fp = os.path.join(DATA_DIR, "geonames", "geonames_feature_codes.csv")
         codes = {}
         classes = {}
-        with open(fp, 'r', encoding='utf-8-sig', newline='') as f:
-            rows = csv.reader(skip_hashed(f), dialect='excel')
+        with open(fp, "r", encoding="utf-8-sig", newline="") as f:
+            rows = csv.reader(skip_hashed(f), dialect="excel")
             keys = next(rows)
             for row in rows:
                 if not any(row):
                     continue
                 rowdict = dict(zip(keys, row))
                 try:
-                    rowdict['SizeIndex'] = int(float(rowdict['SizeIndex']))
+                    rowdict["SizeIndex"] = int(float(rowdict["SizeIndex"]))
                 except ValueError:
                     pass
-                code = rowdict['FeatureCode']
+                code = rowdict["FeatureCode"]
                 codes[code] = rowdict
-                classes.setdefault(rowdict['FeatureClass'], []).append(code)
+                classes.setdefault(rowdict["FeatureClass"], []).append(code)
         # Fix empty codes
-        for code in ['n/a', '', None]:
-            codes[code] = {'SizeIndex': 10}
+        for code in ["n/a", "", None]:
+            codes[code] = {"SizeIndex": 10}
         fields = {}
         for i, row in enumerate(self.config["georeferencing"]["ordered_field_list"]):
             field_codes = []
-            for code in row['codes']:
+            for code in row["codes"]:
                 try:
                     expanded = classes[code]
                 except KeyError:
                     field_codes.append(code)
                 else:
-                    for keyword in ['CONT', 'OCN']:
+                    for keyword in ["CONT", "OCN"]:
                         try:
                             expanded.remove(keyword)
                         except ValueError:
                             pass
                     # Look for and save the list of undersea feature codes
-                    if code == 'U':
-                        fields['undersea'] = expanded
+                    if code == "U":
+                        fields["undersea"] = expanded
                     field_codes.extend(expanded)
-            fields[row['field']] = field_codes
+            fields[row["field"]] = field_codes
             # Expand field codes in config
-            self.config["georeferencing"]["ordered_field_list"][i]['codes'] = field_codes
-        
+            self.config["georeferencing"]["ordered_field_list"][i][
+                "codes"
+            ] = field_codes
+
         self.codes = codes
         self.classes = classes
         self.fields = fields
-
 
     def min_size(self, mixed):
         """Returns the smallest radius for a set of feature codes"""
         return min(self.sizes(mixed))
 
-
     def max_size(self, mixed):
         """Returns the largest radius for a set of feature codes"""
         return max(self.sizes(mixed))
-
 
     def sizes(self, mixed):
         """Returns radii for a set of sites, sites, or feature codes"""
         if isinstance(mixed[0], (float, int)):
             return [s for s in mixed if s]
-        if hasattr(mixed[0], 'record'):
+        if hasattr(mixed[0], "record"):
             return [m.radius for m in mixed if m.radius]
-        if hasattr(mixed[0], 'site_kind'):
+        if hasattr(mixed[0], "site_kind"):
             fcodes = [m.site_kind for m in mixed]
         elif isinstance(mixed, str):
             if len(mixed) == 1:
@@ -321,46 +309,41 @@ class GeoConfig:
                 fcodes = [mixed]
         else:
             fcodes = mixed
-        key = 'SizeIndex'
+        key = "SizeIndex"
         return [self.codes[c][key] for c in fcodes if self.codes[c][key]]
-
 
     def filter_codes(self, fclass=None, min_size=0, max_size=10000):
         """Filters the available feature codes based on given criteria"""
         filtered = []
         for key, vals in self.codes.items():
-            if (vals['SizeIndex']
-                and vals.get('FeatureClass')
-                and min_size <= vals['SizeIndex'] <= max_size
-                and (fclass is None or vals['FeatureClass'] == fclass)):
-                    filtered.append(key)
+            if (
+                vals["SizeIndex"]
+                and vals.get("FeatureClass")
+                and min_size <= vals["SizeIndex"] <= max_size
+                and (fclass is None or vals["FeatureClass"] == fclass)
+            ):
+                filtered.append(key)
         return filtered
-
 
     def get_feature_codes(self, fclass):
         """Gets all feature codes belonging to the given feature class"""
         return sorted({c for c in self.classes[fclass] if c})
 
-
     def get_feature_classes(self, fcodes):
         """Gets all feature classes represented in a set of feature codes"""
-        fclasses = [self.codes[c].get('FeatureClass') for c in fcodes]
+        fclasses = [self.codes[c].get("FeatureClass") for c in fcodes]
         return sorted({c for c in fclasses if c})
-
 
     def get_feature_class(self, fcode):
         """Gets feature class for the given feature code"""
         try:
             return self.get_feature_classes([fcode])[0]
         except IndexError:
-            raise KeyError('Unrecognized feature code: {}'.format(fcode))
-
+            raise KeyError("Unrecognized feature code: {}".format(fcode))
 
     def get_feature_radius(self, fcode):
         """Gets feature class for the given feature code"""
         return self.sizes([fcode])[0]
-
-
 
 
 CONFIG = MinSciConfig()

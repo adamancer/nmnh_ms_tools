@@ -6,14 +6,12 @@ import inflect
 from unidecode import unidecode
 
 
-
-
-def as_str(val, delim=' | '):
+def as_str(val, delim=" | "):
     """Returns a value as a string"""
     if isinstance(val, (bool, float, int)):
         return str(val)
     if not val:
-        return ''
+        return ""
     if isinstance(val, str):
         return val
     if isinstance(val, (list, tuple)):
@@ -62,7 +60,7 @@ def ucfirst(val, lower=False):
     chars = []
     for i, char in enumerate(val):
         if char.isalpha():
-            return ''.join(chars) + char.upper() + ''.join(val[i + 1:])
+            return "".join(chars) + char.upper() + "".join(val[i + 1 :])
         chars.append(char)
     return val
 
@@ -81,7 +79,7 @@ def lcfirst(val):
     chars = []
     for i, char in enumerate(val):
         if char.isalpha():
-            return ''.join(chars) + char.lower() + ''.join(val[i + 1:])
+            return "".join(chars) + char.lower() + "".join(val[i + 1 :])
         chars.append(char)
     return val
 
@@ -95,7 +93,7 @@ def capitalize(val):
 
 def is_uncertain(val):
     """Checks if string indicates uncertainty"""
-    return '?' in val
+    return "?" in val
 
 
 def add_article(val):
@@ -107,32 +105,32 @@ def add_article(val):
     Returns:
         String with indefinite article prepended
     """
-    if val == plural(val) or val.lower().startswith(('a ', 'an ')):
+    if val == plural(val) or val.lower().startswith(("a ", "an ")):
         return val
-    starts_with = re.compile(r'[aeiou]|[fhlmnrsx]{1,2}(\s|\d)', re.I)
-    not_starts_with = re.compile(r'eu|i{1,3}[abcd]|iv[abcd]', re.I)
+    starts_with = re.compile(r"[aeiou]|[fhlmnrsx]{1,2}(\s|\d)", re.I)
+    not_starts_with = re.compile(r"eu|i{1,3}[abcd]|iv[abcd]", re.I)
     if starts_with.match(val) and not not_starts_with.match(val):
-        return 'an {}'.format(val)
-    return 'a {}'.format(val)
+        return "an {}".format(val)
+    return "a {}".format(val)
 
 
 @functools.lru_cache()
 def to_attribute(val):
     """Constructs a python_attribute string from the given value"""
     val = unidecode(val)
-    val = re.sub(r'["\']', '', val)
-    val = re.sub(r'[^A-z\d]+', '_', val)
-    val = re.sub(r'([A-Z])(?!(?:[A-Z_]|$))', r'_\1', val)
-    val = re.sub(r'(?<![A-Z_])([A-Z])', r'_\1', val)
-    val = re.sub(r'(?<![\d_])([\d])', r'_\1', val)
-    val = re.sub(r'_+', '_', val)
-    return val.lower().strip('_')
+    val = re.sub(r'["\']', "", val)
+    val = re.sub(r"[^A-z\d]+", "_", val)
+    val = re.sub(r"([A-Z])(?!(?:[A-Z_]|$))", r"_\1", val)
+    val = re.sub(r"(?<![A-Z_])([A-Z])", r"_\1", val)
+    val = re.sub(r"(?<![\d_])([\d])", r"_\1", val)
+    val = re.sub(r"_+", "_", val)
+    return val.lower().strip("_")
 
 
 @functools.lru_cache()
 def to_camel(val):
     """Constructs a camelCase string from the given value"""
-    capped = ''.join([capitalize(w) for w in to_attribute(val).split('_')])
+    capped = "".join([capitalize(w) for w in to_attribute(val).split("_")])
     return lcfirst(capped)
 
 
@@ -145,19 +143,21 @@ def to_pascal(val):
 @functools.lru_cache()
 def to_dwc_camel(val):
     """Constructs a DwC case string from the given value"""
-    return re.sub(r'Id$', 'ID', to_camel(val))
+    return re.sub(r"Id$", "ID", to_camel(val))
 
 
 @functools.lru_cache()
 def natsortable(val):
-    return tuple([int(p) if p.isnumeric() else p.lower() for p in  re.split(r"(\d+)", val)])
+    return tuple(
+        [int(p) if p.isnumeric() else p.lower() for p in re.split(r"(\d+)", val)]
+    )
 
 
-def to_pattern(val, mask=r'\b{}\b', subs=None, **kwargs):
+def to_pattern(val, mask=r"\b{}\b", subs=None, **kwargs):
     """Constructs a re pattern based on a string"""
     if subs is None:
         subs = {}
-    val = re.escape(val).replace(r'\ ', ' ').replace(r'\-', '-')
+    val = re.escape(val).replace(r"\ ", " ").replace(r"\-", "-")
     for find, repl in subs.items():
         val = re.sub(find, repl, val)
     return re.compile(mask.format(val), **kwargs)
@@ -197,12 +197,12 @@ def std_case(val, std_to):
     while len(val) > len(std_to):
         std_to += std_to[-1]
     std = []
-    for i, char in enumerate(std_to[:len(val)]):
+    for i, char in enumerate(std_to[: len(val)]):
         std.append(val[i].upper() if char.isupper() else val[i].lower())
-    return ''.join(std)
+    return "".join(std)
 
 
-def to_digit(val, mask=r'\b({})\b'):
+def to_digit(val, mask=r"\b({})\b"):
     """Converts string representations of numbers to digits"""
     nums = {mask.format(n): str(i) for i, n in enumerate(NUMS)}
     for pattern in sorted(nums, key=len, reverse=True):
@@ -210,51 +210,51 @@ def to_digit(val, mask=r'\b({})\b'):
     return val
 
 
-def truncate(val, length=32, suffix='...'):
+def truncate(val, length=32, suffix="..."):
     """Truncates a string to the given length"""
     if len(val) > length:
-        return val[:length - len(suffix)] + suffix
+        return val[: length - len(suffix)] + suffix
     return val
 
 
 def _get_nums():
     """Gets of a list of numbers from 0-99"""
     nums = [
-        'zero',
-        'one',
-        'two',
-        'three',
-        'four',
-        'five',
-        'six',
-        'seven',
-        'eight',
-        'nine',
-        'ten',
-        'eleven',
-        'twelve',
-        'thirteen',
-        'fourteen',
-        'fifteen',
-        'sixteen',
-        'seventeen',
-        'eighteen',
-        'nineteen'
+        "zero",
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine",
+        "ten",
+        "eleven",
+        "twelve",
+        "thirteen",
+        "fourteen",
+        "fifteen",
+        "sixteen",
+        "seventeen",
+        "eighteen",
+        "nineteen",
     ]
     tens = [
-        'twenty',
-        'thirty',
-        'forty',
-        'fifty',
-        'sixty',
-        'seventy',
-        'eighty',
-        'ninety'
+        "twenty",
+        "thirty",
+        "forty",
+        "fifty",
+        "sixty",
+        "seventy",
+        "eighty",
+        "ninety",
     ]
     for ten in tens:
         nums.append(ten)
         for num in nums[1:10]:
-            nums.append(r'{}-{}'.format(ten, num))
+            nums.append(r"{}-{}".format(ten, num))
     return nums
 
 

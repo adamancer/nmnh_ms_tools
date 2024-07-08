@@ -1,18 +1,15 @@
 """Stores information about a set of georeferences"""
 
 import logging
-import os
 
 from sqlalchemy import (
-    create_engine,
     Column,
     Integer,
     Numeric,
     String,
     UniqueConstraint,
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 from ...config import CONFIG
 from ..helpers import init_helper

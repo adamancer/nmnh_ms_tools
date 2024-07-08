@@ -1,7 +1,6 @@
 """Stores feature data and lookups for GeoNames"""
 
 import logging
-import os
 
 from sqlalchemy import (
     Column,
@@ -9,8 +8,7 @@ from sqlalchemy import (
     Integer,
     String,
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.schema import Index
 
 from ...config import CONFIG

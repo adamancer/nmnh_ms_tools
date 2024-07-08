@@ -2,10 +2,8 @@
 
 import logging
 
-import os
-
-from sqlalchemy.ext.declarative import DeferredReflection, declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import DeferredReflection
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 from ...config import CONFIG
 from ..helpers import init_helper

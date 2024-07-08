@@ -1,13 +1,10 @@
 """Defines tables in the GeoNames SQL file"""
 
 import logging
-import os
 
-from sqlalchemy import create_engine, Column, String
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import Column, String
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-from ...config import CONFIG
 from ..helpers import init_helper
 
 

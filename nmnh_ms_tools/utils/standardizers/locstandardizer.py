@@ -1,4 +1,5 @@
 """Standardizes strings for comparison"""
+
 import csv
 import os
 import re
@@ -431,6 +432,7 @@ class LocStandardizer(Standardizer):
 def std_directions(val, lower=False):
     """Standardizes cardinal directions to drop periods and spaces"""
     orig = val
+
     # Standardize N. to N
     def callback_n(m):
         return m.group(1).upper() + " "
@@ -438,12 +440,14 @@ def std_directions(val, lower=False):
     # val = re.sub(r'\b([NSEW])\. ?', callback_n, val, flags=re.I)
     val = re.sub(r"\b([A-Z])\.", callback_n, val, flags=re.I)
     val = re.sub(r" +", " ", val)
+
     # Standardize N.N.E. or similar to NNE
     def callback_nne(m):
         return (m.group(1) + m.group(2) + m.group(3)).upper()
 
     pattern = r"\b([NEWS])[ -]*([NS])[ -]*([EW])\b"
     val = re.sub(pattern, callback_nne, val, flags=re.I)
+
     # Standardize N.E. or similar to NE
     def callback_ne(m):
         return (m.group(1) + m.group(2)).upper()

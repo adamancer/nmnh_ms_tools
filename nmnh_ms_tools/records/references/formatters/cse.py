@@ -1,4 +1,5 @@
 """Roughly formats reference string according to CSE guidelines"""
+
 import re
 
 from .core import BaseFormatter
@@ -7,16 +8,16 @@ from .core import BaseFormatter
 class CSEFormatter(BaseFormatter):
     def __str__(self):
         masks = {
-            "article": "{authors}. {year}. {title}. {publication}. {volume}({number}):{pages}. Available from: {url}. doi:{doi}.",
+            "article": "{authors}. {year}. {title}. {publication}. {volume}({number}):{pages}. Available from: {url}; doi:{doi}.",
             "book": "{authors}. {year}. {title}. {volume}({number}). {city} ({state}): {publisher} {pages} p.",
-            "chapter": "{authors}. {year}. {title}. In: {publication}. {pages}.",
+            "inbook": "{authors}. {year}. {title}. In: {publication}. {pages}.",
             "mastersthesis": "{authors}. {year}. {title} [thesis]. {publisher}. {pages} p.",
             "phdthesis": "{authors}. {year}. {title} [thesis]. {publisher}. {pages} p.",
         }
         try:
             mask = masks[self.reference.entry_type]
         except KeyError:
-            mask = masks["book"]
+            mask = masks["article"]
 
         ref = self.reference.to_dict()
         ref["authors"] = self._format_authors()
@@ -40,16 +41,17 @@ class CSEFormatter(BaseFormatter):
         formatted = re.sub(r"\. +\.", ".", formatted)
         formatted = re.sub(r"(?<=[^\d]) p\.$", ".", formatted)
         formatted = (
-            formatted.replace(" Available from: .", "")
-            .replace(" DOI: .", "")
+            formatted.replace(" Available from: ;", "")
+            .replace(" doi:.", ".")
             .replace(": .", ".")
             .replace(" :", "")
             .replace(" ()", "")
             .replace("()", "")
             .replace(" .", ".")
-            .replace(".:", ".")
+            .replace(".:.", ".")
+            .replace(".:", ". ")
             .lstrip(". ")
-            .rstrip(":. ")
+            .rstrip(";:. ")
             + "."
         )
         formatted = re.sub(r"\.\. ", ". ", formatted)

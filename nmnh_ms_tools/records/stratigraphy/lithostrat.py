@@ -1,4 +1,5 @@
 """Definds methods to work with lithostratigraphic names"""
+
 import numpy as np
 
 from .utils import LITHOSTRAT_ABBRS, LITHOSTRAT_RANKS
@@ -12,6 +13,17 @@ class LithoStrat(Record):
     """Defines methods for working with lithostratigraphic names"""
 
     bot = MacrostratBot()
+    terms = [
+        "unit_id",
+        "macrostrat_id",
+        "group",
+        "formation",
+        "member",
+        "min_ma",
+        "max_ma",
+        "current_latitude",
+        "current_longitude",
+    ]
 
     def __init__(self, *args, **kwargs):
         # Set lists of original class attributes and reported properties

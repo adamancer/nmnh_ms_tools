@@ -1,4 +1,5 @@
 """Defines bot to interact with the BLM PLSS webservices"""
+
 import logging
 
 from shapely.geometry import Polygon

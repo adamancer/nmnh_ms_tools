@@ -1,4 +1,5 @@
 """Defines class to parse localities falling between two named features"""
+
 import logging
 import re
 

@@ -2,28 +2,22 @@ import csv
 import datetime as dt
 import json
 import logging
-import os
-import re
 from collections import OrderedDict
 
-from sqlalchemy import or_
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.schema import Index
 
 from .database import Base, Session, AdminNames, AdminThesaurus
 from ..cache import CacheDict
 from ..geonames import GeoNamesFeatures
-from ...config import DATA_DIR
 from ...utils import (
     LocStandardizer,
     as_list,
-    as_str,
     combine,
     dedupe,
     dictify,
     skip_hashed,
     std_names,
-    to_attribute,
 )
 
 
@@ -46,9 +40,7 @@ class AdminFeatures(GeoNamesFeatures):
     def __init__(self):
         super().__init__()
         self.names = AdminNames
-        # self.names = self.names
         self.base = Base
-        self.session = Session
         self.keys = [
             "geoname_id",
             "name",
@@ -84,6 +76,12 @@ class AdminFeatures(GeoNamesFeatures):
         )
         self.update_thesaurus = True
         self._std = LocStandardizer()
+
+    @property
+    def session(self):
+        if self._session is None:
+            self._session = Session()
+        return self._session
 
     def std(self, val):
         return val if val.isnumeric() else self._std.std_admin(val)
@@ -138,7 +136,7 @@ class AdminFeatures(GeoNamesFeatures):
         # Do not map names that indicate uncertainty
         if "?" in str(names):
             raise ValueError("Names uncertain: {}".format(names))
-        rows = self._query(names, kind, **admin)
+        rows = self.query(names, kind, **admin)
         unresolved = self.unresolved(names, kind, rows)
         if unresolved:
             args = []
@@ -153,6 +151,12 @@ class AdminFeatures(GeoNamesFeatures):
                 admin.update(self.map_deprecated(*args))
                 return self.get_admin(**admin)
             raise ValueError("{}={} superseded by thesaurus".format(kind, unresolved))
+        # Restrict to needed fields
+        code_fld = self.kinds[kind]
+        rows = [
+            {"name": row.name, "st_name": row.st_name, code_fld: getattr(row, code_fld)}
+            for row in rows
+        ]
         resolved = combine(*[dictify(r) for r in rows])
         # Make result specific to the current division type
         resolved[kind] = resolved["name"]
@@ -197,7 +201,7 @@ class AdminFeatures(GeoNamesFeatures):
             OR (name like "East %" AND st_name = substr(name, length("East ") + 1))
             OR (name like "West %" AND st_name = substr(name, length("West ") + 1))
         """
-        session = self.session()
+        session = self.session
         for geoname_id, st_name in self.unwanted_names.items():
             for row in session.query(self.names).filter(
                 self.names.geoname_id == geoname_id, self.names.st_name == st_name
@@ -208,7 +212,7 @@ class AdminFeatures(GeoNamesFeatures):
 
     def remove_geoname_ids(self, geoname_ids):
         """Removes list of GeoNames features from the database"""
-        session = self.session()
+        session = self.session
         session.query(self.names).filter(
             self.names.geoname_id.in_(geoname_ids)
         ).delete()
@@ -233,7 +237,7 @@ class AdminFeatures(GeoNamesFeatures):
             field = getattr(AdminThesaurus, key)
             fltr.append(field.in_(names) if names else field == None)
             vals.append(names)
-        session = self.session()
+        session = self.session
         rows = session.query(AdminThesaurus).filter(*fltr).all()
         mappings = []
         for row in rows:
@@ -275,7 +279,7 @@ class AdminFeatures(GeoNamesFeatures):
         """Deletes thesaurus records that haven't been mapped"""
         update_thesaurus = self.update_thesaurus
         self.update_thesaurus = False
-        session = self.session()
+        session = self.session
         for i, row in enumerate(session.query(AdminThesaurus)):
             if not row.mapping:
                 session.delete(row)
@@ -291,10 +295,8 @@ class AdminFeatures(GeoNamesFeatures):
 
         update_thesaurus = self.update_thesaurus
         self.update_thesaurus = False
-        admin = AdminFeatures()
-        self.update_thesaurus = False
         self.map_deprecated = disable_map_deprecated
-        session = self.session()
+        session = self.session
         for i, row in enumerate(session.query(AdminThesaurus)):
             divs = [d for d in [row.country, row.state_province, row.county] if d]
             try:
@@ -314,7 +316,7 @@ class AdminFeatures(GeoNamesFeatures):
         """Verifies that mapped thesaurus records resolve to a known admin div"""
         update_thesaurus = self.update_thesaurus
         self.update_thesaurus = False
-        session = self.session()
+        session = self.session
         rows = (
             session.query(AdminThesaurus)
             .filter(AdminThesaurus.mapping != None, AdminThesaurus.id == 197)
@@ -335,7 +337,7 @@ class AdminFeatures(GeoNamesFeatures):
 
     def from_csv(self, fp):
         """Fills the database from the GeoNames text dump file"""
-        session = self.session()
+        session = self.session
         self.delete_existing_records()
         # Read data into tables
         start = dt.datetime.now()
@@ -386,7 +388,7 @@ class AdminFeatures(GeoNamesFeatures):
         return self
 
     def delete_existing_records(self):
-        session = self.session()
+        session = self.session
         session.query(self.names).delete(synchronize_session=False)
         session.commit()
 
@@ -412,18 +414,29 @@ class AdminFeatures(GeoNamesFeatures):
         ]:
             if drop:
                 try:
-                    index.drop(bind=self.base.metadata.bind)
+                    index.drop(bind=self.session.get_bind())
                     logger.debug("Dropped index '%s'" % index.name)
                 except OperationalError as e:
                     pass
             if create:
                 try:
-                    index.create(bind=self.base.metadata.bind)
+                    index.create(bind=self.session.get_bind())
                     logger.debug("Created index '%s'" % index.name)
                 except OperationalError:
                     logger.debug("Failed to create index '%s'" % index.name)
 
-    def _query(self, names, kind, is_name=True, **admin):
+    def query(self, names, kind, is_name=True, **admin):
+        kindmap = {
+            "country_code": "country",
+            "admin_code_1": "state_province",
+            "admin_code_2": "county",
+        }
+        try:
+            kind = kindmap[kind]
+        except KeyError:
+            pass
+        else:
+            is_name = False
         fcodes = {
             "country": ["PCL", "PCLD", "PCLF", "PCLH", "PCLI", "PCLIX", "PCLS", "TERR"],
             "state_province": ["ADM1"],
@@ -441,6 +454,10 @@ class AdminFeatures(GeoNamesFeatures):
         else:
             fltr.append(code_fld.in_(names))
         limit = len(names)
+        if kind == "country":
+            admin = {}
+        elif kind == "state_province":
+            admin = {k: v for k, v in admin.items() if k == "country_code"}
         for name, code in self.kinds.items():
             field = getattr(self.names, code)
             try:
@@ -450,15 +467,9 @@ class AdminFeatures(GeoNamesFeatures):
             else:
                 fltr.append(field.in_(vals))
                 limit *= len(vals)
-        session = self.session()
-        result = (
-            session.query(self.names.name, self.names.st_name, code_fld)
-            .distinct()
-            .filter(*fltr)
-            .limit(limit)
-            .all()
-        )
+        session = self.session
+        result = session.query(self.names).distinct().filter(*fltr).limit(limit).all()
         session.close()
         if is_name and not result:
-            return self._query(names, kind, is_name=False, **admin)
+            return self.query(names, kind, is_name=False, **admin)
         return result

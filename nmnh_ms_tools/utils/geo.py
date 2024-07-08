@@ -1,4 +1,5 @@
 """Defines constants and helper functions for common geographic operations"""
+
 import logging
 import math
 import re

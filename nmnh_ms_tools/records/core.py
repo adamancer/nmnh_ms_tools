@@ -1,10 +1,12 @@
 """Defines a generic record type to handle various data"""
+
 import csv
 import hashlib
 import logging
 import json
 import os
 import re
+import warnings
 
 from ..config import DATA_DIR
 from ..utils.standardizers import Standardizer
@@ -51,13 +53,16 @@ class Record:
     """Defines base methods for parsing and manipulating natural history data"""
 
     std = Standardizer()
-    terms = read_dwc_terms()
+    terms = []
 
     def __init__(self, data=None, **kwargs):
         # Generate defaults and attributes
+        if not self.terms:
+            raise ValueError("Required class attribute terms not defined")
         attrs = [a for a in self.terms if a in dir(self)]
         self.defaults = {a: getattr(self, a) for a in attrs}
         self.attributes = attrs + self.properties
+        self.valid_attrs = set(dir(self)) - set(self._class_attrs)
         # Reset values for this instance
         self.reset()
         self.verbatim = data
@@ -71,6 +76,8 @@ class Record:
         self._indexed = None
         self._state = {}
 
+        if not data:
+            data = kwargs
         if data:
             # Parse data using parse method defined in the subclass
             if isinstance(data, self.__class__):
@@ -196,8 +203,8 @@ class Record:
         append_to = {} if append_to is None else set(append_to)
         for key, val in data.items():
             # Verify that key is valid
-            if key.rstrip("+") not in self.attributes:
-                raise KeyError("Illegal key: {}".format(key))
+            if key.rstrip("+") not in self.valid_attrs:
+                warnings.warn("Unrecognized key: {}".format(key))
             if key in append_to or key.endswith("+"):
                 key = key.rstrip("+")
                 existing = getattr(self, key) if hasattr(self, key) else ""
@@ -263,7 +270,7 @@ class Record:
 
     def changed(self, name):
         """Tests if record has been modified"""
-        jsonstr = json.dumps(self.to_dict(), sort_keys=True).lower()
+        jsonstr = json.dumps(self.to_dict(), sort_keys=True, cls=_BFEncoder).lower()
         md5 = hashlib.md5(jsonstr.encode("utf-8")).hexdigest()
         if md5 != self._state.get(name):
             self._state[name] = md5
@@ -385,3 +392,12 @@ class Records(list):
         if isinstance(val, self.item_class):
             return val
         return self.item_class(val)
+
+
+class _BFEncoder(json.JSONEncoder):
+
+    def default(self, obj):
+        try:
+            return json.JSONEncoder.default(self, obj)
+        except TypeError:
+            return str(obj)

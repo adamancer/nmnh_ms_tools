@@ -1,4 +1,5 @@
 """Standardizes strings for comparison"""
+
 import logging
 import re
 
@@ -258,16 +259,16 @@ class Standardizer:
         if not isinstance(val, str) or val.isnumeric():
             raise ValueError("Could not standardize '{}'".format(val))
         orig = val
-        # Stopwords allowed if the whole string is made of them
-        pattern = r"^(?:{0})([- ](?:{0}))*$".format("|".join(self.stopwords))
-        if re.match(pattern, orig.strip(), flags=re.I):
-            return re.sub(r" +", self.delim, orig.lower().strip())
         # Make basic changes to the string
         val = val.strip()
         if params["force_lower"]:
             val = val.lower()
         if params["force_ascii"]:
             val = unidecode(val)
+        # Stopwords allowed if the whole string is made of them
+        pattern = r"^(?:{0})([- ](?:{0}))*$".format("|".join(self.stopwords))
+        if re.match(pattern, val.strip(), flags=re.I):
+            return re.sub(r" +", self.delim, val)
         # Strip paired parentheses at the ends of the strings
         if val:
             open_paren = "([{"
@@ -322,7 +323,7 @@ class Standardizer:
         result = self.delim.join(words)
         if self.validate(result):
             return result
-        raise ValueError("Could not standardize '{}'".format(orig))
+        raise ValueError(f"Could not standardize {repr(orig)} (result={repr(result)})")
 
     def _replace_endings(self, word, endings):
         for key in sorted(endings, key=len):
@@ -339,3 +340,29 @@ def std_names(names, std_func):
         except ValueError as e:
             logger.warning(str(e))
     return set(st_names)
+
+
+def std_identifier(val):
+    """Standardizes an identifier like a catalog or field number"""
+    if not val and val not in (0, False):
+        return ""
+
+    # Split into chunks of letters or numbers
+    parts = [p for p in re.split(r"([A-Za-z]+|[0-9]+)", val) if p]
+
+    # Capture trailing non-alphanumeric suffix
+    prefix = parts.pop(0) if not parts[0].isalnum() else ""
+    suffix = parts.pop(-1) if not parts[-1].isalnum() else ""
+
+    # Strip leading zeroes from parts
+    cleaned = []
+    if prefix:
+        cleaned.append(prefix)
+    for part in parts:
+        if part.isalnum():
+            part = part.lstrip("0")
+            cleaned.append(part)
+    if suffix:
+        cleaned.append(suffix)
+
+    return "|".join(cleaned).casefold()

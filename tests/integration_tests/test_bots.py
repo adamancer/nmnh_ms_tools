@@ -1,4 +1,5 @@
 """Tests GeoNamesBot class"""
+
 from collections import namedtuple
 
 import pytest

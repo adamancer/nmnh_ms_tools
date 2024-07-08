@@ -1,13 +1,16 @@
 """Defines method to parse and work with structured bibliography data"""
 
 import datetime as dt
+import html
 import logging
 import re
 from collections import namedtuple
 
 import bibtexparser
+import pandas as pd
 from bibtexparser.bparser import BibTexParser
 from bibtexparser.customization import convert_to_unicode
+from unidecode import unidecode
 
 from .bibtex import BibTeXMapper
 from .formatters import CSEFormatter
@@ -30,6 +33,7 @@ ENTITIES = {
     r"{\'{a}}": "a",
     r"$\greater$": ">",
     r"$\less$": "<",
+    r"$\prime$": "'",
 }
 
 
@@ -53,6 +57,7 @@ class Reference(Record):
         "doi",
     ]
     std = Standardizer()
+    irns = {}
 
     def __init__(self, data=None, resolve_parsed_doi=True):
         # Set lists of original class attributes and reported properties
@@ -76,8 +81,15 @@ class Reference(Record):
         self.resolve_parsed_doi = resolve_parsed_doi
         self.formatter = CSEFormatter
 
+        # Convert pandas data to dict
+        if isinstance(data, pd.Series):
+            data = {k: v if not pd.isna(v) else "" for k, v in data.to_dict().items()}
+
         if data:
-            self.parse(data)
+            try:
+                self.parse(data)
+            except Exception as exc:
+                raise ValueError(f"Could not parse reference: {data}") from exc
 
     def __str__(self):
         return self.name
@@ -137,6 +149,17 @@ class Reference(Record):
     def issue(self, val):
         self.number = val
 
+    @property
+    def title(self):
+        return self._title
+
+    @title.setter
+    def title(self, val):
+        val = html.unescape(re.sub("<.*?>", "", val.rstrip(". ")))
+        while val and val == '"' and val[-1] == '"':
+            val = val[1:-1].rstrip(". ")
+        self._title = val
+
     def parse(self, data):
         """Parses data from various sources to populate class"""
         self.reset()
@@ -145,6 +168,8 @@ class Reference(Record):
         parse_doi = self.resolve_parsed_doi and not is_doi
         if is_doi:
             self._parse_doi(data)
+        elif isinstance(data, str):
+            self._parse_string(data)
         elif "BibRecordType" in data:
             self._parse_emu(data)
         elif "ItemID" in data or "PartID" in data:
@@ -154,6 +179,12 @@ class Reference(Record):
             self._parse_geodeepdive(data)
         elif "provider" in data:
             self._parse_jstor(data)
+        elif "item_type_name" in data or "item_type" in data:
+            self._parse_sro(data)
+        elif "references-count" in data:
+            self._parse_crossref(data)
+        elif "Title" in data:
+            self._parse_google_scholar(data)
         elif "title" in data:
             self._parse_reference(data)
         elif isinstance(data, self.__class__):
@@ -193,7 +224,22 @@ class Reference(Record):
         except AssertionError:
             return False
 
-        similar_title = self.std.similar(self.title, other.title, minlen=2)
+        # Compare titles
+        titles = []
+        for val in (self.title, other.title):
+            val = "".join([w for w in re.split(r"\W+", unidecode(val).casefold())])
+            # Catch some common OCR/transcription errors
+            for find, repl in {
+                "0": "o",
+                "1": "l",
+                "5": "s",
+                "8": "b",
+                "9": "g",
+            }.items():
+                val = val.replace(find, repl)
+            titles.append(val)
+        similar_title = len(set(titles)) == 1
+
         same_year = self.year[:4] == other.year[:4]
 
         same_first_author = None
@@ -206,31 +252,78 @@ class Reference(Record):
 
         return same_first_author and same_year and similar_title
 
-    def resolve_doi(self, doi=None):
-        """Returns a bibTeX string of metadata for a given DOI.
+    def match_doi(self, threshold=80):
+        if self.doi:
+            return self.doi
+        resp = self.bot.get(
+            "https://api.crossref.org/works",
+            params={
+                "query.bibliographic": str(self),
+                "mailto": "mansura@si.edu",
+            },
+        )
+        items = resp.json()["message"]["items"]
+        for item in items:
+            if float(item["score"]) > threshold:
+                other = self.__class__(item, resolve_parsed_doi=False)
+                if self.score_similarity(other) >= 2:
+                    break
+        else:
+            item = items[0]
+        if float(item["score"] > threshold):
+            return self.__class__(item), item["score"]
+        raise ValueError(f"Could not match reference to DOI: {self}")
 
-        Source: https://gist.github.com/jrsmith3/5513926
+    def score_similarity(self, other):
+        score = {}
+        for attr in (
+            "title",
+            "authors",
+            "year",
+            "publication",
+            "volume",
+            "issue",
+            "pages",
+        ):
+            vals = []
+            for ref in (self, other):
+                val = getattr(ref, attr)
+                if isinstance(val, list):
+                    val = "|".join([s.last for s in val])
+                vals.append("".join(re.split(r"\W+", unidecode(val.casefold()))))
+            vals = [s for s in vals if s]
+            if len(vals) > 1:
+                score[attr] = 1 if len(set(vals)) == 1 else -1
+
+        logging.info(f"Ref 1: {self}")
+        logging.info(f"Ref 2: {other}")
+        logging.info(f"Score: {sum(score.values())} ({score})")
+
+        return sum(score.values())
+
+    def resolve_doi(self, doi=None):
+        """Resolves a DOI
 
         Args:
             doi (str): a valid DOI corresponding to a publication
 
         Returns:
-            BibTeX record as a string
+            Bibliographic record as a string
         """
         if doi is None:
             doi = self.doi
         if doi:
             url = "https://doi.org/{}".format(doi)
-            headers = {"Accept": "application/x-bibtex"}
+            headers = {"Accept": "application/json"}
             try:
-                response = self.bot.get(url, headers=headers)
-                if response.text.startswith("@"):
-                    return response.text
-                raise ValueError
-            except ValueError as err:
-                if "user agent" in str(err).lower():
+                verbatim = self.bot.get(url, headers=headers).json()
+                parsed = self._parse_crossref(verbatim)
+                self.verbatim = verbatim
+                return parsed
+            except ValueError as exc:
+                if "user agent" in str(exc).lower():
                     raise
-                logger.warning(f"Could not resolve {doi}")
+                logger.warning(f"Could not resolve {doi}: {exc}")
 
     def author_string(self, max_names=20, delim=", ", conj="&", **kwargs):
         """Converts list of authors objects to a string"""
@@ -260,10 +353,25 @@ class Reference(Record):
 
     def _to_emu(self):
         """Formats record for EMu ebibliography module"""
-        rec_type = self._btm.emu_record_type(self.entry_type)
-        source_type = self._btm.emu_source_type(self.entry_type)
-        prefix = self._btm.emu_record_type(self.entry_type, True)
-        parent = self._btm.emu_source_type(self.entry_type, True)
+
+        try:
+            rec_type = self._btm.emu_record_type(self.entry_type)
+            source_type = self._btm.emu_source_type(self.entry_type)
+            prefix = self._btm.emu_record_type(self.entry_type, True)
+            parent = self._btm.emu_source_type(self.entry_type, True)
+        except KeyError:
+            raise ValueError(
+                f"Could not map entry_type {repr(self.entry_type)} to EMu ({repr(self.verbatim)})"
+            )
+
+        try:
+            key = f"[{rec_type}] {self}"
+            irn = self.__class__.irns[key]
+            if irn:
+                return {"irn": int(irn)}
+        except KeyError:
+            self.__class__.irns[key] = None
+
         # Prepare list of authors
         authors = []
         for author in self.authors:
@@ -287,10 +395,18 @@ class Reference(Record):
             rec["NotNotes"] = self.verbatim
 
         if parent and self.publication:
-            rec["{}ParentRef"] = {
-                "BibRecordType": source_type,
-                "{}Title".format(parent): self.publication,
-            }
+            key = f"[{source_type}] {self.publication}"
+            try:
+                irn = self.__class__.irns[key]
+                if irn:
+                    rec["{}ParentRef"] = {"irn": irn}
+            except KeyError:
+                self.__class__.irns[key] = None
+                rec["{}ParentRef"] = {
+                    "BibRecordType": source_type,
+                    "{}Title".format(parent): self.publication,
+                }
+
         # Adjust fields based on publication type
         if prefix == "Oth":
             del rec["{}PublicationDates"]
@@ -409,29 +525,28 @@ class Reference(Record):
 
     def _parse_doi(self, doi=None):
         """Retrieves and parses data based on DOI"""
-        bibtex = self.resolve_doi(doi)
-        if bibtex:
-            self._parse_bibtex(bibtex)
+        return self.resolve_doi(doi)
 
     def _parse_emu(self, rec):
         """Parses an EMu ebibliography record"""
-        self.kind = rec("BibRecordType")
+        self.kind = rec.get("BibRecordType")
         if not self.kind:
             raise ValueError("BibRecordType required")
         # Give the specific thesis type
         if self.kind == "Thesis":
-            entry_type = self._btm.parse_thesis(rec("TheThesisType"))
+            entry_type = self._btm.parse_thesis(rec.get("TheThesisType"))
             thesis_type = self._btm.emu_thesis_type(entry_type)
             self.kind = "{} ({})".format(self.kind, thesis_type)
-        src_field = self._btm.source_field(self.entry_type)
         prefix = self._btm.emu_record_type(self.entry_type, True)
         parent = self._btm.emu_source_type(self.entry_type, True)
         # Get basic metadata
         self.authors = []
         try:
-            authors = rec("{}AuthorsRef_tab".format(prefix))
+            authors = rec.get("{}AuthorsRef_tab".format(prefix), [])
         except KeyError:
-            authors = [rec("{}AuthorsRef".format(prefix))]
+            author = rec.get("{}AuthorsRef".format(prefix))
+            if author:
+                authors.append(author)
         for author in authors:
             for key in ["NamFirst", "NamMiddle", "NamLast"]:
                 author.setdefault(key, "")
@@ -441,22 +556,22 @@ class Reference(Record):
             except ValueError as e:
                 if name:
                     logger.error(f"Could not parse '{name}'")
-        self.title = rec("{}Title".format(prefix))
+        self.title = rec.get("{}Title".format(prefix))
         # Parse publishing year from publication date
-        pub_date = rec("{}PublicationDates".format(prefix))
+        pub_date = rec.get("{}PublicationDates".format(prefix))
         if not pub_date:
-            pub_date = rec("{}PublicationDate".format(prefix))
+            pub_date = str(rec.get("{}PublicationDate".format(prefix)))
         self.year = self._parse_year(pub_date)
         # Get publication metadata
         try:
-            pub = rec("{}ParentRef".format(prefix), "{}Title".format(parent))
+            pub = rec.get("{}ParentRef.{}Title".format(prefix, parent))
             # Fall back to summary data if source not found
             if not pub:
-                summary = rec("{}ParentRef".format(prefix), "SummaryData")
+                summary = rec.get("{}ParentRef.SummaryData".format(prefix), "")
                 pub = summary.split("]", 1)[-1].strip(". ")
             self.publication = pub
-            self.volume = rec("{}Volume".format(prefix))
-            self.number = rec("{}Issue".format(prefix))
+            self.volume = rec.get("{}Volume".format(prefix))
+            self.number = rec.get("{}Issue".format(prefix))
         except KeyError:
             pass
         # Get pages. Articles in EMu may store pages in either ArtPages or
@@ -465,8 +580,8 @@ class Reference(Record):
         for mask in ("{}Pages", "{}IssuePages"):
             key = mask.format(prefix)
             try:
-                pages.append(rec(key).replace("--", "-"))
-            except KeyError:
+                pages.append(rec.get(key).replace("--", "-"))
+            except (AttributeError, KeyError):
                 pass
         pages = list(set([p for p in pages if p]))
         # Keep the range if both a range and a count found
@@ -477,7 +592,12 @@ class Reference(Record):
             pages = hyphenated
         self.pages = pages[0] if pages else ""
         # Get the DOI
-        self.doi = rec.get_guid("DOI")
+        try:
+            self.doi = rec.grid("AdmGUIDValue_tab").query(
+                "AdmGUIDValue_tab", {"AdmGUIDType_tab": "DOI"}
+            )[0]
+        except IndexError:
+            self.doi = None
         if self.doi:
             self.url = "https://doi.org/{}".format(self.doi)
 
@@ -540,6 +660,84 @@ class Reference(Record):
             # NOTE: At least some Portico arks don't resolve
             self.url = "https://n2t.net/{}".format(data["id"])
 
+    def _parse_sro(self, rec):
+        """Parses JSON record from Smithsonian Research Online"""
+        try:
+            self.kind = rec["item_type_name"]
+        except KeyError:
+            self.kind = rec["item_type"]
+        self.authors = [
+            Person(a["name"]) for a in rec.get("agents", []) if a["role"] == "author"
+        ]
+        self.title = html.unescape(
+            re.sub("<.*?>", "", rec.get("title", "").rstrip(". "))
+        )
+        self.year = rec.get("year", "")
+        for key in ["journal_title", "book_title", "series_title"]:
+            self.publication = rec.get(key, "")
+            if self.publication:
+                break
+        self.volume = rec.get("volume", "")
+        self.number = rec.get("issue", "")
+        self.pages = rec.get("pages", "").replace("--", "-")
+        self.doi = rec.get("doi", "")
+        self.publisher = rec.get("publisher", "")
+        self.publication_url = rec.get("url", "")
+
+    def _parse_string(self, rec):
+        """Parses a string contianing a DOI"""
+        candidates = re.findall(r"\b10\.[A-Za-z0-9/\.\-]+", rec)
+        if len(candidates) == 1:
+            return self._parse_doi(candidates[0].rstrip("."))
+        raise ValueError(f"Could not extract a DOI for {repr(rec)}")
+
+    def _parse_google_scholar(self, rec):
+        """Parses record from Google Scholar"""
+        self.kind = "Article"
+        self.authors = [Person(a.strip()) for a in rec.get("Authors", "").split(";")]
+        self.title = rec.get("Title", "").rstrip(". ")
+        self.year = rec.get("Year", "")
+        self.publication = rec.get("Publication", "")
+        self.volume = rec.get("Volume", "")
+        self.number = rec.get("Issue", "")
+        self.pages = rec.get("Pages", "").replace("--", "-")
+        self.publisher = rec.get("Publisher", "")
+
+    def _parse_crossref(self, rec):
+        """Parses JSON record from CrossRef API"""
+
+        def take_first_item(val):
+            return val[0] if isinstance(val, list) else val
+
+        self.kind = rec["type"]
+        self.authors = []
+        for author in rec.get("author", []):
+            try:
+                author = author["name"]
+            except KeyError:
+                try:
+                    author = f"{author['family']}, {author.get('given', '')}".rstrip(
+                        ", "
+                    )
+                except KeyError:
+                    # Empty author slot
+                    pass
+            self.authors.append(Person(author))
+        self.title = take_first_item(rec.get("title", ""))
+        self.year = rec.get("published", {}).get("date-parts", [[""]])[0][0]
+        self.publication = take_first_item(rec.get("container-title", ""))
+        self.volume = rec.get("volume", "")
+        # HACK: USGS places series info in alternative-id
+        if not self.volume and rec["prefix"] == "10.3133":
+            self.volume = take_first_item(rec.get("alternative-id", ""))
+        self.issue = rec.get("issue", "")
+        self.pages = rec.get("page", "")
+        self.doi = rec.get("DOI", "")
+        self.publisher = rec.get("publisher", "")
+        self.publication_url = (
+            rec.get("'resource", {}).get("primary", {}).get("url", "")
+        )
+
     def _parse_reference(self, data):
         """Parses a pre-formatted reference"""
         for attr, val in data.items():
@@ -553,12 +751,14 @@ class Reference(Record):
 
     def _parse_year(self, val):
         """Parses year from value"""
+        if not val:
+            return ""
         if isinstance(val, dt.date):
             return str(val.year)
         try:
             return re.search(r"\d{4}( *-+ *\d{4})?", val).group()
         except AttributeError:
-            return "????"
+            return ""
 
 
 class References(Records):

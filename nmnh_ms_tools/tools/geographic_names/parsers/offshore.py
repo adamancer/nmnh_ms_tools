@@ -1,4 +1,5 @@
 """Defines class to parse offshore localities"""
+
 import re
 
 from .core import Parser

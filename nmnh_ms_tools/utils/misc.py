@@ -1,4 +1,5 @@
 """Defines miscellaneous helper functions"""
+
 import csv
 import datetime as dt
 import json
@@ -186,8 +187,6 @@ def coerce(val, coerce_to, delim=" | "):
     """Coereces val to another data type"""
     val = nullify(val)
     if isinstance(val, type(coerce_to)) or coerce_to is None:
-        if isinstance(val, str):
-            return val.strip()
         return val
 
     simple_cast = False
@@ -253,7 +252,7 @@ def coerce(val, coerce_to, delim=" | "):
     )
 
 
-def configure_log(name=None, level="DEBUG", stream=True):
+def configure_log(name=None, level="DEBUG", stream=True, filters=None):
     """Convenience function that configures a simple log"""
     if name is None:
         name = __name__
@@ -262,8 +261,11 @@ def configure_log(name=None, level="DEBUG", stream=True):
     if stream:
         handlers.append(logging.StreamHandler())
     # Filter matplotlib font check from debug
+    if filters is None:
+        filters = [NoFontScoreFilter()]
     for handler in handlers:
-        handler.addFilter(NoFontScoreFilter())
+        for filter in filters:
+            handler.addFilter(filter)
     logging.basicConfig(
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         level=getattr(logging, level.upper()),
@@ -330,3 +332,32 @@ def clear_empty(val):
         return vals[0] if isinstance(val, str) else vals
     # Return empty of same class as original value
     return type(val)()
+
+
+def normalize_sample_id(val):
+    """Normalizes a sample identifier for comparisons"""
+    if not val and val != 0:
+        return ""
+
+    # Split into chunks of letters or numbers
+    parts = [p for p in re.split(r"([A-Za-z]+|[0-9]+)", val) if p]
+
+    # Capture trailing non-alphanumeric suffix
+    prefix = parts.pop(0) if not parts[0].isalnum() else ""
+    try:
+        suffix = parts.pop(-1) if not parts[-1].isalnum() else ""
+    except IndexError:
+        suffix = ""
+
+    # Strip leading zeroes from parts
+    cleaned = []
+    if prefix:
+        cleaned.append(prefix)
+    for part in parts:
+        if part.isalnum():
+            part = part.lstrip("0")
+            cleaned.append(part)
+    if suffix:
+        cleaned.append(suffix)
+
+    return "|".join(cleaned).casefold().rstrip("|")

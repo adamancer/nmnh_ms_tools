@@ -1,4 +1,5 @@
 """Defines methods to parse directions and bearings"""
+
 import logging
 import math
 import re

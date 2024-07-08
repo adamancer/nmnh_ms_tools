@@ -1,4 +1,5 @@
 """Tests geometry helper functions"""
+
 import pytest
 from pytest import approx
 

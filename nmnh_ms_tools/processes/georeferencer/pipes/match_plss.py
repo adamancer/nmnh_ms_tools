@@ -1,4 +1,5 @@
 """Defines class to convert PLSS strings to geometries"""
+
 from .core import MatchPipe, Georeference
 from ..evaluators.results import MatchResult
 from ....bots.plss import PLSSBot

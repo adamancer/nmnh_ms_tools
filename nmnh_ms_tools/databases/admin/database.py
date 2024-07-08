@@ -1,4 +1,5 @@
 """Defines tables in the admin division SQL file"""
+
 import logging
 import os
 
@@ -49,10 +50,10 @@ class AdminThesaurus(Base):
     )
 
 
-def init_db(fp=None, tables=None):
+def init_db(fp=None, tables=None, **kwargs):
     """Creates the database based on the given path"""
     global Base
     global Session
     if fp is None:
         fp = CONFIG["data"]["admin"]
-    init_helper(fp, base=Base, session=Session, tables=tables)
+    init_helper(fp, base=Base, session=Session, tables=tables, **kwargs)

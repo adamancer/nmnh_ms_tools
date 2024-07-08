@@ -1,4 +1,5 @@
 """Defines class for caching results from GeoNames matching"""
+
 import json
 import os
 

@@ -1,4 +1,5 @@
 """Defines methods for parsing and geolocating PLSS localities"""
+
 import logging
 
 import os

@@ -1,4 +1,5 @@
 """Defines bot to interact with the Macrostrat API"""
+
 import logging
 
 from .core import Bot, JSONResponse

@@ -1,4 +1,5 @@
 """Tests DirectionParser"""
+
 # FIXME: Test is_antarctic
 
 import pytest

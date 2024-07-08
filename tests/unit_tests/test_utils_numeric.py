@@ -1,4 +1,5 @@
 """Tests functions in AdamancerBot class"""
+
 import pytest
 
 

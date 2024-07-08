@@ -1,4 +1,5 @@
 """Defines dict linked to a SQLite file"""
+
 import logging
 import os
 from collections import OrderedDict

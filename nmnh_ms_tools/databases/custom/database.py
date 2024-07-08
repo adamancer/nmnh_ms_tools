@@ -1,4 +1,5 @@
 """Defines tables in the custom feature SQL file"""
+
 import logging
 import os
 
@@ -66,10 +67,10 @@ class AlternateNames(Base):
     ocean = Column(String(collation="nocase"))
 
 
-def init_db(fp=None, tables=None):
+def init_db(fp=None, tables=None, **kwargs):
     """Creates the database based on the given path"""
     global Base
     global Session
     if fp is None:
         fp = CONFIG["data"]["custom"]
-    init_helper(fp, base=Base, session=Session, tables=tables)
+    init_helper(fp, base=Base, session=Session, tables=tables, **kwargs)

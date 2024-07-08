@@ -1,15 +1,19 @@
 """Defines class to handle projection of lat/long data"""
-import json
+
 import logging
+import math
 import re
-from functools import cached_property
+from functools import cache, cached_property
+from math import isclose
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
+import numpy as np
 from shapely import wkb, wkt
 from shapely.affinity import scale, translate
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry import (
+    GeometryCollection,
     Point,
     Polygon,
     LineString,
@@ -19,15 +23,11 @@ from shapely.geometry import (
     box,
 )
 from shapely.ops import nearest_points, split, unary_union
+from xmu import EMuLatitude, EMuLongitude
 
 from ....databases.cache import CacheDict
-from ....utils.coords import parse_coordinate
 from ....utils.geo import (
-    crosses_180,
-    draw_circle,
     draw_polygon,
-    epsg_id,
-    fix_shape,
     get_dist_km,
     similar,
     sort_geoms,
@@ -36,6 +36,7 @@ from ....utils.geo import (
     translate_with_uncertainty,
     trim,
 )
+from ....utils import as_list, truncate
 
 
 logger = logging.getLogger(__name__)
@@ -44,73 +45,105 @@ logger = logging.getLogger(__name__)
 class GeoMetry:
     """Subclasses NaiveGeometry to handle common projection operations"""
 
-    lat_lon_mask = (
-        "+proj=longlat +lat_0={lat} +lon_0={lon} +ellps=WGS84 +datum=WGS84 +no_defs"
-    )
-    equal_area_mask = (
-        "+proj=eck4 +lon_0={lon} +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
-    )
-    polar_equal_area_mask = "proj=laea +lat_0={lat} +lon_0={lon} +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m no_defs"
+    lat_lon_mask = "+proj=longlat +lat_0={lat:.1f} +lon_0={lon:.1f} +ellps=WGS84 +datum=WGS84 +no_defs"
+    lat_lon_bounds = (-180, -90, 180, 90)
+
+    equal_area_mask = "+proj=eck4 +lat_0={lat:.1f} +lon_0={lon:.1f} +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
+    equal_area_bounds = (-16921202.92, -8460500, 16921202.92, 8460500)
 
     geom_cache = CacheDict()
     op_cache = CacheDict()
 
-    def __init__(self, geom, crs=None, radius_km=0):
-        self._crs = None
-        if crs is None:
-            try:
-                crs = geom[0].crs if isinstance(geom, (list, tuple)) else geom.crs
-            except AttributeError:
-                raise ValueError("Could not infer CRS")
+    cached = (
+        "x",
+        "y",
+        "meridians",
+        "lat",
+        "lon",
+        "coords",
+        "lat_lons",
+        "centroid",
+        "convex_hull",
+        "center",
+        "area",
+        "bounds",
+        "radius_km",
+        "height_km",
+        "width_km",
+        "as_equal_area",
+        "as_lat_lon",
+        "as_wgs84",
+        "envelope",
+        "ellipse",
+        "main",
+        "polygon",
+        "drawable",
+        "wkb",
+        "wkt",
+    )
 
-        parsed = self.parse(geom, crs=crs)
-
-        self.geom = gpd.GeoSeries(parsed)
-        self.crs = crs
-
-        self.verbatim = geom
-        self.verbatim_geom = parsed
-        self.verbatim_crs = crs
-
+    def __init__(self, geom, crs=None, radius_km=0, validate=True):
+        # Metadata
         self.name = None
         self.parents = []
 
+        self._geom = None
         self._radius_km = radius_km
         self._resized = {}
 
-        # self.geom = self.validate_shape()
+        if crs is None:
+            try:
+                crs = geom.iloc[0].crs if isinstance(geom, (list, tuple)) else geom.crs
+            except AttributeError:
+                raise ValueError("Could not infer CRS")
 
-    def validate_shape(self):
-        geom = self.geom.to_crs(self.customize_proj_string(self.equal_area_mask))
-        if not self._is_valid(geom):
-            geom = geom.buffer(0.1)
-            if not self._is_valid(geom):
-                geom = geom.convex_hull
-            if not self._is_valid(geom):
-                raise ValueError(f"Invalid geometry: {self.geom}")
-            return geom.to_crs(self.crs)
-        return self.geom
+        self.validate = validate
+
+        # Parse the provided shape data
+        self.verbatim = geom
+        parsed = self.parse(geom, crs=crs)
+
+        # Parsed geometries are always saved as GeoSeries
+        self.verbatim_geom = gpd.GeoSeries(parsed, crs=crs)
+        self.geom = gpd.GeoSeries(parsed, crs=crs)
 
     def __str__(self):
         return (
-            f"<GeoMetry geom={self.geom[0]} crs={self.crs} radius_km={self.radius_km}>"
+            f"<GeoMetry name={repr(self.name)}"
+            f" crs={repr(str(self.crs))}"
+            f" radius_km={self.radius_km:.1f}"
+            f" geom={_truncate(self.geom.iloc[0])}>"
         )
 
     def __repr__(self):
         return str(self)
 
     @property
-    def crs(self):
-        return self._crs
+    def geom(self):
+        return self._geom
 
-    @crs.setter
-    def crs(self, crs):
-        if self._crs is not None:
-            raise ValueError("Cannot change CRS once set")
-        self._crs = crs
-        self.verbatim_crs = crs
-        if crs is not None:
-            self.geom.set_crs(crs, inplace=True)
+    @geom.setter
+    def geom(self, geom):
+
+        if not isinstance(geom, gpd.GeoSeries):
+            raise TypeError(f"geom must be a GeoSeries ({repr(type(geom))} given)")
+
+        self._geom = geom
+
+        # Clear cached properties when geom changes
+        for attr in self.cached:
+            try:
+                delattr(self, attr)
+            except AttributeError:
+                pass
+
+        # Validate the geoemtry once set
+        if self.validate:
+            self.validate_shape()
+
+    @property
+    def crs(self):
+        return self.geom.crs
 
     @property
     def geom_type(self):
@@ -129,6 +162,22 @@ class GeoMetry:
         return [c[1] for c in self.coords]
 
     @cached_property
+    def meridians(self):
+        logger.debug("Calculating meridians")
+        try:
+            logger.debug("Getting meridians from x")
+            meridians = self.as_wgs84.x
+        except NotImplementedError:
+            logger.debug("Getting meridians from subgeoms")
+            meridians = []
+            for geom in self.as_wgs84.geom.iloc[0].geoms:
+                for x, _ in geom.exterior.coords:
+                    meridians.append(int(x))
+        vals, bins = np.histogram(meridians, bins=6, range=(-180, 180))
+        midpoints = [np.mean((val, bins[i])) for i, val in enumerate(bins[1:])]
+        return {int(m) for m, v in zip(midpoints, vals) if v}
+
+    @cached_property
     def lat(self):
         return self.y
 
@@ -138,13 +187,16 @@ class GeoMetry:
 
     @cached_property
     def coords(self):
-        try:
-            return list(self.geom[0].exterior.coords)
-        except AttributeError:
-            try:
-                return list(self.geom[0].coords)
-            except NotImplementedError:
-                return list(self.convex_hull.coords)
+        if self.geom_type == "Polygon":
+            logger.debug("Getting coords for Polygon")
+            return list(self.geom.iloc[0].exterior.coords)
+        elif self.geom_type == "LineString":
+            logger.debug("Getting coords for LineString")
+            return list(self.geom.iloc[0].coords)
+        elif self.geom_type == "Point":
+            return [(self.geom.iloc[0].x, self.geom.iloc[0].y)]
+        logger.debug(f"Getting coords for {self.geom_type}")
+        return list(self.convex_hull.coords)
 
     @cached_property
     def lat_lons(self):
@@ -163,40 +215,65 @@ class GeoMetry:
         return self.match(self.as_equal_area.geom.convex_hull)
 
     @cached_property
+    def representative_point(self):
+        return self.geom.to_crs(4326).representative_point()[0]
+
+    @cached_property
     def center(self):
+        logger.debug(f"Calculating the center of {_truncate(self.geom.iloc[0])}")
+        if self.geom.iloc[0].is_empty:
+            raise ValueError(
+                f"Cannot calculate center of empty shape: {self.geom.iloc[0]}"
+            )
         # Return point
         if self.geom_type == "Point":
-            return self.match(self.geom[0])
+            return self.match(self.geom.iloc[0])
         # Return centroid if polygon does not cross the dateline
         geom = self.geom.to_crs(4326)
         x1, y1, x2, y2 = geom.total_bounds
         lat = (y1 + y2) / 2
         lon = (x1 + x2) / 2
+        # Return centroid if polygon does not cross the dateline
         if abs(x1 - x2) < 180:
             proj_string = self.equal_area_mask.format(lat=lat, lon=lon)
             centroid = geom.to_crs(proj_string).centroid
             return self.match(centroid)
         # Reproject until polygon is in one piece
-        for x in range(0, 180, 15):
-            for lon in (x, -x):
-                reproj = geom.to_crs(self.lat_lon_mask.format(lat=lat, lon=lon))
-                x1, _, x2, _ = reproj.total_bounds
-                if abs(x1 - x2) < 180:
-                    proj_string = self.equal_area_mask.format(lat=lat, lon=lon)
-                    centroid = reproj.to_crs(proj_string).centroid
-                    return self.match(centroid)
-        raise ValueError("Could not compute center")
+        for lon in range(-180, 180, 15):
+            reproj = geom.to_crs(self.lat_lon_mask.format(lat=lat, lon=lon))
+            x1_, _, x2_, _ = reproj.total_bounds
+            if abs(x1_ - x2_) < 180:
+                proj_string = self.equal_area_mask.format(lat=lat, lon=lon)
+                centroid = reproj.to_crs(proj_string).centroid
+                return self.match(centroid)
+        # Assign center=0 for features that span the full range of longitude
+        # that can't otherwise be mapped to a coherent polygon
+        maxx = max((x1, x2))
+        minx = min((x1, x2))
+        if (
+            isclose(maxx, 180, abs_tol=1e-3)
+            or maxx > 180
+            and isclose(minx, -180, abs_tol=1e-3)
+            or minx < 180
+        ):
+            return self.match(Point(0, lat), other_crs=4326)
+        raise ValueError("Could not calculate center")
 
     @cached_property
     def area(self):
-        return self.as_equal_area.polygon.geom[0].area
+        logger.debug(f"Calculating the area of {_truncate(self.geom)}")
+        return self.as_equal_area.polygon.geom.iloc[0].area
 
     @cached_property
     def bounds(self):
+        logger.debug(f"Calculating the bounds of {_truncate(self.geom)}")
+        if self.geom_type == "Point":
+            return self.polygon.geom.total_bounds
         return self.geom.total_bounds
 
     @cached_property
     def radius_km(self):
+        logger.debug(f"Calculating the radius in km of {_truncate(self.geom)}")
         if self.geom_type == "Point":
             return self._radius_km
         lon1, lat1, lon2, lat2 = self.as_wgs84.bounds
@@ -204,16 +281,18 @@ class GeoMetry:
 
     @cached_property
     def height_km(self):
+        logger.debug(f"Calculating the height in km of {_truncate(self.geom)}")
         if self.geom_type == "Point":
             return self._radius_km
-        lon1, lat1, lon2, lat2 = self.as_wgs84.bounds
+        lon1, lat1, lon2, _ = self.as_wgs84.bounds
         return get_dist_km(lat1, lon1, lat1, lon2) / 2
 
     @cached_property
     def width_km(self):
+        logger.debug(f"Calculating the width in km of {_truncate(self.geom)}")
         if self.geom_type == "Point":
             return self._radius_km
-        lon1, lat1, lon2, lat2 = self.as_wgs84.bounds
+        lon1, lat1, _, lat2 = self.as_wgs84.bounds
         return get_dist_km(lat1, lon1, lat2, lon1) / 2
 
     @cached_property
@@ -232,49 +311,92 @@ class GeoMetry:
 
     @cached_property
     def envelope(self):
+        logger.debug(f"Calculating the envelope of {_truncate(self)}")
         if self.geom_type == "Point" and self.radius_km:
             geom = self.as_wgs84
             poly = draw_polygon(geom.center.y, geom.center.x, self.radius_km, 4)
             return self.match(poly, geom.crs)
         geom = self.as_lat_lon
         poly = box(*self.as_lat_lon.bounds)
-        return self.match(poly, geom.crs)
+        return self.match(poly, other_crs=geom.crs)
 
     @cached_property
     def ellipse(self):
         """Returns the ellipse around the centroid of the geometry"""
+        logger.debug(f"Calculating the ellipse of {_truncate(self)}")
         geom = self.as_lat_lon
         poly = draw_polygon(geom.center.y, geom.center.x, self.radius_km, 50)
-        return self.match(poly, geom.crs)
+        return self.match(poly, other_crs=geom.crs)
 
     @cached_property
     def main(self):
         if self.geom_type == "MultiPolygon":
-            geoms = {g.area: g for g in self.geom[0].geoms}
+            logger.debug(f"Finding the main polygon in {_truncate(self)}")
+            geoms = {g.area: g for g in self.geom.iloc[0].geoms}
             return self.match(geoms[max(geoms)])
         return self.copy()
 
     @cached_property
     def polygon(self):
         """A representation of the geometry as a polygon"""
-        return self.envelope if self.geom_type == "Point" else self
+        return self.ellipse if self.geom_type == "Point" else self
 
     @cached_property
     def drawable(self):
-        geom = self.polygon
-        if geom.crs == 4326 and geom.crosses_dateline():
-            geom = geom.split_at_dateline()
-        return geom.geom[0]
+        x1, _, x2, _ = self.bounds
+        if (
+            self.crs == 4326
+            and self.crosses_dateline()
+            and not isclose(max(x1, x2), 180)
+            and not isclose(min(x1, x2), -180)
+        ):
+            return self.split_at_dateline().geom.iloc[0]
+        return self.polygon.geom.iloc[0]
 
-    def to_crs(self, crs):
-        obj = self.copy()
-        if crs != self.crs:
-            obj.geom = obj.geom.to_crs(crs)
-            obj._crs = crs
-        return obj
+    @cached_property
+    def wkb(self):
+        return self.geom.iloc[0].wkb
+
+    @cached_property
+    def wkt(self):
+        return self.geom.iloc[0].wkt
+
+    @property
+    def is_empty(self):
+        return self.geom.iloc[0].is_empty
+
+    @property
+    def is_valid(self):
+        return self.geom.iloc[0].is_valid
+
+    def to_crs(self, crs, validate=True):
+        """Reprojects geometry to another crs"""
+        geom = self.verbatim_geom.copy(True)
+        if crs != geom.crs:
+            logger.debug(
+                f"Reprojecting from {repr(str(self.verbatim_geom.crs))}"
+                f" to {repr(str(crs))}"
+            )
+            geom = geom.to_crs(crs)
+
+        # Defer validation of the reprojected shape until the verbatim_geom from
+        # the parent can be copied over to the new object. This allows the original
+        # geometry to be used when reassessing an invalid shape.
+        geom = self.__class__(geom, validate=False)
+        geom.verbatim_geom = self.verbatim_geom.copy()
+        if validate:
+            geom.geom = geom.validate_shape()
+        geom.validate = validate
+
+        # Copy metadata
+        geom.name = self.name
+        geom.parents = self.parents.copy()
+
+        return geom
 
     def match(self, other, other_crs=None):
         """Matches another geometry to this class and CRS"""
+        logger.debug(f"Reprojecting {_truncate(other)} to match {_truncate(self.crs)}")
         if not isinstance(other, self.__class__):
             try:
                 other = self.__class__(other, crs=other_crs)
@@ -287,9 +409,13 @@ class GeoMetry:
         return other
 
     def copy(self):
-        copy = self.__class__(self.verbatim, crs=self.verbatim_crs)
-        if self.crs != self.verbatim_crs:
+        logger.debug(f"Creating a copy of {_truncate(self)}")
+        copy = self.__class__(self.verbatim_geom.copy())
+        if self.crs != self.verbatim_geom.crs:
             copy = copy.to_crs(self.crs)
+        copy.name = self.name
+        copy.parents = self.parents.copy()
+        copy.radius_km = self.radius_km
         return copy
 
     def clone(self):
@@ -297,11 +423,15 @@ class GeoMetry:
 
     def simplify(self, tolerance=0.05, num_points=25):
         if self.geom_type != "Point":
-            geom = (
-                self.geom[0]
-                if self.geom_type == "Polygon"
-                else self.convex_hull.geom[0]
+            logger.debug(
+                f"Simplifying {_truncate(self)} (tolerance={tolerance}, num_points={num_points})"
             )
+            # geom = (
+            #    self.geom.iloc[0]
+            #    if self.geom_type == "Polygon"
+            #    else self.convex_hull.geom.iloc[0]
+            # )
+            geom = self.geom.iloc[0]
             simplified = None
             coords = None
             while simplified is None or len(coords) > num_points:
@@ -310,63 +440,85 @@ class GeoMetry:
                 try:
                     coords = simplified.exterior.coords
                 except AttributeError:
-                    coords = simplified.coords
+                    try:
+                        coords = simplified.coords
+                    except NotImplementedError:
+                        break
             return self.match(geom if simplified is None else simplified)
         return self.copy()
 
     def customize_proj_string(self, proj_string):
-        center = self.center.as_wgs84
-        return proj_string.format(lat=center.y, lon=center.x)
+        point = self.representative_point
+        return proj_string.format(lat=point.y, lon=point.x)
 
     def equals_exact(self, other, tolerance=0.1):
-        other = self.match(other)
-        return self.geom[0].equals_exact(other.geom[0], tolerance=tolerance)
+        geom, other = self.reproject(other)
+        return geom.geom.iloc[0].equals_exact(other.geom.iloc[0], tolerance=tolerance)
 
     def contains(self, other):
-        other = self.as_equal_area.match(other)
-        return self.as_equal_area.polygon.geom[0].contains(other.polygon.geom[0])
+        logger.debug(f"Checking if {_truncate(self)} contains {_truncate(other)}")
+        geom, other = self.reproject(other)
+        return geom.polygon.geom.iloc[0].contains(other.polygon.geom.iloc[0])
 
     def crosses(self, other):
-        other = self.as_equal_area.match(other)
-        return self.as_equal_area.polygon.geom[0].crosses(other.polygon.geom[0])
+        logger.debug(f"Checking if {_truncate(self)} crosses {_truncate(other)}")
+        geom, other = self.reproject(other)
+        return geom.polygon.geom.iloc[0].crosses(other.polygon.geom.iloc[0])
 
     def disjoint(self, other):
-        other = self.as_equal_area.match(other)
-        return self.as_equal_area.polygon.geom[0].disjoint(other.polygon.geom[0])
+        logger.debug(
+            f"Checking if {_truncate(self)} is disjoint from {_truncate(other)}"
+        )
+        geom, other = self.reproject(other)
+        return geom.polygon.geom.iloc[0].disjoint(other.polygon.geom.iloc[0])
 
     def intersects(self, other):
-        other = self.as_equal_area.match(other)
-        return self.as_equal_area.polygon.geom[0].intersects(other.polygon.geom[0])
+        logger.debug(f"Checking if {_truncate(self)} intersects {_truncate(other)}")
+        geom, other = self.reproject(other)
+        return geom.polygon.geom.iloc[0].intersects(other.polygon.geom.iloc[0])
 
     def touches(self, other):
-        other = self.as_equal_area.match(other)
-        return self.as_equal_area.polygon.geom[0].touches(other.polygon.geom[0])
+        logger.debug(f"Checking if {_truncate(self)} touches {_truncate(other)}")
+        geom, other = self.reproject(other)
+        return geom.polygon.geom.iloc[0].touches(other.polygon.geom.iloc[0])
 
     def within(self, other):
-        other = self.as_equal_area.match(other)
-        return self.as_equal_area.polygon.geom[0].within(other.polygon.geom[0])
+        logger.debug(f"Checking if {_truncate(self)} is within {_truncate(other)}")
+        geom, other = self.reproject(other)
+        return self.as_equal_area.polygon.geom.iloc[0].within(
+            other.polygon.geom.iloc[0]
+        )
 
     def difference(self, other):
-        other = self.as_equal_area.match(other)
-        geom = self.as_equal_area.polygon.geom.difference(other.polygon.geom)
-        return self.match(geom, self.as_equal_area.crs)
+        logger.debug(
+            f"Calculating the difference between {_truncate(self)} and {_truncate(other)}"
+        )
+        geom, other = self.reproject(other)
+        crs = geom.crs
+        geom = geom.polygon.geom.iloc[0].difference(other.polygon.geom.iloc[0])
+        return self.match(geom, other_crs=crs)
 
     def intersection(self, other):
-        other = self.as_equal_area.match(other)
-        geom = self.as_equal_area.polygon.geom.intersection(other.polygon.geom)
-        return self.match(geom, self.as_equal_area.crs)
+        logger.debug(
+            f"Calculating the intersection between {_truncate(self)} and {_truncate(other)}"
+        )
+        geom, other = self.reproject(other)
+        crs = geom.crs
+        geom = geom.polygon.geom.iloc[0].intersection(other.polygon.geom.iloc[0])
+        return self.match(geom, other_crs=crs)
 
     def intersects_all(self, others, transitive=True):
         """Tests if list of shapes all intersect"""
-        others = [self.match(o) for o in others]
+        others = self.reproject(others)
+        geom = others.pop(0)
         # If transitive is False, shape must itself intersect all others
         if not transitive:
             for other in others:
-                if not self.intersects(other):
+                if not geom.intersects(other):
                     return False
             return True
         # If transitive is True, look for chains of intersection
-        intersecting = [self]
+        intersecting = [geom]
         last = None
         while intersecting != last:
             disjoint = []
@@ -382,8 +534,7 @@ class GeoMetry:
 
     def overlap(self, other, percent=False):
         """Calculates the overlap between two objects"""
-        geom = self.as_equal_area
-        other = geom.match(other)
+        geom, other = self.reproject(other)
         try:
             site, other = [s.envelope for s in [geom, other]]
             if site.disjoint(other):
@@ -404,28 +555,30 @@ class GeoMetry:
 
     def nearest_points(self, other):
         """Calculates nearest points between this and another geometry"""
-        other = self.match(other)
+        geom, other = self.reproject(other)
+        crs = geom.crs
         # Use centroids where radius is estimated
-        geom = (self.centroid if self.geom_type == "Point" else self).geom.unary_union
+        geom = (geom.centroid if geom.geom_type == "Point" else geom).geom.unary_union
         other = (
             other.centroid if other.geom_type == "Point" else other
         ).geom.unary_union
-        return [self.match(g) for g in nearest_points(geom, other)]
+        return [self.match(g, other_crs=crs) for g in nearest_points(geom, other)]
 
     def similar_to(self, other, *args, dist_km=0.1, **kwargs):
         """Tests if centroid and radius of two shapes are within 100 m"""
-        other = self.match(other)
+        geom, other = self.reproject(other)
         if args or kwargs:
-            return self._similar_to(other, *args, **kwargs)
-        if self.centroid_dist_km(other) <= dist_km:
-            return abs(self.radius_km - other.radius_km) <= dist_km
+            return geom._similar_to(other, *args, **kwargs)
+        if geom.centroid_dist_km(other) <= dist_km:
+            return abs(geom.radius_km - other.radius_km) <= dist_km
         return False
 
     def combine(self, others, allow_hull=True):
         """Combines list of shapes using their union or convex hull"""
-        others = [self.match(o) for o in others]
-        geoms = [s.geom[0] for s in [self] + others]
-        if self.intersects_all(others):
+        geoms = [s.geom.iloc[0] for s in self.reproject(others)]
+        geom = geoms[0]
+        others = geoms[1:]
+        if geom.intersects_all(others):
             return self.match(unary_union(geoms))
         if allow_hull:
             return self.match(GeometryCollection(geoms).convex_hull)
@@ -543,7 +696,7 @@ class GeoMetry:
 
     def crop(self, other, left=True, bottom=True, right=True, top=True):
         """Crops shape to bounding box for all directions given as True"""
-        other = self.match(other)
+        geom, other = self.reproject(other)
         bounds = list(self.bounds)
         for i, val in enumerate([left, bottom, right, top]):
             if val:
@@ -553,15 +706,16 @@ class GeoMetry:
 
     def centroid_dist_km(self, other, *args, **kwargs):
         """Calculates distance in km between centroids of two geometries"""
-        other = self.match(other)
-        return self.centroid.dist_km(other.centroid, *args, **kwargs)
+        geom, other = self.reproject(other)
+        return geom.centroid.min_dist_km(other.centroid, *args, **kwargs)
 
     def max_dist_km(self, other):
         """Estimates the maximum distance in km between two geometries"""
-        other = self.match(other)
+        geom = self.as_wgs84
+        other = other.as_wgs84
         # Simplify the geometries to hulls to partially mitigate the awfulness
         # of this appraoch
-        geom = self.convex_hull if self.geom_type != "Point" else self
+        geom = geom.convex_hull if geom.geom_type != "Point" else geom
         other = other.convex_hull if other.geom_type != "Point" else other
         dists_km = []
         for lon, lat in geom.coords:
@@ -571,26 +725,57 @@ class GeoMetry:
 
     def min_dist_km(self, other, threshold_km=None):
         """Calculates minimum distance in km between two geometries"""
-        other = self.match(other)
+        geom = self.as_wgs84
+        other = other.as_wgs84
         # Use centroids where radius is estimated
-        geom = self.centroid if self.geom_type == "Point" else self
+        geom = geom.centroid if geom.geom_type == "Point" else geom
         other = other.centroid if other.geom_type == "Point" else other
         if geom.intersects(other):
             return 0.0
-        pts = [p.centroid.geom[0] for p in geom.nearest_points(other)]
+        pts = [p.centroid.geom.iloc[0] for p in geom.nearest_points(other)]
         dist_km = get_dist_km(pts[0].y, pts[0].x, pts[1].y, pts[1].x)
         # If threshold specified and exceeded, check variants
-        if threshold_km is not None and dist_km > threshold_km:
-            dists_km = []
-            for geom in self.variants():
-                geom = geom.centroid if geom.geom_type == "Point" else geom
-                pts = geom.nearest_points(other)
-                vdist_km = get_dist_km(pts[0].y, pts[0].x, pts[1].y, pts[1].x)
-                if vdist_km < threshold_km:
-                    return vdist_km
-                dists_km.append(vdist_km)
-            return min(dists_km)
+        # if threshold_km is not None and dist_km > threshold_km:
+        #    dists_km = []
+        #    for geom in geom.variants():
+        #        geom = geom.centroid if geom.geom_type == "Point" else geom
+        #        pts = geom.nearest_points(other)
+        #        vdist_km = get_dist_km(pts[0].y, pts[0].x, pts[1].y, pts[1].x)
+        #        if vdist_km < threshold_km:
+        #            return vdist_km
+        #        dists_km.append(vdist_km)
+        #    return min(dists_km)
         return dist_km
+
+    def get_common_projection(self, others):
+        if not isinstance(others, (list, tuple)):
+            others = [others]
+        others = [self.__class__(o) for o in others]
+        meridians = [self.meridians] + [o.meridians for o in others]
+        for lon in meridians[0].intersection(*meridians[1:]):
+            return self.equal_area_mask.format(lat=0, lon=lon)
+        # Test meridians
+        counts = {}
+        for merids in [self.meridians] + [o.meridians for o in others]:
+            for merid in merids:
+                counts.setdefault(merid, 0)
+                counts[merid] += 1
+        hulls = [g.convex_hull for g in [self] + others]
+        for merid in [kv[0] for kv in sorted(counts.items(), key=lambda kv: -kv[1])]:
+            proj = self.equal_area_mask.format(lat=0, lon=merid)
+            for hull in hulls:
+                if "Multi" in hull.to_crs(proj).geom_type:
+                    break
+            else:
+                return proj
+        raise ValueError("No common meridian found")
+
+    def reproject(self, others, other_crs=None):
+        """Reprojects geometries to a common projection"""
+        geoms = [self] + [self.__class__(o) for o in as_list(others)]
+        if len(geoms) == 1:
+            return [self.as_equal_area]
+        return [g.to_crs(geoms[0].get_common_projection(geoms[1:])) for g in geoms]
 
     def crosses_dateline(self):
         x1, _, x2, _ = self.bounds
@@ -598,7 +783,8 @@ class GeoMetry:
 
     def split_at_dateline(self):
         if self.crosses_dateline():
-            translated = translate(self.geom[0], xoff=180)
+            logger.debug("Splitting geometry at dateline")
+            translated = translate(self.geom.iloc[0], xoff=180)
             geom = split(translated, LineString([(180, 90), (180, -90)]))
             geoms = []
             for geom in translate(geom, xoff=-180).geoms:
@@ -609,87 +795,121 @@ class GeoMetry:
             return self.match(MultiPolygon(geoms))
         return self
 
-    def draw(self, others=None, title=None, labels=None):
-        """Draws a set of geometries"""
-        geoms = [self]
-        if others:
-            if not isinstance(others, list):
-                others = [others]
-            geoms.extend([self.match(o) for o in others])
+    def validate_shape(self):
 
-        for i, geom in enumerate(geoms):
-
-            drawable = geom.drawable
+        if not self.is_valid:
+            geom = self.clip(validate=False)
+            if geom.is_valid:
+                return geom.geom
+        if not self.is_valid:
+            # Special handling for circumpolar features
+            wgs84 = self.__class__(self.verbatim_geom, validate=False).to_crs(
+                4326, validate=False
+            )
             try:
-                drawable = drawable.geoms
-            except AttributeError:
-                drawable = [drawable]
+                bounds = {round(c) for c in wgs84.bounds}
+            except OverflowError:
+                return geom.geom
+            common = {-180, -90, 90, 180} & bounds
+            if len(common) == 5:  # Change to 3 to enable, but I wouldn't
 
-            color = "gainsboro" if i else "b"
+                # Get the bounds of the shape in the current CRS
+                x1, y1, x2, y2 = self.bounds
 
-            for geom in drawable:
-                geom = self.match(geom)
-                if geom.geom_type == "Point":
-                    plt.plot(geom.centroid.x, geom.centroid.y, "o", color=color)
-                    plt.plot(geom.x, geom.y, color=color)
+                # Get the edge facing away from the pole based on
+                # WGS84 latitudes
+                lat = max((y1, y2)) if 90 in common else min((y1, y2))
+
+                # Create the edge in WGS84. Using another CRS may clip the edge.
+                edge = wgs84.edge("S" if 90 in common else "N").geom.iloc[0]
+
+                # Fill in the edge with additional points. Use the interpolated
+                # line to
+                coords = []
+                dist = 0
+                while True:
+                    coord = edge.interpolate(dist)
+                    if coords and coord == coords[-1]:
+                        break
+                    coords.append(coord)
+                    dist += 1
+                geom = self.__class__(LineString(coords), crs=4326, validate=False)
+                x1, _, x2, _ = geom.bounds
+
+                # Project the edge to the provided CRS and reorder the points
+                # so that they are continuous across the given range in x
+                reproj = geom.to_crs(self.crs)
+                coords = reproj.coords
+                for i, (x, _) in enumerate(reproj.coords):
+                    if i:
+                        diff = abs(x - reproj.coords[i - 1][0])
+                        if diff > max((x1, x2)):
+                            coords = reproj.coords[i:] + reproj.coords[:i]
+
+                # Add the pole
+                xmin, xmax = sorted((x1, x2))
+                x1 = coords[0].x if hasattr(coords[0], "x") else coords[0][0]
+                x2 = coords[-1].x if hasattr(coords[-1], "x") else coords[-1][0]
+                if x1 > x2:
+                    coords.insert(0, (xmax, lat))
+                    coords.append((xmin, lat))
                 else:
-                    plt.plot(geom.x, geom.y, color=color)
-                    # plt.fill(geom.x, geom.y)
-                    if labels:
-                        minx, miny, maxx, maxy = geom.bounds
-                        x = (maxx + minx) / 2
-                        y = (maxy + miny) / 2
-                        kwargs = {
-                            "fontsize": 8,
-                            "horizontalalignment": "center",
-                            "verticalalignment": "center",
-                        }
-                        if isinstance(labels, (list, tuple)):
-                            plt.text(x, y, labels[i], **kwargs)
-                        elif isinstance(labels, str):
-                            plt.text(x, y, getattr(geom, labels), **kwargs)
-        plt.title(title)
-        plt.show()
+                    coords.insert(0, (xmin, lat))
+                    coords.append((xmax, lat))
 
-    def buffer_km(self, dist_km):
+                logger.debug(f"Fixed invalid polar geometry")
+                return gpd.GeoSeries(Polygon(coords), crs=self.crs)
+
+        # Otherwise tweak the polygon to correct minor errors
+        geom = self.geom.iloc[0]
+        if not geom.is_valid:
+            geom = geom.buffer(0.1)
+        if not geom.is_valid:
+            geom = geom.convex_hull
+        if geom.is_valid:
+            return gpd.GeoSeries(geom, crs=self.crs)
+
+        raise ValueError(f"Invalid geometry: {self.geom}")
+
+    def plot(self, others=None, **kwargs):
+        """Draws a set of geometries"""
+        geoms = [self] + as_list(others)
+        geoms = [g.polygon if g.geom_type == "Point" else g for g in geoms]
+        geoms.sort(key=lambda g: -g.area)
+        return geoms_to_geoseries(geoms).plot(**kwargs)
+
+    def buffer(self, dist, how="km"):
         """Buffers an object by distance in km"""
-        centroid = self.centroid
-        lon = centroid.x
-        lat = centroid.y
-        # Get distances per degree
-        km_per_deg_lon = get_dist_km(lat, lon, lat, lon + 1)
-        km_per_deg_lat = get_dist_km(lat, lon, lat + 1, lon)
-        # Calculate x and y scaling factors
-        xfact = dist_km / km_per_deg_lon
-        yfact = dist_km / km_per_deg_lat
-        return self.match(self.geom.buffer(max([xfact, yfact])))
-
-    def resize(self, multiplier, min_diff_km=0):
-        """Resizes the site by multiplier or desired difference in km"""
-
-        # Update the multiplier if a minimum distance is specified
-        if min_diff_km:
-            km_multiplier = (self.radius_km + min_diff_km) / self.radius_km
-            multiplier = max([multiplier, km_multiplier])
-
-        try:
-            return self._resized[multiplier].copy()
-        except KeyError:
-            pass
-
-        geom = self.as_equal_area.convex_hull
-        resized = self.match(geom.geom.scale(multiplier, multiplier))
-        if not all(resized.geom.is_valid):
-            resized = self.match(geom.geom.scale(multiplier))
-        if all(resized.geom.is_valid):
-            self._resized[multiplier] = resized.copy()
-            return resized
-
-        # Log warning and return original geometry
-        mask = "Resize failed (multiplier={}, min_diff_km={})"
-        logger.debug(mask.format(multiplier, min_diff_km))
-        self._resized[multiplier] = self.copy()
+        logger.debug(f"Buffering shape to {repr(dist)} (how={repr(how)})")
+        if how not in ("km", "rel"):
+            raise ValueError("how must be 'km' or 'rel'")
+        if how == "rel":
+            dist = self.radius_km * (dist - 1)
+        if dist:
+            # Convert distance to meters
+            dist *= 1000
+            # Buffer and crop the geometry
+            proj_string = self.equal_area_mask.format(
+                lat=0, lon=self.representative_point.x
+            )
+            geom = self.geom.to_crs(proj_string)
+            buffered = geom.buffer(dist).clip(self.equal_area_bounds)
+            return self.__class__(buffered)
         return self.copy()
+
+    def resize(self, *args, **kwargs):
+        return self.copy()
+
+    def clip(self, other=None, validate=True):
+        if other is None:
+            crs = str(self.crs)
+            if "longlat" in crs or "4326" in crs:
+                other = self.lat_lon_bounds
+            elif "eck4" in crs:
+                other = self.equal_area_bounds
+            else:
+                raise ValueError(f"Could not guess extent: {_truncate(self.crs)}")
+        return self.__class__(self.geom.clip(other), validate=validate)
 
     def subsection(self, modifier):
         """Splits polygon along a line based on a modifier"""
@@ -788,8 +1008,8 @@ class GeoMetry:
 
         Needed when the split line cuts through a gap in a polygon.
         """
-        line = self.match(line).geom[0]
-        geoms = list(split(self.geom[0], line).geoms)
+        line = self.match(line).geom.iloc[0]
+        geoms = list(split(self.geom.iloc[0], line).geoms)
         if len(geoms) > 2:
             bounds = line.bounds
             val = bounds[0] if bounds[0] == bounds[2] else bounds[1]
@@ -809,26 +1029,44 @@ class GeoMetry:
             self.name = obj.name
 
         if isinstance(obj, GeoMetry):
-            return obj.geom.copy()
+            logger.debug("Parsed geometry from GeoMetry")
+            geom = obj.geom.copy()
+            if crs and geom.crs != crs:
+                geom = geom.to_crs(crs)
+            return geom
+
+        # Object is a GeoDataFrame
+        if isinstance(obj, gpd.GeoDataFrame):
+            logger.debug("Parsed geometry from GeoDataFrame")
+            if crs and obj.crs != crs:
+                obj = obj.to_crs(crs)
+            return obj.geometry.iloc[-1:].reset_index(drop=True)
 
         # Object is a GeoSeries
         if isinstance(obj, gpd.GeoSeries):
-            return obj[0]
+            logger.debug("Parsed geometry from GeoSeries")
+            if crs and obj.crs != crs:
+                obj = obj.to_crs(crs)
+            return obj.geometry.iloc[-1:].reset_index(drop=True)
 
         # Shape is a shapely geometry object
         if isinstance(obj, BaseGeometry):
+            logger.debug("Parsed geometry from BaseGeometry")
             return obj
 
         # Interpet bytes as WKB
         if isinstance(obj, bytes):
+            logger.debug("Parsed geometry from WKB")
             return wkb.loads(obj)
 
         # Interpet str as WKT
         if isinstance(obj, str):
+            logger.debug("Parsed geometry from WKT")
             return wkt.loads(obj)
 
         # Interpret dict as a Geonames-style bounding box
         if isinstance(obj, dict):
+            logger.debug("Parsed geometry from GeoNames bounding box")
             lats = [obj["south"], obj["north"]]
             lons = [obj["west"], obj["east"]]
             return box(lons[0], lats[0], lons[1], lats[1])
@@ -844,16 +1082,18 @@ class GeoMetry:
 
             # Extract underlying shapely shapes from a list of geometries
             if isinstance(obj[0], GeoMetry):
+                logger.debug("Parsed as a series of GeoMetry objects")
                 geoms = []
                 for geom in obj:
-                    geom = self.__class__(geom.verbatim_geom, crs=geom.verbatim_crs)
+                    geom = self.__class__(geom.verbatim_geom, crs=geom.verbatim.crs)
                     if geom.crs != crs:
                         geom = geom.to_crs(crs)
-                    geoms.append(geom.geom[0])
+                    geoms.append(geom.geom.iloc[0])
                 obj = geoms
 
             # Interpret lists of shapely objects
             if isinstance(obj[0], BaseGeometry):
+                logger.debug("Parsed as a series of BaseGeometry objects")
 
                 # Convert list mixing multiple shapely objects to GeometryCollection
                 if len({s.geom_type for s in obj}) > 1:
@@ -891,15 +1131,18 @@ class GeoMetry:
 
             # Interpet list of pairs as [(lat, lon),...]
             if list_of_lists and list_of_pairs:
+                logger.debug("Parsed as a series of lat-lons")
                 lat_lons = list(obj)
 
             # Interpret a pair of lists as [lats, lons]
             elif list_of_lists:
+                logger.debug("Parsed as latitude and longitude lists")
                 # Shape is [lats, lons]
                 lat_lons = list(zip(*obj))
 
             # Interpret a single pair as a point
             elif len(obj) == 2:
+                logger.debug("Parsed as a point")
                 lat_lons = [obj]
 
             if lat_lons:
@@ -907,8 +1150,8 @@ class GeoMetry:
                 lats = []
                 lons = []
                 for lat, lon in lat_lons:
-                    lats.append(self.parse_coordinate(lat, "latitude"))
-                    lons.append(self.parse_coordinate(lon, "longitude"))
+                    lats.append(self.parse_coordinate(lat, "lat"))
+                    lons.append(self.parse_coordinate(lon, "lon"))
 
                 # Convert coordinates to shapely geometry
                 xy = list(zip(lons, lats))
@@ -920,6 +1163,7 @@ class GeoMetry:
 
         # Check for a geometry attribute
         if hasattr(obj, "geometry"):
+            logger.debug("Parsed geometry from geometry attribute")
             return self.parse(obj.geometry)
 
         # Give up
@@ -927,9 +1171,12 @@ class GeoMetry:
         logger.error(msg)
         raise ValueError(msg)
 
-    def parse_coordinate(self, val, *args, **kwargs):
+    def parse_coordinate(self, val, kind):
         """Placeholder function used to parse coordinates"""
-        return float(val)
+        try:
+            return float(val)
+        except ValueError:
+            return float({"lat": EMuLatitude, "lon": EMuLongitude}[kind](val))
 
     def _similar_to(self, other, min_overlap=0.9, min_area_ratio=0.5):
         """Tests if two geometries have similar positions and sizes"""
@@ -953,10 +1200,30 @@ class GeoMetry:
         return obj.is_valid
 
 
-def geom_to_geoseries(geoms):
-    """Converts list of geoms to a GeoSeries with a coherenent equal-area CRS"""
-    series = gpd.GeoSeries([g.geom[0] for g in geoms], crs=geoms[0].crs)
-    ctr = geoms[0].__class__(box(*series.total_bounds), crs=series.crs).center
-    return series.to_crs(
-        geoms[0].__class__.equal_area_mask.format(lat=ctr.y, lon=ctr.x)
+def geoms_to_geoseries(geoms):
+    """Converts list of geoms to a GeoSeries with a coherent equal-area CRS"""
+    geoms = reproject(geoms)
+    return gpd.GeoSeries([g.geom.iloc[0] for g in geoms], crs=geoms[0].crs)
+
+
+def geoms_to_geodataframe(geoms, **kwargs):
+    geoms = reproject(geoms)
+    kwargs["geometry"] = gpd.GeoSeries(
+        [g.geom.iloc[0] for g in geoms], crs=geoms[0].crs
     )
+    gdf = gpd.GeoDataFrame(kwargs)
+    gdf["area"] = gdf["geometry"].area
+    return gdf.sort_values("area", ascending=False)
+
+
+def reproject(geoms):
+    return geoms[0].reproject(geoms[1:])
+
+
+def _truncate(val):
+    """Truncates string for log"""
+    if isinstance(val, gpd.GeoDataFrame):
+        val = val.iloc[0]
+    if isinstance(val, gpd.GeoSeries):
+        val = val.iloc[0]
+    return repr(truncate(str(val), 128))

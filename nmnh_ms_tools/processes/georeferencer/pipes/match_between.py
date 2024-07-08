@@ -1,4 +1,5 @@
 """Defines class to convert between strings to geometries"""
+
 import itertools
 
 from .core import MatchPipe, Georeference
@@ -65,6 +66,20 @@ class MatchBetween(MatchPipe):
                     sources=sources,
                 )
                 sites.append(site)
+
+        # Prefer sites compare similar features
+        same_class = []
+        same_code = []
+        for site in sites:
+            if len({s.site_kind for s in site.related_sites}) == 1:
+                same_code.append(site)
+            elif len({s.site_class for s in site.related_sites}) == 1:
+                same_class.append(site)
+        if same_code:
+            sites = same_code
+        elif same_class:
+            sites = same_class
+
         return Georeference(sites)
 
     def georeference_feature(self, feature):

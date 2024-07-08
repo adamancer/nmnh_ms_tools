@@ -1,4 +1,5 @@
 """Stores information about a set of georeferences"""
+
 import logging
 import os
 
@@ -55,10 +56,10 @@ class Localities(Base):
     has_poly = Column(Integer)
 
 
-def init_db(fp=None, tables=None):
+def init_db(fp=None, tables=None, **kwargs):
     """Creates the database based on the given path"""
     global Base
     global Session
     if fp is None:
         fp = CONFIG["data"]["georef_job"]
-    init_helper(fp, base=Base, session=Session, tables=tables)
+    init_helper(fp, base=Base, session=Session, tables=tables, **kwargs)

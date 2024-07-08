@@ -1,4 +1,5 @@
 """Defines bot to interact with the GeoGallery portal"""
+
 import logging
 import re
 

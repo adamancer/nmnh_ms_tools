@@ -1,4 +1,5 @@
 """Tests geographic name parsers"""
+
 import pytest
 
 from nmnh_ms_tools.databases.geonames import (

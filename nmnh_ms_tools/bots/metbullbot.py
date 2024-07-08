@@ -1,4 +1,5 @@
 """Defines bot to interact with the MetBull website"""
+
 from datetime import datetime
 import hashlib
 import logging

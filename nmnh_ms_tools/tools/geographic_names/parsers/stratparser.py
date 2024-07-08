@@ -1,4 +1,5 @@
 """Defines class to parse stratigraphic unit names"""
+
 import re
 
 from .core import Parser

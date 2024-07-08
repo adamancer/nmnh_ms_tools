@@ -1,0 +1,12 @@
+bots:
+  email:
+  cache_name: bot
+  geonames_username:
+  geonames_use_local: True
+data:
+  admin: data/databases/admin.sqlite
+  custom: data/databases/custom.sqlite
+  geonames: data/databases/geonames.sqlite
+  geohelper: data/databases/geohelper.sqlite
+  georef_job: job.sqlite
+  thesaurus: data/databases/thesaurus.yml

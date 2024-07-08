@@ -1,12 +1,11 @@
 """Defines classes to build and index a hierarchy of geological taxa"""
+
 import json
 import logging
 import pprint as pp
 import os
-import re
 from collections.abc import MutableMapping, MutableSequence
 
-import yaml
 from unidecode import unidecode
 
 from .taxalist import TaxaList
@@ -144,10 +143,18 @@ class TaxaTree(TaxaIndex):
 
     def find(self, term, index="name_index"):
         """Finds all matches for a search term"""
-        try:
-            return [super().__getitem__(term)]
-        except KeyError:
-            return [self[irn] for irn in self.get_index(index)[term]]
+        terms = [term]
+        if isinstance(term, str) and term.count(",") == 1:
+            terms.append(" ".join([s.strip() for s in term.split(",")][::-1]))
+        for term in terms:
+            try:
+                return [super().__getitem__(term)]
+            except KeyError:
+                try:
+                    return [self[irn] for irn in self.get_index(index)[term]]
+                except KeyError:
+                    pass
+        raise KeyError(f"Term not found: '{terms[0]}'")
 
     def find_one(self, term, index="name_index"):
         """Finds the best match on a search term"""

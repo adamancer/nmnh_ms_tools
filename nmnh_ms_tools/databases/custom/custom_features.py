@@ -16,14 +16,19 @@ class CustomFeatures(GeoNamesFeatures):
     """Fills and searches a SQLite db based on the user-provided gazetteers"""
 
     def __init__(self):
-        super(CustomFeatures, self).__init__()
+        super().__init__()
         self.features = AllCustom
         self.names = AlternateNames
         self.base = Base
-        self.session = Session
         self.keys = None  # overrides attribute in base class
         self.csv_kwargs = {"dialect": "excel"}
         self.delim = "|"
+
+    @property
+    def session(self):
+        if self._session is None:
+            self._session = Session()
+        return self._session
 
     def mapper(self, rowdict, reverse=False):
         """Maps dict to format used by GeoNames"""
@@ -53,7 +58,7 @@ class CustomFeatures(GeoNamesFeatures):
             rowdict["synonyms"] = as_str(synonyms)
             return rowdict
         site = Site(rowdict)
-        site.map_admin_from_names()
+        site.map_admin()
         sitedict = site.to_dict()
         row = {}
         for src_key, gn_key in keymap.items():

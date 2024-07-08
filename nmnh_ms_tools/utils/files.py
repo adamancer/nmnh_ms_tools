@@ -1,15 +1,137 @@
 """Contains methods to hash a file or image data from a file"""
+
 from __future__ import unicode_literals
 
-import csv
 import hashlib
 import json
+import logging
 import os
 import shutil
 import subprocess
+from collections import namedtuple
+from pathlib import Path
 
 import yaml
 from PIL import Image
+
+
+logger = logging.getLogger(__name__)
+
+HashedFile = namedtuple("HashedFile", ("path", "hash"))
+
+
+class HashCheck:
+
+    def __init__(self):
+        self.filename = "hashes.json"
+        self._indexes = {}
+        self._filepaths = {}
+        self._filenames = {}
+        self._hashes = {}
+
+    def __getitem__(self, key):
+        # Key is a file path
+        try:
+            path = Path(key).resolve()
+            return [HashedFile(path, self._filepaths[path])]
+        except KeyError:
+            pass
+
+        # Key is a hash
+        try:
+            return [HashedFile(p, key) for p in self._hashes[key]]
+        except KeyError:
+            pass
+
+        # Key is a file name
+        try:
+            return [HashedFile(p, self._filepaths[p]) for p in self._filenames[key]]
+        except KeyError:
+            pass
+
+        raise KeyError(f"Could not resolve key: {key}")
+
+    def __iter__(self):
+        return iter(self._filepaths)
+
+    def hashes(self):
+        return self._hashes
+
+    @property
+    def index(self):
+        index = {}
+        for path, idx in self._indexes.items():
+            index.update({path.parent / k: v for k, v in idx.items()})
+        return index
+
+    def hash_file(self, path, overwrite=True):
+        path = Path(path).resolve()
+        idx_path, index = self.load_index(path)
+        try:
+            if overwrite:
+                raise KeyError
+            index[path.name]
+        except KeyError:
+            logger.info(f"Hashing {path}")
+            index[path.name] = hash_file(path)
+            with open(idx_path, "w") as f:
+                json.dump(index, f, indent=2, sort_keys=True)
+            self._update_lookups()
+        return HashedFile(path, index[path.name])
+
+    def get_hashes(self, path, pattern="*.*", overwrite=False):
+        path = Path(path).resolve()
+        if path.is_file():
+            self.hash_file(path, overwrite=overwrite)
+        else:
+            for path in path.glob(f"**/{pattern}"):
+                if path.is_file() and path.name != self.filename:
+                    self.hash_file(path, overwrite=overwrite)
+        self._update_lookups()
+        return self
+
+    def get_duplicates(self):
+        return {k: v for k, v in self._hashes.items() if len(v) > 1}
+
+    def load_index(self, path):
+        parent = Path(path).resolve()
+        if parent.is_file():
+            parent = parent.parent
+
+        idx_path = parent / self.filename
+        try:
+            index = self._indexes[idx_path]
+        except KeyError:
+            try:
+                with open(idx_path) as f:
+                    index = json.load(f)
+            except FileNotFoundError:
+                index = {}
+            else:
+                # Remove files that do not exist
+                names = set(index) & set([p.name for p in parent.iterdir()])
+                index = {k: v for k, v in index.items() if k in names}
+
+                # Sort and update index file
+                sorted_index = dict(sorted(index.items(), key=lambda kv: kv[0]))
+                if list(index) != list(sorted_index):
+                    with open(idx_path, "w") as f:
+                        json.dump(sorted_index, f)
+            finally:
+                self._indexes[idx_path] = index
+
+        return (idx_path, index)
+
+    def _update_lookups(self):
+        self._filepaths = {}
+        self._filenames = {}
+        self._hashes = {}
+        for idx_path, index in self._indexes.items():
+            for fn, hash_ in index.items():
+                path = Path(idx_path.parent) / fn
+                self._filepaths[path] = hash_
+                self._filenames.setdefault(path.name, []).append(path)
+                self._hashes.setdefault(hash_, []).append(path)
 
 
 def hasher(filestream, size=8192):
@@ -88,6 +210,26 @@ def hash_image_data(path, output_dir="images"):
         hexhash = hashlib.md5(Image.open(dst).tobytes()).hexdigest()
         os.remove(dst)
         return hexhash
+
+
+def fnv1a_64(data):
+    """Alternative FNV hash algorithm used in FNV-1a
+
+    Adapted from https://github.com/znerol/py-fnvhash
+    """
+    hval_init = 0xCBF29CE484222325
+    fnv_prime = 0x100000001B3
+    fnv_size = 2**64
+
+    hval = hval_init
+    for byte in data:
+        hval = hval ^ byte
+        hval = (hval * fnv_prime) % fnv_size
+    return hex(hval)
+
+
+def fast_hash(data):
+    return fnv1a_64(data)
 
 
 def is_newer(path, other, other_must_exist=False):

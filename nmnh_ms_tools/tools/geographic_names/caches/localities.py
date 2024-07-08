@@ -1,4 +1,5 @@
 """Defines class for caching parsed locality strings"""
+
 import json
 import os
 

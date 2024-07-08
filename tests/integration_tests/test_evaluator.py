@@ -1,4 +1,5 @@
 """Tests evaluator"""
+
 from random import randint
 
 import pytest

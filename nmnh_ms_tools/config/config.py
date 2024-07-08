@@ -1,4 +1,5 @@
 """Reads the global configuration file"""
+
 import logging
 import csv
 import os
@@ -224,11 +225,27 @@ class GeoConfig:
 
     def __init__(self, config):
         self.config = config
-        self.codes = None  # maps feature codes to data about them
-        self.classes = None  # maps feature classes to feature codes
-        self.fields = None  # maps DwC-ish fields to feature codes
+        self._codes = None  # maps feature codes to data about them
+        self._classes = None  # maps feature classes to feature codes
+        self._fields = None  # maps DwC-ish fields to feature codes
 
-        self.read_feature_definitions()
+    @property
+    def codes(self):
+        if self._codes is None:
+            self.read_feature_definitions()
+        return self._codes
+
+    @property
+    def classes(self):
+        if self._classes is None:
+            self.read_feature_definitions()
+        return self._classes
+
+    @property
+    def fields(self):
+        if self._fields is None:
+            self.read_feature_definitions()
+        return self._fields
 
     def read_feature_definitions(self, fp=None):
         """Reads GeoNames feature definitions from CSV"""
@@ -277,9 +294,9 @@ class GeoConfig:
                 "codes"
             ] = field_codes
 
-        self.codes = codes
-        self.classes = classes
-        self.fields = fields
+        self._codes = codes
+        self._classes = classes
+        self._fields = fields
 
     def min_size(self, mixed):
         """Returns the smallest radius for a set of feature codes"""

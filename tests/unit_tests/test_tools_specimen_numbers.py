@@ -1,15 +1,16 @@
 import pytest
 
 from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
+from nmnh_ms_tools.tools.specimen_numbers.utils import is_spec_num
 
 
 @pytest.mark.parametrize(
     "test_input,expected",
     [
         ("Holotype, US NMNH 4 5 2 6 6 5 , from locality 4", ["NMNH 452665"]),
-        ("USNM 12345 4", ["USNM 12345"]),
+        ("USNM 12345 4", ["USNM 12345"]),  # could also be 12345-4 or 123454
         ("NMNH 560-042", ["NMNH 560042"]),
-        ("USNM El 1732", ["USNM E 11732"]),
+        ("USNM El 1732", ["USNM E11732"]),
         ("...internal standard (USNM 113498/1 VG-A99 [12]) were...", ["USNM 113498-1"]),
         (
             "NMNH 113652-53, 113655-60",
@@ -25,7 +26,13 @@ from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
             ],
         ),
         ("USNM Type No. 10660", ["USNM type no. 10660"]),
-        ("USNM 629a and 629b; 40-44", ["USNM 629A", "USNM 629B"]),
+        (
+            "USNM 629a and 629b; 40-44",
+            [
+                "USNM 629A",
+                "USNM 629B",
+            ],
+        ),
         (
             "USNM 201 100, 201 lOla-c",
             ["USNM 201100", "USNM 201101A", "USNM 201101B", "USNM 201101C"],
@@ -47,15 +54,15 @@ from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
         (
             "NMNH G4998-5003",
             [
-                "NMNH G 4998",
-                "NMNH G 4999",
-                "NMNH G 5000",
-                "NMNH G 5001",
-                "NMNH G 5002",
-                "NMNH G 5003",
+                "NMNH G4998",
+                "NMNH G4999",
+                "NMNH G5000",
+                "NMNH G5001",
+                "NMNH G5002",
+                "NMNH G5003",
             ],
         ),
-        ("USNM # R12596", ["USNM R 12596"]),
+        ("USNM # R12596", ["USNM R12596"]),
         (
             "USNM 234567-234571",
             ["USNM 234567", "USNM 234568", "USNM 234569", "USNM 234570", "USNM 234571"],
@@ -64,7 +71,7 @@ from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
         ("USNM No. 234567", ["USNM 234567"]),
         ("USNM#123456", ["USNM 123456"]),
         ("USNM #12345", ["USNM 12345"]),
-        ("USNM G3551-00", ["USNM G 3551-00"]),
+        ("USNM G3551-00", ["USNM G3551-00"]),
         ("NMNH 246892-3", ["NMNH 246892", "NMNH 246893"]),
         ("USNM 39958O", ["USNM 399580"]),
         ("USNM 16215 16216 16217", ["USNM 16215", "USNM 16216", "USNM 16217"]),
@@ -72,7 +79,7 @@ from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
             "USNM 12345 and RMA 12881",
             ["USNM 12345"],
         ),  # USNM RMA 12881 is not really a catalog number but matches the pattern
-        ("USNM 117801 and G4800", ["USNM 117801", "USNM G 4800"]),
+        ("USNM 117801 and G4800", ["USNM 117801", "USNM G4800"]),
         ("USNM 83943b", ["USNM 83943B"]),
         (
             "NMNH 123456-59",
@@ -203,13 +210,13 @@ from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
         (
             "USNM B240-B243 and B245-B247",
             [
-                "USNM B 240",
-                "USNM B 241",
-                "USNM B 242",
-                "USNM B 243",
-                "USNM B 245",
-                "USNM B 246",
-                "USNM B 247",
+                "USNM B240",
+                "USNM B241",
+                "USNM B242",
+                "USNM B243",
+                "USNM B245",
+                "USNM B246",
+                "USNM B247",
             ],
         ),
         (
@@ -355,7 +362,7 @@ from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
         ),
         (
             "USNM P4833, P4861, P4862 and P4863",
-            ["USNM P 4833", "USNM P 4861", "USNM P 4862", "USNM P 4863"],
+            ["USNM P4833", "USNM P4861", "USNM P4862", "USNM P4863"],
         ),
         ("AMNH 1021, 3519, 3520", ["AMNH 1021", "AMNH 3519", "AMNH 3520"]),
         ("NMNH 18279, Fig. lb", ["NMNH 18279"]),
@@ -363,7 +370,7 @@ from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
         ("USNM 14344.  lb", ["USNM 14344"]),
         (
             "USNM P4430a-d",
-            ["USNM P 4430A", "USNM P 4430B", "USNM P 4430C", "USNM P 4430D"],
+            ["USNM P4430A", "USNM P4430B", "USNM P4430C", "USNM P4430D"],
         ),
         (
             "...legans), USNM 40886  (syntypes of Protaster miamiensis), USNM 87166 (syntypes of T.  meafordensis), USNM 92604, USNM 92607, USNM 92617, USNM  92627, USNM 92639, USNM 161520, NYSM 7784 (holotype of T.  schohariae), MCZ 470 (holotype of Protaster? gramdiferus; ex MCZ 21),  CSC 1404 (h...",
@@ -399,7 +406,7 @@ from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
         ("and USNM #113498, a Smithsonian natural basaltic glass", ["USNM 113498"]),
         (
             "standards are a gem-quality meionite from Brazil, U.S.N.M. # R6600-1",
-            ["USNM R 6600", "USNM R 6601"],
+            ["USNM R6600", "USNM R6601"],
         ),  # accetpable but incorrect
         (
             "451 Appendix Table 7. (Continued) USNM No, 496302 03 04 05 06 07 08 09 10 498278 79 498413 Date Collected Age Sex Remarks",
@@ -544,7 +551,7 @@ from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
         ),
         (
             "...vindo NP), and Amnirana amnicola (310 km SE; nearest voucher is MCZ A-139750, Ivindo NP). Laurent (1951) reported Hyperolius steind...",
-            ["MCZ A 139750"],
+            ["MCZ A139750"],
         ),
         (
             "...9-72; Sri Lanka: nr. Negombo Point, Pitipana Fisheries Station, USNM 192727; Puttalam, AMNH 94493; Jaffna Lagoon, FMNH 121498-499; A...",
@@ -624,9 +631,24 @@ from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
         ),
         (
             "NMNH G9875, 148089, and 148090",
-            ["NMNH G 9875", "NMNH 148089", "NMNH 148090"],
+            ["NMNH G9875", "NMNH 148089", "NMNH 148090"],
         ),
-        ("NMNH C6648 and G9977", ["NMNH C 6648", "NMNH G 9977"]),
+        ("NMNH C6648 and G9977", ["NMNH C6648", "NMNH G9977"]),
+        (
+            "NMNH 12345/1-10",
+            [
+                "NMNH 12345-1",
+                "NMNH 12345-2",
+                "NMNH 12345-3",
+                "NMNH 12345-4",
+                "NMNH 12345-5",
+                "NMNH 12345-6",
+                "NMNH 12345-7",
+                "NMNH 12345-8",
+                "NMNH 12345-9",
+                "NMNH 12345-10",
+            ],
+        ),
         # No results expected
         ("NMNH 1234567890", []),
         ("Dyak coll. 190010408-9 (USNM)", []),
@@ -639,7 +661,7 @@ from nmnh_ms_tools.tools.specimen_numbers.parser import Parser
     ],
 )
 def test_parse_numbers(test_input, expected):
-    assert set(Parser().parse(test_input)) == set(expected)
+    assert {str(s) for s in Parser(from_ocr=True).parse(test_input)} == set(expected)
 
 
 @pytest.mark.parametrize(
@@ -664,5 +686,29 @@ def test_parse_numbers(test_input, expected):
     ],
 )
 def test_parse_ranged(test_input, expected_ranged, expected_unranged):
-    assert set(Parser(True).parse(test_input)) == set(expected_ranged)
-    assert set(Parser(False).parse(test_input)) == set(expected_unranged)
+    assert {str(s) for s in Parser(True).parse(test_input)} == set(expected_ranged)
+    assert {str(s) for s in Parser(False).parse(test_input)} == set(expected_unranged)
+
+
+@pytest.mark.parametrize(
+    "test_input,expected",
+    [
+        ("123456-1", True),
+        ("123456,1", True),
+        ("123456 1", True),
+        ("123456.0001", True),
+        ("A123456", True),
+        ("A 123456", True),
+        ("A2-00", True),
+        ("A2-01", True),
+        ("123456A", True),
+        ("123456 A", True),
+        ("123456/1", True),
+        ("123456 1-10", False),
+        ("123456/1-10", False),
+        ("123456/A-B", False),
+        ("123456 123457", False),
+    ],
+)
+def test_is_spec_num(test_input, expected):
+    assert is_spec_num(test_input) == expected

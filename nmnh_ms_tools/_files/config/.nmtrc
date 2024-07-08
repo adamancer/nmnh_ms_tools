@@ -1,5 +1,6 @@
 bots:
   user_agent: null
+  cache_name: null
   elsevier_api_key: null
   geonames_username: null
   geonames_use_local: False
@@ -7,8 +8,9 @@ data:
   admin: ~/data/nmnh_ms_tools/geo/admin.sqlite
   custom: ~/data/nmnh_ms_tools/geo/custom.sqlite
   geonames: ~/data/nmnh_ms_tools/geo/geonames.sqlite
-  georef_data: ~/data/nmnh_ms_tools/geo/georef_data.sqlite
+  geohelper: ~/data/nmnh_ms_tools/geo/geohelper.sqlite
   georef_job: job.sqlite
+  gvp: ~/data/nmnh_ms_tools/geo/GVP_Volcano_List*.xlsx
   natural_earth: ~/data/nmnh_ms_tools/geo/natural_earth.sqlite
   thesaurus: ~/data/nmnh_ms_tools/geo/thesaurus.yml
   taxa_tree: ~/data/nmnh_ms_tools/taxa/geotree.json

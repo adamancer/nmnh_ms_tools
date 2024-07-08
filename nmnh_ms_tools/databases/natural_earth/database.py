@@ -1,4 +1,5 @@
 """Defines tables in the Natural Earth SQL file"""
+
 import logging
 
 import os
@@ -31,20 +32,36 @@ class Lakes(DeferredReflection, Base):
     __tablename__ = "ne_10m_lakes"
 
 
-class LakesNorthAmerica(DeferredReflection, Base):
-    __tablename__ = "ne_10m_lakes_north_america"
+class LakesAustralia(DeferredReflection, Base):
+    __tablename__ = "ne_10m_lakes_australia"
 
 
 class LakesEurope(DeferredReflection, Base):
     __tablename__ = "ne_10m_lakes_europe"
 
 
+class LakesNorthAmerica(DeferredReflection, Base):
+    __tablename__ = "ne_10m_lakes_north_america"
+
+
 class ParksAndProtectedLands(DeferredReflection, Base):
     __tablename__ = "ne_10m_parks_and_protected_lands_area"
 
 
+class PopulatedPlaces(DeferredReflection, Base):
+    __tablename__ = "ne_10m_populated_places"
+
+
+class Playas(DeferredReflection, Base):
+    __tablename__ = "ne_10m_playas"
+
+
 class Reefs(DeferredReflection, Base):
     __tablename__ = "ne_10m_reefs"
+
+
+class RiversAustralia(DeferredReflection, Base):
+    __tablename__ = "ne_10m_rivers_australia"
 
 
 class RiversEurope(DeferredReflection, Base):
@@ -71,10 +88,10 @@ class StatesProvinces(DeferredReflection, Base):
     __tablename__ = "ne_10m_admin_1_states_provinces"
 
 
-def init_db(fp=None, tables=None):
+def init_db(fp=None, tables=None, **kwargs):
     """Creates the database based on the given path"""
     global Base
     global Session
     if fp is None:
         fp = CONFIG["data"]["natural_earth"]
-    init_helper(fp, base=Base, session=Session, deferred=True, tables=tables)
+    init_helper(fp, base=Base, session=Session, deferred=True, tables=tables, **kwargs)

@@ -1,4 +1,5 @@
 """Defines tables in the GeoNames SQL file"""
+
 import logging
 import os
 
@@ -23,8 +24,8 @@ class Cache(Base):
     val = Column(String)
 
 
-def init_db(fp, tables=None):
+def init_db(fp, tables=None, **kwargs):
     """Creates the database based on the given path"""
     global Base
     global Session
-    init_helper(fp, base=Base, session=Session, tables=tables)
+    init_helper(fp, base=Base, session=Session, tables=tables, **kwargs)

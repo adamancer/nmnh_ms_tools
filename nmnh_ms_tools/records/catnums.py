@@ -1,18 +1,20 @@
 """Defines tools to parse and display NMNH catalog numbers"""
+
 import functools
 import logging
-import pprint as pp
+import pprint
 import re
 
 from .core import Record, Records
-from ..tools.specimen_numbers.parser import Parser, SpecNum
+from ..tools.specimen_numbers.parsers import Parser
+from ..tools.specimen_numbers.specnum import SpecNum, parse_spec_num
 from ..utils import PrefixedNum, to_attribute
 
 
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_PARSER = Parser(expand_short_ranges=False, from_ocr=False)
+DEFAULT_PARSER = Parser(clean=True, require_code=False)
 
 
 class CatNum(Record):
@@ -195,6 +197,8 @@ class CatNum(Record):
                 self.suffix += trailing_primes.group()
         elif data and isinstance(data, self.__class__):
             self._parse_self(data)
+        elif isinstance(data, SpecNum):
+            self._parse_spec_num(data)
         elif "basisOfRecord" in data or "basis_of_record" in data:
             self._parse_dwc(data)
         elif "CatNumber" in data or "MetMeteoriteName" in data:
@@ -207,8 +211,6 @@ class CatNum(Record):
             self.delim = data.pop("delim", "-")
             self.department = data.pop("department", None)
             self.division = data.pop("division", None)
-        elif isinstance(data, SpecNum):
-            self._parse_spec_num(data)
         elif data:
             raise ValueError("Cannot parse: {}".format(data))
         # Set code and delim for meteorites
@@ -285,21 +287,25 @@ class CatNum(Record):
             if attr in ["number", "suffix"] or re.match(r"^\d+$", val):
                 keyed.append(val.zfill(length))
             else:
-                keyed.append(val.ljust(length, "_"))
-        key = "_".join(keyed)
+                keyed.append(val.ljust(length, "-"))
+        key = "-".join(keyed)
         return key
 
     def _to_emu(self):
         """Formats list for EMu"""
         if self.is_antarctic():
             return {"MetMeteoriteName": str(self)}
-        return {
+        rec = {
             "CatMuseumAcronym": self.code,
             "CatPrefix": self.prefix,
             "CatNumber": self.number,
             "CatSuffix": self.suffix,
             "CatDivision": self.division,
         }
+        for key in ["CatMuseumAcronym", "CatDivision"]:
+            if not rec[key]:
+                del rec[key]
+        return rec
 
     def to_filename(self, sortable=False, lower=False, **kwargs):
         """Converts the catalog number to a filename"""
@@ -331,6 +337,7 @@ class CatNum(Record):
         val = (
             mask.format(**vals)
             .replace(self.delim + " ", " ")
+            .replace(self.delim + "(", " (")
             .replace("()", "")
             .strip(" -,")
         )
@@ -356,16 +363,30 @@ class CatNum(Record):
             self.department = data.get("CatDepartment")
             self.division = data.get("CatDivision")
             self.delim = "-"
+            # Normalize the suffix
+            if self.suffix is not None:
+                self.suffix = self.suffix.upper()
             # Get detailed specimen info from EMu data
             self._collections = data.get("CatCollectionName_tab", [])
             try:
                 self._collections = [c["CatCollectionName"] for c in self._collections]
             except TypeError:
                 pass
-            try:
-                self._primary = data["IdeTaxonRef_tab"][0]["ClaScientificName"]
-            except (KeyError, TypeError, IndexError):
-                self._primary = data.get("MetMeteoriteType")
+            for key in (
+                "DarScientificName",
+                "MetMeteoriteName",
+            ):
+
+                val = data.get(key)
+                if val:
+                    self._primary = val
+                    break
+            else:
+                try:
+                    self._primary = data["IdeTaxonRef_tab"][0]["ClaScientificName"]
+                except (IndexError, KeyError, TypeError):
+                    # FIXME: Handle IRNs
+                    pass
 
     def _parse_self(self, data):
         """Parses and copies data from another CatNum object"""
@@ -392,6 +413,9 @@ class CatNum(Record):
         """Parses catalog number from string"""
         self.verbatim = data
 
+        # Collapse multiple spaces
+        data = re.sub(" +", " ", data)
+
         # Pull out ugly Antarctic meteorite comma numbers ("1 2", "3-SI") that
         # are not handled by the parser
         suffix = None
@@ -402,9 +426,20 @@ class CatNum(Record):
                 pass
 
         try:
-            self._parse_spec_num(self.parser.parse_quick(data))
-        except (AttributeError, ValueError):
+            spec_nums = self.parser.extract(data)
+            if len(spec_nums) != 1:
+                raise ValueError
+        except (AttributeError, IndexError, ValueError):
             raise ValueError("Could not parse {}".format(data))
+        else:
+            self._parse_spec_num(
+                parse_spec_num(spec_nums[self.parser.prepare(data)][0])
+            )
+
+        # Is the suffix a division label?
+        if re.match(r"\([A-Z]{3}(:[A-Z]{3})?\)", self.suffix):
+            self.division = self.suffix.strip("()")
+            self.suffix = ""
 
         # Reintegrate the ugly suffix if found
         if suffix is not None:
@@ -474,7 +509,7 @@ class CatNums(Records):
         return ", ".join(vals)
 
     def __repr__(self):
-        return pp.pformat([repr(c) for c in self])
+        return pprint.pformat([repr(c) for c in self])
 
     def for_filename(self, clustered=True, sortable=True, lower=False, n_max=None):
         """Formats list for use as a filename"""
@@ -543,12 +578,12 @@ class CatNums(Records):
 def parse_catnum(val, **kwargs):
     """Parses catalog numbers from a string, returning one if appropriate"""
     parsed = parse_catnums(val, **kwargs)
-    if not any(parsed) and len(parsed) == 1:
+    if len(parsed) == 1 and parsed[0].number:
         return parsed[0]
-    raise ValueError(f"Could not parse a single catalong number: {val}")
+    raise ValueError(f"Could not parse a single catalog number: {val}")
 
 
-def parse_catnums(val, parser=None):
+def parse_catnums(val, parser=None, require_code=True):
     """Parses catalog numbers from a string"""
     if not val:
         return CatNums()
@@ -557,17 +592,17 @@ def parse_catnums(val, parser=None):
     if parser is None:
         parser = DEFAULT_PARSER
     try:
-        return CatNums([CatNum(parser.parse_quick(val))])
-    except (AttributeError, TypeError):
-        try:
-            return CatNums([CatNum(c) for c in parser.parse(val)])
-        except Exception as exc:
-            logger.error("Undefined exception: parse_catnums", exc_info=exc)
-            return CatNums()
+        return CatNums([CatNum(c) for c in parser.parse(val)])
+    except Exception as exc:
+        logger.error("Undefined exception: parse_catnums", exc_info=exc)
+        return CatNums()
 
 
 @functools.lru_cache()
 def is_antarctic(val):
     """Tests if catalog number is a NASA meteorite number"""
-    pattern = r"^[A-Z]{3}[A ]\d{5,6}(,\d+(-SI?| \d+)?)?$"
-    return bool(re.search(pattern, val)) if val else False
+    return (
+        val
+        and bool(re.search(r"^[A-Z]{3}[A ]\d{5,6}(?:,[-A-Z\d]+)?$", val))
+        and not val.upper().startswith(("AND", "NWA"))
+    )

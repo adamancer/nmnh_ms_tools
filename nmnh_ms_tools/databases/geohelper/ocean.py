@@ -1,4 +1,5 @@
 """Builds and queries tiles representing the global ocean"""
+
 import re
 from collections import namedtuple
 
@@ -8,7 +9,7 @@ from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
 from .database import Session, OceanTiles
-from ..natural_earth import Ocean
+from ..natural_earth import Session as NaturalEarthSession, Ocean
 from ...tools.geographic_operations.geometry import GeoMetry
 
 
@@ -20,10 +21,10 @@ class OceanQuery:
 
     _tree = None
 
-    def __init__(self):
+    def __init__(self, interval=15):
         self.oceans = {}
         if self._tree is None:
-            self.__class__._tree = self.build_tree()
+            self.__class__._tree = self.build_tree(interval=interval)
 
     @staticmethod
     def std_ocean(name):
@@ -54,17 +55,16 @@ class OceanQuery:
         """Calculates the union of the tiles returned by query"""
         return unary_union(self.query(geom))
 
-    def build_tree(self):
+    def build_tree(self, interval=15):
         """Retrieves and indexes ocean tiles"""
         session = Session()
         query = session.query(OceanTiles)
         if not any(query):
-            self.generate_tiles()
+            self.generate_tiles(interval=interval)
             session.query(OceanTiles)
         tiles = []
         for row in query:
             geom = wkb.loads(row.geometry)
-            geom.name = row.id
             tiles.append(geom)
             if row.ocean:
                 self.oceans[row.id] = row.ocean
@@ -75,28 +75,25 @@ class OceanQuery:
     def generate_tiles(interval=15):
         """Calculates a set of tiles spaced by a given interval"""
         session = Session()
-        shape = wkb.loads(session.query(Ocean).first().GEOMETRY)
+        shape = wkb.loads(NaturalEarthSession().query(Ocean).first().GEOMETRY)
         for x1 in range(-180, 180, interval):
             x2 = x1 + interval
             for y1 in range(-90, 90, interval):
                 y2 = y1 + interval
                 polygon = Polygon([(x1, y1), (x1, y2), (x2, y2), (x2, y1)])
-                print([(x1, y1), (x1, y2), (x2, y2), (x2, y1)])
                 geom = polygon.intersection(shape)
                 try:
                     for geom in geom.geoms:
-                        # geom = geom.simplify(0.1)
                         tile = OceanTiles(geometry=wkb.dumps(geom), coast=True)
                         session.add(tile)
                 except AttributeError:
-                    # geom = geom.simplify(0.1)
                     tile = OceanTiles(geometry=wkb.dumps(geom), coast=True)
                     session.add(tile)
         session.commit()
         session.close()
 
     @staticmethod
-    def map_tiles():
+    def map_ocean():
         """Allows user to map tiles to an ocean"""
         session = Session()
         rows = session.query(OceanTiles).order_by(OceanTiles.id)
@@ -114,9 +111,7 @@ class OceanQuery:
                 else:
                     start = 0 if i < 100 else i - 100
                     end = i + 100
-                    print("lats:", miny, maxy)
-                    print("lngs:", minx, maxx)
-                    GeoMetry(tiles[i]).draw(tiles[start:end])
+                    GeoMetry(tiles[i], crs="epsg:4326").draw(tiles[start:end])
                     ocean = input("ocean (last={}): ".format(last))
                     if not ocean:
                         ocean = last
@@ -137,3 +132,11 @@ class OceanQuery:
                 oceans = [re.sub(pattern, mask.format(name), o) for o in oceans]
                 session.merge(OceanTiles(id=row.id, ocean=" | ".join(oceans)))
             session.commit()
+
+
+def fill_ocean_tiles_table(interval=15):
+    session = Session()
+    session.query(OceanTiles).delete(synchronize_session=False)
+    session.commit()
+    session.close()
+    OceanQuery(interval=interval)

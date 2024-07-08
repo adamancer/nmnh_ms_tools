@@ -1,4 +1,5 @@
 """Defines class to parse roads and junctions"""
+
 import re
 
 from .core import Parser

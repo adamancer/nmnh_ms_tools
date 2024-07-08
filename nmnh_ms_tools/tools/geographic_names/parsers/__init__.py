@@ -1,4 +1,5 @@
 """Defines parsers for common locality strings"""
+
 from .between import BetweenParser
 from .border import BorderParser
 from .direction import DirectionParser

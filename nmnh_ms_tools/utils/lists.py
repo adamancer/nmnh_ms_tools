@@ -1,12 +1,15 @@
 """Defines helper functions for working with lists"""
-import six
+
 from collections import Counter
 from collections.abc import Iterable, KeysView, ValuesView
+
+import pandas as pd
+import six
 
 
 def as_list(val, delims="|;"):
     """Returns a value as a list"""
-    if isinstance(val, (bool, float, int)):
+    if isinstance(val, (bool, float, int, pd.DataFrame, pd.Series)):
         return [val]
     if not val:
         return []
@@ -29,6 +32,10 @@ def as_list(val, delims="|;"):
 def as_set(val, delims="|;"):
     """Returns a value as a set"""
     return val if isinstance(val, set) else set(as_list(val, delims))
+
+
+def as_tuple(val, delims="|;"):
+    return tuple(as_list(val, delims=delims))
 
 
 def dedupe(lst, lower=True):

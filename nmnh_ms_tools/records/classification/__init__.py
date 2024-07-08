@@ -1,4 +1,7 @@
 """Constructs a hierarchy of rock and mineral names"""
+
+from functools import cache
+
 from .taxon import Taxon
 from .taxalist import TaxaList
 from .taxanamer import TaxaNamer
@@ -7,6 +10,7 @@ from ...config import CONFIG
 from ...utils import is_different
 
 
+@cache
 def get_tree(src=None):
 
     import json
@@ -40,7 +44,7 @@ def get_tree(src=None):
         errors = []
 
         reader = EMuReader(src, json_path=os.path.splitext(src)[0] + ".json")
-        for i, rec in enumerate(reader):
+        for rec in reader:
             reader.report_progress()
             try:
                 rec = Taxon(EMuRecord(rec, module=reader.module))

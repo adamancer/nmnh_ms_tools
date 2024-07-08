@@ -1,4 +1,5 @@
 """Extracts features from strings"""
+
 import logging
 
 logger = logging.getLogger(__name__)

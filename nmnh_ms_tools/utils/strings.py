@@ -1,4 +1,5 @@
 """Defines helper functions for working with strings"""
+
 import functools
 import re
 
@@ -61,8 +62,10 @@ def ucfirst(val, lower=False):
     for i, char in enumerate(val):
         if char.isalpha():
             return "".join(chars) + char.upper() + "".join(val[i + 1 :])
-        chars.append(char)
-    return val
+        if not char.isnumeric():
+            chars.append(char)
+        else:
+            return val
 
 
 def lcfirst(val):
@@ -114,6 +117,10 @@ def add_article(val):
     return "a {}".format(val)
 
 
+def collapse_whitespace(val):
+    return re.sub(r" +", " ", val).strip()
+
+
 @functools.lru_cache()
 def to_attribute(val):
     """Constructs a python_attribute string from the given value"""
@@ -130,13 +137,13 @@ def to_attribute(val):
 @functools.lru_cache()
 def to_camel(val):
     """Constructs a camelCase string from the given value"""
-    capped = "".join([capitalize(w) for w in to_attribute(val).split("_")])
+    capped = "".join([ucfirst(w) for w in to_attribute(val).split("_")])
     return lcfirst(capped)
 
 
 @functools.lru_cache()
 def to_pascal(val):
-    """Constructs a PacalCasee string from the given value"""
+    """Constructs a PascalCase string from the given value"""
     return ucfirst(to_camel(val))
 
 

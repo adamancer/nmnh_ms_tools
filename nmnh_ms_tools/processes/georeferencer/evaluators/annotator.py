@@ -1,4 +1,5 @@
 """Defines class to describe how a georeference was determined"""
+
 import logging
 import os
 import re

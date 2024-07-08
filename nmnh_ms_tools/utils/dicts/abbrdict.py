@@ -1,4 +1,5 @@
 """Defines dict where key lookups check for possible abbreviations"""
+
 from unidecode import unidecode
 
 from .basedict import BaseDict

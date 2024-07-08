@@ -1,4 +1,5 @@
 """Identifies simple feature names mushed together in one string"""
+
 import logging
 import re
 

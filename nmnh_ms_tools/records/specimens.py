@@ -1,13 +1,14 @@
 """Defines class and methods to parse and manipulate specimen data"""
+
 import re
 
-from .core import Record
+from .core import Record, read_dwc_terms
 from .catnums import CatNum, parse_catnum, parse_catnums, is_antarctic
 from .references import Reference
 from .sites import Site
 from .stratigraphy import LithoStrat
 from ..tools.geographic_names.parsers.helpers import parse_localities
-from ..tools.specimen_numbers.link import (
+from ..tools.specimen_numbers_old.link import (
     MatchMaker,
     MatchObject,
     validate_dept,
@@ -15,8 +16,8 @@ from ..tools.specimen_numbers.link import (
     STOPWORDS,
     REPLACEMENTS,
 )
-from ..tools.specimen_numbers.parser import Parser
-from ..tools.specimen_numbers.utils import is_geoscience
+from ..tools.specimen_numbers_old.parser import Parser
+from ..tools.specimen_numbers_old.utils import is_geoscience
 from ..utils import as_list, dedupe, to_attribute, to_camel, to_pattern
 from ..utils.standardizers import Standardizer
 
@@ -28,6 +29,7 @@ class Specimen(Record):
     _site_attrs = Site({}).attributes
     _strat_attrs = LithoStrat({}).attributes
     _to_attr = {}
+    terms = read_dwc_terms()
 
     def __init__(self, *args, **kwargs):
         # Set lists of original class attributes and reported properties

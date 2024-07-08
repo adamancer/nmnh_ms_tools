@@ -1,11 +1,12 @@
 """Downloads data files not included in the GitHib repo
 
 Files downloaded to _files/data/downloads include:
-+ georef_data.sqlite (used for georeferencing)
++ geohelper.sqlite (used for georeferencing)
 + geotree.json (used for classifying geological specimens)
 + nmnh_taxonomy.json (used to assign topics to snippets)
 
 """
+
 import hashlib
 import os
 import tempfile

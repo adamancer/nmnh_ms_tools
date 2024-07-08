@@ -1,4 +1,5 @@
 """Defines a namedtuple-style dict"""
+
 from .attrdict import AttrDict
 
 

@@ -1,4 +1,5 @@
 """Defines bot to interact with the GNRD taxonomic name resolver"""
+
 import logging
 
 from .core import Bot, JSONResponse

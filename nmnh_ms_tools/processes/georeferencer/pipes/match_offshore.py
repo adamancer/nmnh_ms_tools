@@ -1,4 +1,5 @@
 """Defines class to convert offshore strings to geometries"""
+
 import itertools
 
 from .core import MatchPipe, Georeference

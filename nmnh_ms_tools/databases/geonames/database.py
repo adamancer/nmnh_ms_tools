@@ -1,4 +1,5 @@
 """Stores feature data and lookups for GeoNames"""
+
 import logging
 import os
 
@@ -10,6 +11,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.schema import Index
 
 from ...config import CONFIG
 from ..helpers import init_helper
@@ -61,10 +63,10 @@ class AlternateNames(Base):
     ocean = Column(String(collation="nocase"))
 
 
-def init_db(fp=None, tables=None):
+def init_db(fp=None, tables=None, **kwargs):
     """Creates the database based on the given path"""
     global Base
     global Session
     if fp is None:
         fp = CONFIG["data"]["geonames"]
-    init_helper(fp, base=Base, session=Session, tables=tables)
+    init_helper(fp, base=Base, session=Session, tables=tables, **kwargs)

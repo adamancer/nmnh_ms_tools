@@ -1,4 +1,5 @@
 """Defines helper methods for working with the job database"""
+
 import logging
 import numpy as np
 

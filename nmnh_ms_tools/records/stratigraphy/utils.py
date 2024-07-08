@@ -1,4 +1,5 @@
 """Defines constants and functions used in the stratigraphy submodule"""
+
 import copy
 import itertools
 import re

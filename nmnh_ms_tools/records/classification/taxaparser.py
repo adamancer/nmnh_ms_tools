@@ -1,4 +1,5 @@
 """Defines a class for parsing and guessing parent of a rock or mineral name"""
+
 import os
 import pprint as pp
 import re

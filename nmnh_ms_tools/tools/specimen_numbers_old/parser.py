@@ -1,33 +1,29 @@
 """Defines methods to work with USNM catalog numbers and specimen data"""
+
 import functools
-import json
 import logging
 import math
 import os
 import re
-import time
 from collections import namedtuple
 
-import requests
 import yaml
-from unidecode import unidecode
 
 from .cluster import Cluster
+from .utils import SpecNum, combine_vals, is_spec_num, parse_spec_num
 from ...config import CONFIG_DIR
 
 
 logger = logging.getLogger(__name__)
 logger.debug("Loading parser.py")
 
-
 IndexedSnippet = namedtuple("IndexedSnippet", ["text", "start", "end"])
-SpecNum = namedtuple("SpecNum", ["code", "prefix", "number", "suffix"])
 
 
 class Parser:
     """Parses and interprets USNM catalog numbers in text"""
 
-    def __init__(self, expand_short_ranges=True, from_ocr=True):
+    def __init__(self, expand_short_ranges=True, from_ocr=False, require_code=True):
         fp = os.path.join(CONFIG_DIR, "config_specimen_numbers.yml")
         with open(fp, "r") as f:
             self.regex = yaml.safe_load(f)
@@ -39,55 +35,68 @@ class Parser:
             r"(([A-z])" + self.regex["join_range"].format(**self.regex) + r"([A-z]))"
         )
         self.range = re.compile(self.regex["range_mask"].format(**self.regex))
+        self.prefixed_num = re.compile(self.regex["prefixed_num"].format(**self.regex))
         self.code = ""
         self.codes = [s.strip() for s in self.regex["code"].strip("()").split("|")]
         self.metadata = []
         self.expand_short_ranges = expand_short_ranges
         self.from_ocr = from_ocr
-        self._cluster = Cluster()
+        self.require_code = require_code
+        self._cluster = Cluster(from_ocr=self.from_ocr)
 
-    def cluster(self, val):
-        """Clusters lists of numbers and expands alpha suffixes"""
-        if self.from_ocr:
-            return self._cluster.cluster(self.fix_ocr_errors(val))
-        return val
+    @functools.lru_cache()
+    def parse(self, val, **kwargs):
+        """Parses catalog numbers from a string"""
+        orig = val
+        val = self.prep_text(val)
+        # Use snippets to get a list of candidates
+        snippets = self.snippets(val)
+        if not snippets:
+            logger.debug(f"No snippets found: {repr(val)}")
+            return []
+        logger.debug(f"Found snippets: {snippets}")
+        val = "|".join(snippets)
+        # Try to split the value on strings that look like museum codes,
+        # defined here as capitalized alpha strings of 3 or more letters.
+        words = [w for w in re.split(r"([A-Z]{3,} ?)", val) if w and w not in "()"]
+        code = ""
+        held = []
+        for i, word in enumerate(words):
+            if word.strip() in self.codes:
+                code = word.strip()
+                held.append([word])
+                logger.debug('Found museum code "{}"'.format(word.strip()))
+            elif word.strip().isalpha() and i and words[i - 1].strip() != code:
+                code = ""
+            elif code and word.strip():
+                held[-1].append(word)
+        vals = []
+        for val in held:
+            if len(val) > 1:
+                val = "".join(val).strip("|;, ")
+                try:
+                    parsed = self._parse(val)
+                except Exception as e:
+                    logger.warning(f"Parse failed: {str(e)}")
+                    logger.debug("Parse traceback", exc_info=e)
+                else:
+                    vals.extend(parsed)
+                    logger.debug('Parsed "{}" as {}'.format(val, parsed))
+            else:
+                logger.warning("Museum code only: %s", orig)
+        return sorted((parse_spec_num(v) for v in vals))
 
-    def findall(self, text):
+    def findall(self, text, **kwargs):
         """Finds all likely catalog numbers within the given string"""
         # logger.debug('Search "%s"', text)
+        text = self.prep_text(text, **kwargs)
         matches = []
         for match in {m[0] for m in self.mask.findall(text)}:
             if re.search(r"\d", match):
-                matches.append(match)
+                matches.append(match.replace("ZZZZ ", "").strip())
         matches.sort()
         logger.debug('Found catalog numbers: %s"', matches)
         return sorted(matches, key=len)
-
-    def clean_text(self, text, split_codes=True):
-        """Removes periods and spaces from museum codes in text"""
-
-        def clean_codes(match):
-            if match.group().count(".") == 1 and match.group().endswith("."):
-                return text
-            return re.sub(r"[^A-z]", "", match.group()).upper()
-
-        codes = [r"\.? *".join(c) for c in self.codes]
-        pattern = r"\b({})(\.|\b)".format("|".join(codes))
-        text = re.sub(pattern, clean_codes, text, flags=re.I)
-
-        # Split text on codes. Useful for matching but disrupts the string.
-        if split_codes:
-            pattern = r"({})".format("|".join(self.codes))
-            parts = re.split(pattern, text)
-            combined = []
-            for i, part in enumerate(parts[1:]):
-                if parts[i] in self.codes:
-                    coded = f"{parts[i]}{part}".strip(";. ")
-                    coded = re.sub(r"(?<=\d)([\. ]+)(?=[A-Z]$)", "-", coded)
-                    combined.append(coded)
-            return "; ".join(combined)
-
-        return text
 
     def snippets(
         self, text, mask=None, num_chars=32, highlight=True, clean=False, pages=None
@@ -98,12 +107,13 @@ class Parser:
         elif isinstance(mask, str):
             mask = re.compile(mask)
 
-        orig = text
         if clean:
-            text = self.clean_text(text, split_codes=False)
+            text = self.prep_text(text, split_codes=False)
 
+        logger.debug(f"Looking for snippets in {repr(text)}")
         snippets = {}
         for match in mask.finditer(text):
+
             val = match.group()
             start = match.start()
 
@@ -153,159 +163,109 @@ class Parser:
 
         return snippets
 
-    @functools.lru_cache()
-    def parse(self, val, expand_short_ranges=None):
-        """Parses catalog numbers from a string"""
-        if expand_short_ranges is not None:
-            esr = self.expand_short_ranges
-            self.expand_short_ranges = expand_short_ranges
-        orig = val
-        # Remove thousands separators`
-        val = re.sub(r"(\d),(\d\d\d)\b", r"\1\2", val)
-        # Move trailing codes to beginning of string
+    def prep_text(self, text, split_codes=True):
+        """Removes periods and spaces from museum codes in text"""
+
+        def clean_codes(match):
+            if match.group().count(".") == 1 and match.group().endswith("."):
+                return text
+            return re.sub(r"[^A-z]", "", match.group()).upper()
+
+        orig = text
+
+        # Move trailing codes to front of string
         for code in self.codes:
-            if val.endswith("({})".format(code)):
-                val = code + " " + val[: -(len(code) + 2)].strip()
+            if text.endswith("({})".format(code)):
+                text = code + " " + text[: -(len(code) + 2)].strip()
                 logger.debug('Moved "%s" to front of string', code)
-            val = val.replace(code, code + " ").replace("  ", " ")
-        # Use snippets to get a list of candidates
-        val = "|".join(self.snippets(val))
-        # Try to split the value on strings that look like museum codes,
-        # defined here as capitalized alpha strings of 3 or more letters.
-        words = [w for w in re.split(r"([A-Z]{3,} ?)", val) if w and w not in "()"]
-        code = ""
-        held = []
-        for i, word in enumerate(words):
-            if word.strip() in self.codes:
-                code = word.strip()
-                held.append([word])
-                logger.debug('Found museum code "{}"'.format(word.strip()))
-            elif word.strip().isalpha() and i and words[i - 1].strip() != code:
-                code = ""
-            elif code and word.strip():
-                held[-1].append(word)
-        vals = []
-        for val in held:
-            if len(val) > 1:
-                val = "".join(val).strip("|;, ")
-                try:
-                    parsed = self._parse(val)
-                except Exception as e:
-                    logger.warning(f"Parse failed: {str(e)}")
-                    logger.debug("Parse traceback", exc_info=e)
-                else:
-                    vals.extend(parsed)
-                    logger.debug('Parsed "{}" as {}'.format(val, parsed))
-            else:
-                logger.warning("Museum code only: %s", orig)
-        if expand_short_ranges is not None:
-            self.expand_short_ranges = esr
-        return sorted(vals)
+            text = text.replace(code, code + " ").replace("  ", " ")
 
-    def _parse(self, val):
-        """Parses catalog numbers from a string"""
-        logger.debug('Parsing "{}"...'.format(val))
-        # Clean up the string a little to simplify parsing
-        val = val.replace("--", "-").replace("^", "").strip("()[],;&? ")
-        val = re.sub(r"\band\b", "&", val)
-        val = val.strip("()[],;&? ")
-        # Remove the museum code, wherever it may be
-        try:
-            self.code = re.findall(self.regex["code"], val)[0].strip()
-        except IndexError:
-            pass
-        # Clean up special numbers so they're easier to recognize
-        pattern = r"(?<=[A-Z] )(loc(\.|ality)?|slide|type)(?= \d)"
-        val = re.sub(pattern, r"\1 no.", val)
-        # Check for high-quality numbers and bail
-        if self.simple.search(val):
-            return [val]
-        self.metadata = []
-        nums = []
-        for match in [m[0] for m in self.mask.findall(val)]:
-            # The museum code interferes with parsing, so strip it here
-            match = self.remove_museum_code(match)
-            nums.extend(self.parse_mixed(match))
-            nums.extend(self.parse_discrete(match))
-            nums.extend(self.parse_ranges(match))
-        if not nums and self.is_range(val):
-            logger.debug("Parsed as simple range: %s", val)
-            nums = self.fill_range(val)
-        if not nums:
-            logger.debug("Parsed as catalog number: %s", val)
-            val = self.remove_museum_code(val)
-            clustered = [n.strip() for n in self.cluster(val).split(";")]
-            nums = [self.parse_num(n) for n in clustered if n]
-        # Are the lengths in the results reasonable?
-        if len(nums) > 1:
-            minlen = min([len(str(n.number)) for n in nums])
-            if minlen < 4:
-                maxlen = max([len(str(n.number)) for n in nums])
-                nums = [n for n in nums if n.number > 10 ** (maxlen - 2)]
+        # Remove stray commas from within numbers in OCR'd text
+        if self.from_ocr:
+            text = re.sub(r"(\d+),(\d+)", r"\1\2", text)
 
-        nums = [self.stringify(n) for n in nums]
-        nums = [n for i, n in enumerate(nums) if n not in nums[:i]]
-
-        # Catch special numbers that look like catalog numbers
-        pat = r"\b(loc(\.|ality)?|slide|type) *(?:#|no\.?|num(ber))"
-        try:
-            kind = re.search(pat, val, flags=re.I).group(1).lower().strip(".")
-        except AttributeError:
-            pass
+        # Remove thousands separators in all text
         else:
-            kind = {"loc": "locality"}.get(kind, kind)
-            nums = [n.replace(" ", f" {kind} no. ", 1) for n in nums]
+            text = re.sub(r"(\d),(\d\d\d)\b", r"\1\2", text)
 
-        return nums
-
-    @staticmethod
-    def stringify(spec_num):
-        delim_prefix = " "
-        delim_suffix = "-"
-        if not spec_num.prefix:
-            delim_prefix = ""
-        elif len(spec_num.prefix) > 1:
-            delim_prefix = " "
-        if (spec_num.suffix.isalpha() and len(spec_num.suffix) == 1) or re.match(
-            r"[A-Za-z]-\d+", spec_num.suffix
+        # Add a placeholder code if no codes and require_code is false
+        if not self.require_code and not re.search(
+            r"\b(" + "|".join(self.codes) + r")\b", text
         ):
-            delim_suffix = ""
-        return (
-            "{} {}{}{}{}{}".format(
-                spec_num.code,
-                spec_num.prefix,
-                delim_prefix,
-                spec_num.number,
-                delim_suffix,
-                spec_num.suffix,
-            )
-            .rstrip(delim_suffix)
-            .strip()
-        )
+            text = self.prefixed_num.sub(r"ZZZZ \1", text, count=1)
+
+        # Clean museum codes
+        codes = [r"\.? *".join(c) for c in self.codes]
+        pattern = r"\b({})(\.|\b)".format("|".join(codes))
+        text = re.sub(pattern, clean_codes, text, flags=re.I)
+
+        # Split text on codes. Useful for matching but disrupts the string.
+        if split_codes:
+            pattern = r"({})".format("|".join(self.codes))
+            parts = re.split(pattern, text)
+            combined = []
+            for i, part in enumerate(parts[1:]):
+                if parts[i] in self.codes:
+                    coded = f"{parts[i]}{part}".strip(";. ")
+                    coded = re.sub(r"(?<=\d)([\. ]+)(?=[A-Z]$)", "-", coded)
+                    combined.append(coded)
+            text = "; ".join(combined)
+
+        # Replace keywords with symbols
+        text = re.sub(r"(\d) (?:through|thru) ([A-Z]?\d)", r"\1-\2", text)
+        text = re.sub(" +# +", " no. ", text)
+
+        # Split on hard delimiters and toss anything weak without a code
+        parts = re.split(r"[;|]", text)
+        matches = []
+        last_code = None
+        for part in parts:
+            clustered = self.cluster(self.remove_museum_code(part))
+            try:
+                code = re.search(self.regex["code"], part).group()
+                last_code = code
+            except AttributeError:
+                code = None
+            for subpart in clustered.split("; "):
+                if last_code:
+                    subpart = f"{last_code} {subpart}"
+                try:
+                    spec_num = parse_spec_num(subpart)
+                except ValueError:
+                    pass
+                else:
+                    if code or spec_num.number >= 1000:
+                        matches.append(subpart)
+        text = "; ".join(matches)
+
+        logger.debug(f"Prepped {repr(orig)} as {repr(text)}")
+        return text
+
+    def cluster(self, val):
+        """Clusters lists of numbers and expands alpha suffixes"""
+        return self._cluster.cluster(self.fix_ocr_errors(val))
 
     def parse_discrete(self, val):
         """Returns a list of discrete specimen numbers"""
         logger.debug('Looking for discrete numbers in "{}"...'.format(val))
-        orig = val
 
-        # val = re.sub(self.regex['filler'], '', val, flags=re.I)
         pattern = self.regex["filler"] + r"(?=[A-Z]{,3}\d{3,})"
         val = re.sub(pattern, "", val, flags=re.I)
-        # prefix = re.match(r'\b(' + self.regex['prefix'] + r')(?![a-zA-z])', val)
-        # prefix = prefix.group() if prefix is not None else ''
+
         discrete = self.discrete.search(val)
         if discrete is None:
             val = self.cluster(val)
             discrete = self.discrete.search(val)
+
         nums = []
         if discrete is not None:
             val = discrete.group().strip()
             val = self.cluster(val)
             if self.is_range(val):
                 nums.extend(self.get_range(val))
-            elif self.is_catnum(val):
-                # Check if value is actually a single catalog number
-                nums.append(self.parse_num(val.replace(" ", "")))
+            elif is_spec_num(val):
+                # Retain value if a single catalog number
+                nums.append(self.parse_num(val))
             else:
                 # Chunk the original string into individual catalog numbers.
                 # Two primary ways of doing this have been considered:
@@ -316,23 +276,27 @@ class Parser:
                 #
                 # Test if split on common delimiters yields usable numbers.
                 # This helps prevent catalog numbers from grabbing an alpha
-                # prefix from the succeeding catalog number.
+                # prefix from the preceding catalog number.
                 spec_nums = [s.strip() for s in re.split(r"(?:,|;| and | & )", val)]
                 for spec_num in spec_nums:
-                    if not self.is_catnum(spec_num):
+                    if not is_spec_num(spec_num):
                         spec_nums = re.findall(self.regex["catnum"], val)
-                        spec_nums = [s for s in spec_nums if self.is_catnum(s)]
+                        spec_nums = [s for s in spec_nums if is_spec_num(s)]
                         break
+
                 # Clean up suffixes after chunking into discrete parts
                 for chunk in re.split(self.regex["join_discrete"], val):
                     if self.is_range(chunk):
-                        rng = [self.stringify(n) for n in self.fill_range(chunk)]
+                        rng = [str(n) for n in self.fill_range(chunk)]
                         spec_nums.extend(rng)
                         # Ensure that this chunk is not in spec_nums
                         spec_nums = [n for n in spec_nums if n != chunk]
+
                 # Fill numbers
                 prefix = None
-                for spec_num in spec_nums:
+                for spec_num in enumerate(
+                    combine_vals(spec_nums, from_ocr=self.from_ocr)
+                ):
                     spec_num = self.remove_museum_code(spec_num)
 
                     # Check for prefix
@@ -345,20 +309,20 @@ class Parser:
                         num = self.parse_num(spec_num)
                         if len(str(num.number)) == prefix[1]:
                             num.prefix = prefix[0]
-                            spec_num = self.stringify(num)
+                            spec_num = str(num)
                         else:
                             prefix = None
 
                     if self.is_range(spec_num):
                         nums.extend(self.fill_range(spec_num))
-                    elif self.is_catnum(spec_num.strip()):
+                    elif is_spec_num(spec_num.strip()):
                         nums.append(self.parse_num(spec_num.replace(" ", "")))
                     else:
                         nums.append(self.parse_num(spec_num))
 
                 nums = [n for i, n in enumerate(nums) if n not in nums[:i]]
         if nums:
-            num_strings = [self.stringify(n) for n in nums]
+            num_strings = [str(n) for n in nums]
             logger.debug("Parsed discrete: %s", num_strings)
         else:
             logger.debug("No discrete numbers found")
@@ -383,43 +347,59 @@ class Parser:
                     # Finds ranges joined by something other than a dash
                     try:
                         n1, n2 = re.findall(self.regex["catnum"], spec_num)
-                        n1, n2 = [n for n in (n1, n2) if self.is_catnum(n)]
+                        n1, n2 = [n for n in (n1, n2) if is_spec_num(n)]
                         n1, n2 = [self.parse_num(n) for n in (n1, n2)]
                     except ValueError:
                         pass
                     else:
                         nums.extend(self.fill_range(n1, n2))
         if nums:
-            num_strings = [self.stringify(n) for n in nums]
+            num_strings = [str(n) for n in nums]
             logger.debug("Parsed range: %s", num_strings)
         else:
             logger.debug("No ranges found")
         return nums
 
     def parse_mixed(self, val):
-        """Returns specimen numbers from string with discrete and ranged nums"""
+        """Returns specimen numbers from string that mixes discrete and ranged nums"""
 
         if not ("-" in val and "/" in val):
             return []
 
-        parts = [s for s in re.split(r"([-/]\d+)", val)]
+        parts = re.split(r"(/\d+(?:\-\d+)?)", val)
         parts = [p.strip() for p in parts if p.strip()]
+
+        # If the number is formatted like 12345/1, it may be a suffix
+        # and should be handled elsewhere
+        if len(parts) == 2 and "-" not in parts[0] and "-" in parts[1]:
+            return []
+
         nums = []
-        if all([re.match(r"[-/]\d+$", p) for p in parts[1:]]):
-            nums.append(self.parse_num(parts[0]))
-            for i, part in enumerate(parts[1:]):
+        if all([re.match(r"/\d+(\-\d+)?$", p) for p in parts[1:]]):
+
+            # Extract base number from first part
+            if "-" in parts[0]:
+                nums.extend(self.fill_range(parts[0]))
+            else:
+                nums.append(self.parse_num(parts[0]))
+
+            basenum = str(nums[0].number)
+
+            for part in parts[1:]:
 
                 # Fill ranges for hyphen-delimited parts
-                if part.startswith("-"):
-                    num = self.stringify(nums[-1])
+                if "-" in part:
+                    part = part.lstrip("/")
+                    num = basenum[: -len(part.split("-")[0])]
                     nums.extend(self.fill_range(f"{num}{part}"))
 
                 # Fill discrete by substituting last few characters of
                 # previous number with the current part
                 else:
                     part = part.strip("/")
-                    num = self.stringify(nums[-1])
-                    nums.append(self.parse_num(num[: -len(part)] + part))
+                    nums.append(self.parse_num(basenum[: -len(part)] + part))
+
+        logger.debug(f"Parsed mixed: {nums}")
 
         return nums
 
@@ -463,18 +443,6 @@ class Parser:
             return val.replace(self.code, "", 1).replace("()", "").strip(" -")
         return re.sub(self.regex["code"], "", val).replace("()", "").strip(" -")
 
-    def parse_quick(self, val, mask=None):
-        """Parses a single well-formed catalog number"""
-        if mask is None:
-            mask = (
-                r"^(?:(?P<code>NMNH|USNM) )?"
-                r"(?P<prefix>(?:[A-Z]{1,4}))? ?"
-                r"(?P<number>\d+)"
-                r"(?P<suffix>(?:(?:[-, ](?:[A-Z0-9]+))|[A-Z])?"
-                r"(?: \((?:[A-Z:]+)\))?)$"
-            )
-        return SpecNum(**re.search(mask, val, flags=re.I).groupdict())
-
     def parse_num(self, val):
         """Parses a catalog number into prefix, number, and suffix"""
         orig = val
@@ -497,8 +465,10 @@ class Parser:
             prefix = self.fix_ocr_errors(prefix, True)
             if prefix.isnumeric():
                 prefix = ""
+
         # Format number
         number = val[len(prefix) :].strip(" -")
+
         # Identify suffix
         delims = ("--", " - ", "-", ",", "/", ".")
         suffix = ""
@@ -539,6 +509,7 @@ class Parser:
         number = self.fix_ocr_errors(number)
         if len(number) < 6:
             suffix = self.fix_ocr_errors(suffix.strip(), match=True)
+
         # Disregard unlikely suffixes
         stopwords = {"and", "but", "in", "for", "not", "of", "on", "so", "the", "was"}
         if (
@@ -553,8 +524,9 @@ class Parser:
             # Strip stopwords that directly follow a number
             pattern = r"(?<=\d)({})".format("|".join(stopwords))
             suffix = re.sub(pattern, "", suffix)
+
         try:
-            return SpecNum(code, prefix, int(number), suffix.upper())
+            return SpecNum(code, "", prefix, int(number), suffix.upper())
         except ValueError as e:
             raise ValueError(f"Could not parse: {val} ({e})")
 
@@ -602,10 +574,10 @@ class Parser:
             n1, n2 = self.get_range(n1)
             derived_n2 = True
         if n1.prefix and not n2.prefix:
-            n2 = SpecNum(n2.code, n1.prefix, n2.number, n2.suffix)
+            n2 = SpecNum(n2.code, n1.kind, n1.prefix, n2.number, n2.suffix)
         if self.is_range(n1, n2):
             return [
-                SpecNum(self.code, n1.prefix, n, "")
+                SpecNum(self.code, n1.kind, n1.prefix, n, "")
                 for n in range(n1.number, n2.number + 1)
             ]
         # Range parse failed!
@@ -624,7 +596,7 @@ class Parser:
         n1, n2 = [n.strip() for n in val.strip().split(delim)]
         n1, n2 = [self.parse_num(n) for n in (n1, n2)]
         if n1.prefix and not n2.prefix:
-            n2 = SpecNum(n2.code, n1.prefix, n2.number, n2.suffix)
+            n2 = SpecNum(n2.code, n1.kind, n1.prefix, n2.number, n2.suffix)
         return n1, n2
 
     def is_range(self, n1, n2=None):
@@ -644,37 +616,71 @@ class Parser:
             is_range = self._is_range(*self.short_range(n1, n2))
         return is_range
 
-    def _is_range(self, n1, n2=None):
-        """Tests if a given pair of numbes are likely to be a range"""
-        if n2 is None:
-            n1, n2 = self.split_num(n1)
-        same_prefix = n1.prefix == n2.prefix
-        big_numbers = n1.number > 100 and n2.number > 100
-        small_diff = (n2.number - n1.number) < 500
-        no_suffix = not n1.suffix and not n2.suffix
-        n2_bigger = n2.number > n1.number
-        return (
-            same_prefix
-            and (big_numbers or small_diff)
-            and small_diff
-            and no_suffix
-            and n2_bigger
-        )
-
-    def is_catnum(self, val):
-        """Tests if the given value looks like a catalog number"""
-        return (
-            re.match("^" + self.regex["catnum"] + "$", val)
-            and not val.strip().isalpha()
-        )
-
     def short_range(self, n1, n2):
         """Expands numbers to test for short ranges (e.g., 123456-59)"""
         x = 10 ** len(str(n2.number))
         num = int(math.floor(n1.number / x) * x) + n2.number
-        n2 = SpecNum(n2.code, n2.prefix, num, n2.suffix)
+        n2 = SpecNum(n2.code, n2.kind, n2.prefix, num, n2.suffix)
         return n1, n2
 
-    def short_discrete(self, n1, n2):
-        """Expands shorthand numbers (e.g., 194383-85/87/92/93/99)"""
-        raise NotImplementedError
+    def _parse(self, val):
+        """Parses catalog numbers from a string"""
+        logger.debug('Parsing "{}"...'.format(val))
+        # Clean up the string a little to simplify parsing
+        val = val.replace("--", "-").replace("^", "").strip("()[],;&? ")
+        val = re.sub(r"\band\b", "&", val)
+        val = val.strip("()[],;&? ")
+        # Remove the museum code, wherever it may be
+        try:
+            self.code = re.findall(self.regex["code"], val)[0].strip()
+        except IndexError:
+            pass
+        # Clean up special numbers so they're easier to recognize
+        pattern = r"(?<=[A-Z] )(loc(\.|ality)?|slide|type)(?= \d)"
+        val = re.sub(pattern, r"\1 no.", val)
+        # Check for high-quality numbers and bail
+        if self.simple.search(val):
+            return [val]
+        self.metadata = []
+        nums = []
+        for match in [m[0] for m in self.mask.findall(val)]:
+            # The museum code interferes with parsing, so strip it here
+            match = self.remove_museum_code(match)
+            nums.extend(self.parse_mixed(match))
+            nums.extend(self.parse_discrete(match))
+            nums.extend(self.parse_ranges(match))
+        if not nums and self.is_range(val):
+            logger.debug("Parsed as simple range: %s", val)
+            nums = self.fill_range(val)
+        if not nums:
+            logger.debug("Parsed as catalog number: %s", val)
+            val = self.remove_museum_code(val)
+            clustered = [n.strip() for n in self.cluster(val).split(";")]
+            nums = [self.parse_num(n) for n in clustered if n]
+        # Are the lengths in the results reasonable?
+        if len(nums) > 1:
+            minlen = min([len(str(n.number)) for n in nums])
+            if minlen < 4:
+                maxlen = max([len(str(n.number)) for n in nums])
+                nums = [n for n in nums if n.number > 10 ** (maxlen - 2)]
+
+        nums = [str(n) for n in nums]
+        nums = [n for i, n in enumerate(nums) if n not in nums[:i]]
+
+        # Catch special numbers that look like catalog numbers
+        pat = r"\b(loc(\.|ality)?|slide|type) *(?:#|no\.?|num(ber))"
+        try:
+            kind = re.search(pat, val, flags=re.I).group(1).lower().strip(".")
+        except AttributeError:
+            pass
+        else:
+            kind = {"loc": "locality"}.get(kind, kind)
+            nums = [n.replace(" ", f" {kind} no. ", 1) for n in nums]
+
+        return nums
+
+    def _is_range(self, n1, n2=None):
+        """Tests if a given pair of numbes are likely to be a range"""
+        if n2 is None:
+            n1, n2 = self.split_num(n1)
+        return parse_spec_num(n1).is_range(n2)

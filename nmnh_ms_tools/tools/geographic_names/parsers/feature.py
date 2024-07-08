@@ -1,4 +1,5 @@
 """Defines class to parse simple feature names"""
+
 import logging
 import re
 
@@ -216,7 +217,7 @@ class FeatureParser(Parser):
             raise ValueError(mask.format(val))
 
         # Reject features that start with certain adjectives or prepositions
-        if val.startwith(("which", "with")):
+        if val.startswith(("which", "with")):
             mask = 'Could not parse "{}" (bad first word)'
             raise ValueError(mask.format(val))
 

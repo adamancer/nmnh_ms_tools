@@ -1,4 +1,5 @@
 """Defines methods for parsing and manipulating lists of rock/mineral names"""
+
 from collections.abc import MutableSequence
 
 
@@ -87,8 +88,6 @@ class TaxaList(MutableSequence):
                 return unique[0]
             if force_match:
                 return self[0]
-        print("THIS SHOULD RAISE AN ERROR")
-        input(name)
         raise ValueError("{}: {}".format(name, self.irns()))
 
     def unique(self):

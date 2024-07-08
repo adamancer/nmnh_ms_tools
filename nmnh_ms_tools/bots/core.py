@@ -1,14 +1,17 @@
 """Defines generic bot for making requests with retry"""
+
 from functools import wraps
 import logging
 import pprint as pp
 import random
 import time
+from contextlib import contextmanager
 
 import requests
 import requests_cache
 from lxml import etree
 
+from ..config import CONFIG
 from ..utils import to_attribute
 
 
@@ -18,7 +21,10 @@ logger = logging.getLogger(__name__)
 class Bot:
     """Methods to handle and retry HTTP requests"""
 
-    email = None
+    try:
+        email = CONFIG["bots"]["email"]
+    except KeyError:
+        email = input("Email: ")
 
     def __init__(
         self,
@@ -37,6 +43,8 @@ class Bot:
         self.start_param = start_param
         self.limit_param = limit_param  # either a key or func(resp)
         self.paged = paged
+        self.session = requests.Session()
+        self._cached_session = None
 
     @property
     def headers(self):
@@ -84,19 +92,23 @@ class Bot:
 
     def get(self, *args, **kwargs):
         """Makes GET request with retry"""
-        return self._retry(requests.get, *args, **kwargs)
+        return self._retry("get", *args, **kwargs)
 
     def post(self, *args, **kwargs):
         """Makes POST request with retry"""
-        return self._retry(requests.post, *args, **kwargs)
+        return self._retry("post", *args, **kwargs)
+
+    def head(self, *args, **kwargs):
+        """Makes HEAD request with retry"""
+        return self._retry("head", *args, **kwargs)
 
     def validate(self, resp):
         """Placeholder function to validate resp"""
         return True
 
-    def download(self, url, path, ext=None, chunk_size=8192):
+    def download(self, url, path, chunk_size=8192):
         """Downloads content at url to path"""
-        with requests.get(url, stream=True) as r:
+        with self.get(url, stream=True) as r:
             r.raise_for_status()
             with open(path, "wb") as f:
                 for chunk in r.iter_content(chunk_size=chunk_size):
@@ -105,26 +117,43 @@ class Bot:
     def handle_error(self, resp):
         raise ValueError(f"Could not parse response from {resp.url}: {resp.text}")
 
-    @staticmethod
-    def get_cache():
-        return requests_cache.get_cache()
-
-    @staticmethod
-    def install_cache(path="cache"):
+    def install_cache(self, cache_name="http_cache"):
         """Activates cache located at path"""
-        if requests_cache.get_cache() is not None:
-            requests_cache.uninstall_cache()
-        requests_cache.install_cache(path)
-        return requests_cache.get_cache()
+        if (
+            not isinstance(self.session, requests_cache.CachedSession)
+            or self.session.cache.cache_name != cache_name
+        ):
+            self.session = requests_cache.CachedSession(cache_name)
 
-    @staticmethod
-    def uninstall_cache():
-        """Deactives caches"""
-        cache = requests_cache.get_cache()
-        if cache is not None:
-            requests_cache.uninstall_cache()
+    def uninstall_cache(self):
+        """Deactives cache"""
+        self.session = requests.Session()
 
-    @staticmethod
+    @contextmanager
+    def disable_cache(self):
+        """Temporarily disables cache
+
+        Has no effect if cache is not enabled
+        """
+        try:
+            cache_name = self.get_cache().cache_name
+        except AttributeError:
+            cache_name = None
+        else:
+            self.uninstall_cache()
+
+        try:
+            yield self
+        finally:
+            if cache_name is not None:
+                self.install_cache(cache_name)
+
+    def get_cache(self):
+        return self.session.cache
+
+    def is_cached(self):
+        return isinstance(self.session, requests_cache.CachedSession)
+
     def delete_cached_url(url):
         """Deletes the given URL from the cache"""
         try:
@@ -132,12 +161,15 @@ class Bot:
         except AttributeError:
             pass
 
-    def _retry(self, *args, **kwargs):
+    def _retry(self, method, *args, **kwargs):
         """Routes requests to use single or paged"""
+        if CONFIG["bots"]["cache_name"] and not self.is_cached():
+            self.install_cache(CONFIG["bots"]["cache_name"])
+        func = getattr(self.session, method)
         if self.start_param and self.wrapper:
-            resp = self._retry_paged(*args, **kwargs)
+            resp = self._retry_paged(func, *args, **kwargs)
         else:
-            resp = self._retry_one(*args, **kwargs)
+            resp = self._retry_one(func, *args, **kwargs)
         if not resp:
             self.handle_error(resp)
         if self.wrapper:
@@ -157,6 +189,7 @@ class Bot:
             raise ValueError("User agent is required")
         # Make the request, repeating it if a resolvable error is encountered
         for i in range(7):
+            logger.debug(f"Making request: {args}, {kwargs}")
             try:
                 resp = func(*args, **kwargs)
                 # Retry if status code indicates a temporary problem
@@ -184,7 +217,7 @@ class Bot:
                 # Enforce the minimum wait only if response is from an external server
                 local = resp.url.startswith(("http://localhost", "http://127.0.0.1"))
                 if not local and not resp.from_cache:
-                    logger.info("New request: {}".format(resp.url))
+                    logger.info("Made new request: {}".format(resp.url))
                     # Update wait based on rate limit
                     time.sleep(self.wait_from_rate_limit(resp))
                 # Validate the response, returning the response object if OK
@@ -343,7 +376,7 @@ class JSONResponse:
             return default
 
     def all(self, default=None):
-        """Returns all records all results path as a list"""
+        """Returns all records from the results path as a list"""
         obj = self._json
         for key in self._results_path:
             try:
@@ -395,13 +428,19 @@ class JSONResponse:
             for key in self._results_path:
                 obj = obj[key]
             for resp in responses[1:]:
-                obj.extend(
-                    self.__class__(
-                        resp,
-                        results_path=self._results_path,
-                        result_wrapper=self._result_wrapper,
-                    ).all()
-                )
+                if isinstance(obj, list):
+                    obj.extend(
+                        self.__class__(
+                            resp,
+                            results_path=self._results_path,
+                            result_wrapper=self._result_wrapper,
+                        ).all()
+                    )
+                elif isinstance(obj, dict):
+                    new = resp.json()
+                    for key in self._results_path:
+                        new = new[key]
+                    obj.update(new)
         mask = "Wrapped {:,} records from {:,} responses with {}"
         logger.debug(mask.format(len(self), len(responses), self.__class__.__name__))
 

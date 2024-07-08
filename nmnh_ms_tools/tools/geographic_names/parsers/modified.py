@@ -1,4 +1,5 @@
 """Identifies feature names modified by compass directions"""
+
 import logging
 import re
 

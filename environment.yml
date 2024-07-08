@@ -3,7 +3,7 @@ channels:
 - conda-forge
 - default
 dependencies:
-- python=3.9
+- python=>3.8
 - pip
 - bibtexparser
 - bs4
@@ -17,6 +17,7 @@ dependencies:
 - nameparser
 - nltk
 - numpy
+- openpyxl
 - pillow
 - pymongo
 - pyproj

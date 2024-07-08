@@ -1,8 +1,10 @@
 """Stores information about a set of georeferences"""
+
 import logging
 import os
 
 from sqlalchemy import (
+    Boolean,
     Column,
     Integer,
     LargeBinary,
@@ -28,15 +30,28 @@ class AlternativePolygons(Base):
     __tablename__ = "alternative_polygons"
     id = Column(Integer, primary_key=True)
     name = Column(String(collation="nocase"))
-    geoname_id = Column(String(collation="nocase"))
+    gn_id = Column(String(collation="nocase"))
     geometry = Column(LargeBinary)
     fcode = Column(String(collation="nocase"))
     source = Column(String(collation="nocase"))
-    source_id = Column(String(collation="nocase"))
-    source_class = Column(String(collation="nocase"))
+    __table_args__ = (Index("ap_ids", "gn_id"), Index("ap_names", "name"))
+
+
+class NaturalEarthCombined(Base):
+
+    __tablename__ = "natural_earth_combined"
+    id = Column(Integer, primary_key=True)
+    table = Column(String(collation="nocase"))
     ogc_fid = Column(String(collation="nocase"))
-    wikidata_id = Column(String(collation="nocase"))
-    __table_args__ = (Index("poly_ids", "geoname_id"), Index("poly_names", "name"))
+    gn_id = Column(String(collation="nocase"))
+    ne_id = Column(String(collation="nocase"))
+    wikidataid = Column(String(collation="nocase"))
+    name = Column(String(collation="nocase"))
+    name_alt = Column(String(collation="nocase"))
+    name_en = Column(String(collation="nocase"))
+    fcode = Column(String(collation="nocase"))
+    GEOMETRY = Column(LargeBinary)
+    __table_args__ = (Index("nec_ids", "gn_id"), Index("nec_names", "name"))
 
 
 class OceanTiles(Base):
@@ -46,6 +61,7 @@ class OceanTiles(Base):
     id = Column(Integer, primary_key=True)
     geometry = Column(LargeBinary)
     ocean = Column(String(collation="nocase"))
+    coast = Column(Boolean)
 
 
 class PreferredLocalities(Base):
@@ -69,10 +85,10 @@ class PreferredLocalities(Base):
     )
 
 
-def init_db(fp=None, tables=None):
+def init_db(fp=None, tables=None, **kwargs):
     """Creates the database based on the given path"""
     global Base
     global Session
     if fp is None:  # pragma: no cover
-        fp = CONFIG["data"]["georef_data"]
-    init_helper(fp, base=Base, session=Session, tables=tables)
+        fp = CONFIG["data"]["geohelper"]
+    init_helper(fp, base=Base, session=Session, tables=tables, **kwargs)

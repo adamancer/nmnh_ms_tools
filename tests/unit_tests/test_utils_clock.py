@@ -1,4 +1,5 @@
 """Tests clock functions"""
+
 import re
 
 import pytest

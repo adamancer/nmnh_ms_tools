@@ -1,4 +1,5 @@
 """Initializes databases required by tests in this folder"""
+
 import os
 
 from nmnh_ms_tools.bots import Bot
@@ -15,7 +16,7 @@ from nmnh_ms_tools.databases.geonames import (
     GeoNamesFeatures,
     init_db as init_geonames_db,
 )
-from nmnh_ms_tools.databases.georef_data import init_db as init_georef_data_db
+from nmnh_ms_tools.databases.geohelper import init_db as init_geohelper_db
 from nmnh_ms_tools.databases.georef_job import init_db as init_georef_job_db
 
 
@@ -46,5 +47,5 @@ init_custom_db(":memory")
 CustomFeatures().from_csv(os.path.join(TEST_DIR, "test_custom.csv"))
 
 # Initialize georeferencing databases
-init_georef_data_db(os.path.join(DATA_DIR, "downloads", "georef_data.sqlite"))
+init_geohelper_db(os.path.join(DATA_DIR, "downloads", "geohelper.sqlite"))
 init_georef_job_db(":memory")

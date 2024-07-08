@@ -1,4 +1,5 @@
 """Defines bot to interact with the GeoDeepDive API"""
+
 import logging
 
 from .core import Bot, JSONResponse

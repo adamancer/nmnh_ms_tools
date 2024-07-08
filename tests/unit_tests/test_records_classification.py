@@ -1,4 +1,5 @@
 """Tests classification tools"""
+
 import pytest
 
 from nmnh_ms_tools.records.classification import TaxaParser, Taxon, get_tree

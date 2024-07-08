@@ -1,11 +1,40 @@
 """Defines helper functions for the associated database"""
+
 import re
 
 from lxml import etree
-from shapely import wkb
+from shapely import equals, from_wkb, wkb
 from shapely.geometry import Polygon
+from shapely.ops import linemerge
 
-from .database import Session, AlternativePolygons, PreferredLocalities
+from .database import (
+    Session,
+    AlternativePolygons,
+    NaturalEarthCombined,
+    PreferredLocalities,
+)
+from ..natural_earth.database import (
+    Session as NaturalEarthSession,
+    Counties,
+    Countries,
+    GeographicRegions,
+    Lakes,
+    LakesAustralia,
+    LakesEurope,
+    LakesNorthAmerica,
+    ParksAndProtectedLands,
+    PopulatedPlaces,
+    Playas,
+    Reefs,
+    RiversAustralia,
+    RiversEurope,
+    RiversNorthAmerica,
+    MarineRegions,
+    MinorIslands,
+    Ocean,
+    StatesProvinces,
+)
+from ...tools.geographic_operations import GeoMetry
 from ...utils import as_list, as_str
 
 
@@ -14,7 +43,7 @@ def get_alt_geometry(geoname_id):
     session = Session()
     row = (
         session.query(AlternativePolygons.geometry, AlternativePolygons.source)
-        .filter(AlternativePolygons.geoname_id == geoname_id)
+        .filter(AlternativePolygons.gn_id == geoname_id)
         .order_by(AlternativePolygons.fcode)
         .first()
     )
@@ -81,7 +110,7 @@ def import_from_kml(fp):
         coords = placemark.find(".//coordinates", namespaces=nsmap).text
         xy = []
         for triple in coords.strip().split(" "):
-            lng, lat, elev = [float(n) for n in triple.split(",")]
+            lng, lat, _ = [float(n) for n in triple.split(",")]
             xy.append((lng, lat))
 
         # Check name for id
@@ -108,31 +137,6 @@ def import_from_kml(fp):
     session.close()
 
 
-def import_from_natural_earth():
-    """Imports records from Natural Earth database file"""
-    session = NaturalEarthSession()
-    rows = []
-    for row in session.query(GeoNamesToNaturalEarth):
-        rows.append(
-            {
-                "name": row.name,
-                "geoname_id": row.geonames_id,
-                "geometry": row.geometry,
-                "fcode": row.fcode,
-                "source": "Natural Earth",
-                "source_id": row.ne_id,
-                "source_class": row.featurecla,
-                "ogc_fid": row.ogc_fid,
-                "wikidata_id": row.wikidataid,
-            }
-        )
-    session.close()
-    session = GeoNamesSession()
-    session.bulk_insert_mappings(AlternativePolygons, rows)
-    session.commit()
-    session.close()
-
-
 def composite_natural_earth():
     """Composites multiple features from Natural Earth into a single feature"""
     composites = {"Mediterranean Sea": ["Mediterranean Sea"]}
@@ -140,8 +144,8 @@ def composite_natural_earth():
     rows = []
     for comp_name, names in composites.items():
         geoms = []
-        for row in session.query(GeoNamesToNaturalEarth).filter(
-            GeoNamesToNaturalEarth.name.in_(names)
+        for row in session.query(NaturalEarthCombined).filter(
+            NaturalEarthCombined.name.in_(names)
         ):
             geoms.append(wkb.loads(row.geometry))
             GeoMetry(geoms[-1]).draw(title=row.name)
@@ -156,7 +160,120 @@ def composite_natural_earth():
         )
         GeoMetry(composite).draw(geoms, title=comp_name)
     session.close()
-    session = GeoNamesSession()
+    session = Session()
     session.bulk_insert_mappings(AlternativePolygons, rows)
-    # session.commit()
+    session.commit()
+    session.close()
+
+
+def fill_natural_earth_combined_table():
+    """Combines relevant 10 m Natural Earth tables into a single table"""
+    session = NaturalEarthSession()
+
+    attrs = (
+        "name",
+        "name_alt",
+        "name_en",
+        "gn_id",
+        "ogc_fid",
+        "wikidataid",
+        "ne_id",
+        "GEOMETRY",
+    )
+
+    rows = []
+    for table in (
+        Counties,
+        Countries,
+        GeographicRegions,
+        Lakes,
+        LakesAustralia,
+        LakesEurope,
+        LakesNorthAmerica,
+        ParksAndProtectedLands,
+        PopulatedPlaces,
+        Playas,
+        Reefs,
+        RiversAustralia,
+        RiversEurope,
+        RiversNorthAmerica,
+        MarineRegions,
+        MinorIslands,
+        Ocean,
+        StatesProvinces,
+    ):
+        for row in session.query(table):
+            rowdict = {"table": table.__name__}
+            for attr in attrs:
+                try:
+                    rowdict[attr] = getattr(row, attr)
+                except AttributeError:
+                    rowdict[attr] = None
+
+            rowdict["ogc_fid"] = "{table}-{ogc_fid}".format(**rowdict)
+            if rowdict["gn_id"] and str(rowdict["gn_id"]).startswith("-"):
+                rowdict["gn_id"] = None
+            rows.append(rowdict)
+
+    session.close()
+
+    session = Session()
+    session.bulk_insert_mappings(NaturalEarthCombined, rows)
+    session.commit()
+    session.close()
+
+
+def fill_alternative_polygons_table():
+    session = Session()
+
+    session.query(AlternativePolygons).delete(synchronize_session=False)
+    session.commit()
+
+    # Group by GeoNames ID
+    grouped = {}
+    for row in session.query(NaturalEarthCombined):
+        if row.gn_id and row.GEOMETRY:
+            grouped.setdefault(row.gn_id, []).append(row)
+
+    updates = []
+    for gn_id, rows in grouped.items():
+
+        geoms = [from_wkb(r.GEOMETRY) for r in rows]
+        name = rows[0].name
+
+        row = {
+            "name": name.title() if name.isupper() else name,
+            "gn_id": gn_id,
+            "geometry": geoms[0],
+            "fcode": rows[0].fcode,
+            "source": "Natural Earth",
+        }
+
+        # Combine geometries if multiple are assigned the same ID
+        for i, geom in enumerate(geoms[1:]):
+            if not equals(geom, geoms[i - 1]):
+
+                # Combine lines
+                if all(["Line" in g.__class__.__name__ for g in geoms]):
+                    while "MultiLineString" in {g.__class__.__name__ for g in geoms}:
+                        geoms_ = []
+                        for geom in geoms:
+                            try:
+                                geoms_.extend(geom.geoms)
+                            except AttributeError:
+                                geoms_.append(geom)
+                        geoms = geoms_
+                    row["geometry"] = GeoMetry(linemerge(geoms), crs=4326)
+
+                # Combine other shapes
+                else:
+                    row["geometry"] = GeoMetry(geoms[0], crs=4326).combine(geoms[1:])
+
+                break
+
+        row["geometry"] = row["geometry"].wkb
+        updates.append(row)
+
+    session.bulk_insert_mappings(AlternativePolygons, updates)
+    session.commit()
     session.close()

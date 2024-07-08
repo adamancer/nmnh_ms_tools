@@ -1,4 +1,5 @@
 """Defines class to convert direction strings to geometries"""
+
 from .core import MatchPipe, Georeference
 from .match_border import MatchBorder
 from .match_custom import MatchCustom

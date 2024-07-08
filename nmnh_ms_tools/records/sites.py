@@ -1,10 +1,13 @@
 """Defines tools for parsing and manipulating locality data"""
+
 import json
 import logging
 import os
 import re
+from itertools import product
 
 import geopandas as gpd
+import pandas as pd
 from sqlalchemy.exc import UnboundExecutionError
 
 from .core import Record
@@ -12,7 +15,7 @@ from ..bots.geonames import CODES_MARINE, GeoNamesBot
 from ..databases.admin import AdminFeatures
 from ..databases.cache import CacheDict
 from ..databases.geonames import GeoNamesFeatures
-from ..databases.georef_data import get_alt_geometry
+from ..databases.geohelper import get_alt_geometry
 from ..config import CONFIG, GEOCONFIG
 from ..tools.geographic_names.caches import LocalityCache
 from ..tools.geographic_names.parsers import (
@@ -20,14 +23,13 @@ from ..tools.geographic_names.parsers import (
     get_leftover,
     parse_localities,
 )
-from ..tools.geographic_operations import GeoMetry, geom_to_geoseries
+from ..tools.geographic_operations import GeoMetry, geoms_to_geodataframe
 from ..tools.geographic_operations.kml import write_kml
 from ..utils import (
-    StaticDict,
     as_list,
     as_str,
-    clear_empty,
     clock,
+    combine,
     dedupe,
     dictify,
     get_first,
@@ -244,6 +246,50 @@ class Site(Record):
     std = LocStandardizer()
     pipe = None
 
+    terms = [
+        "location_id",
+        "continent",
+        "country",
+        "state_province",
+        "county",
+        "municipality",
+        "island",
+        "island_group",
+        "water_body",
+        "features",
+        "settings",
+        "maps",
+        "mine",
+        "mining_district",
+        "volcano",
+        "ocean",
+        "sea_gulf",
+        "bay_sound",
+        "locality",
+        "verbatim_locality",
+        "geodetic_datum",
+        "decimal_latitude",
+        "decimal_longitude",
+        "verbatim_latitude",
+        "verbatim_longitude",
+        "footprint_wkt",
+        "georeference_protocol",
+        "georeference_sources",
+        "georeference_remarks",
+        "plss",
+        "site_class",
+        "site_source",
+        "site_num",
+        "site_names",
+        "synonyms",
+        "continent_code",
+        "country_code",
+        "admin_div_1",
+        "admin_code_1",
+        "admin_div_2",
+        "admin_code_2",
+    ]
+
     @clock
     def __init__(self, *args, **kwargs):
         # Set lists of original class attributes and reported properties
@@ -260,6 +306,7 @@ class Site(Record):
         self.island_group = ""
         self.water_body = []
         self.features = []
+        self.settings = []
         self.maps = []
         self.mine = ""
         self.mining_district = ""
@@ -278,6 +325,7 @@ class Site(Record):
         self.georeference_protocol = ""
         self.georeference_sources = ""
         self.georeference_remarks = ""
+        self.plss = ""
         # GeoNames fields
         self.site_class = ""
         self.site_source = ""
@@ -519,7 +567,7 @@ class Site(Record):
         if self.country and self.country not in ["Unknown"]:
             adm = [self.county, self.state_province, self.country]
             try:
-                self.map_admin_from_names()
+                self.map_admin()
             except (AssertionError, ValueError):
                 logger.error("Could not map admin: {}".format(adm))
                 return False
@@ -527,8 +575,6 @@ class Site(Record):
                 logger.error("Invalid country: {}".format(adm[-1]))
                 return False
             if self.state_province and not self.admin_code_1:
-                # if 'Colorado' in self.state_province:
-                #    self.map_admin_from_names()
                 logger.error("Invalid state/province: {}, {}".format(*adm[-2:]))
                 return False
             if self.county and not self.admin_code_2:
@@ -536,53 +582,11 @@ class Site(Record):
                 return False
         return True
 
-    def map_admin_from_names(self):
-        """Gets the GeoNames admin codes for the major admin divisions"""
-        func_name = "map_admin_from_names"
-        self.map_continent()
-        if clear_empty(self.country) and self.changed(func_name):
-            args = []
-            for attr in ["country", "state_province", "county"]:
-                args.append(clear_empty(getattr(self, attr)))
-            try:
-                result = self.adm.get(*args)
-            except ValueError:
-                mask = "Could not map admin names: {}"
-                raise ValueError(mask.format(json.dumps(args)))
-            else:
-                if result:
-                    for field in self.adm.fields:
-                        result.setdefault(field, None)
-                    append_to = [a for a in result if a not in self.adm.fields]
-                    self.update(result, append_to=append_to)
-                    # Clear codes that do not correspond to a name
-                    if not self.state_province and self.admin_code_1:
-                        self.admin_code_1 = []
-                    if not self.county and self.admin_code_2:
-                        self.admin_code_2 = []
-                    self.changed(func_name)
-                    return result
-
-    def map_admin_from_codes(self):
-        """Gets the preferred GeoNames names for the major admin divisions"""
-        if self.country_code:
-            args = (self.country_code, self.admin_code_1, self.admin_code_2)
-            try:
-                result = self.adm.get(*args)
-            except ValueError:
-                mask = "Could not map admin codes: {}"
-                raise ValueError(mask.format(json.dumps(args)))
-            else:
-                if result:
-                    for field in self.adm.fields:
-                        result.setdefault(field, None)
-                    append_to = [a for a in result if a not in self.adm.fields]
-                    self.update(result, append_to=append_to)
-                    return result
-
     def map_continent(self):
         """Maps continent names and codes based on GeoNames"""
         self.continent_code = ""
+        if not self.continent and self.country:
+            self.continent = self.local.get_continent(self.country)
         if self.continent:
             if len(self.continent) == 2:
                 self.continent_code = self.continent.upper()
@@ -590,6 +594,125 @@ class Site(Record):
             else:
                 self.continent_code = self.adm.get_continent_code(self.continent)
         return self
+
+    def map_admin(self):
+        # Check cache for polygons
+        adm_fields = ["continent", "country", "state_province", "county"]
+        vals = [getattr(self, a) for a in adm_fields]
+        if not any(vals):
+            return gpd.GeoDataFrame()
+
+        vkey = json.dumps(vals)
+        try:
+            gdf, result, interpreted = self.admin_cache[vkey]
+        except KeyError:
+            pass
+        else:
+            for key, val in result.items():
+                setattr(self, key, val if isinstance(val, str) else val.copy())
+            self.interpreted = interpreted.copy()
+            return gdf
+
+        attrs = {
+            "country": "country_code",
+            "state_province": "admin_code_1",
+            "county": "admin_code_2",
+        }
+
+        # Determine whether to map from codes or names
+        names = 0
+        codes = 0
+        for name, code in attrs.items():
+            if getattr(self, name):
+                names += 1
+            if getattr(self, code):
+                codes += 1
+        attrs = list(attrs) if names > codes else list(attrs.values())
+
+        result = {}
+        val_to_id = {}
+        id_to_field = {}
+
+        # Map admin
+        if names + codes:
+            # Get all combinations of country/state_province/county
+            admin = []
+            for attr in attrs:
+                vals = as_list(getattr(self, attr))
+                if not vals:
+                    break
+                admin.append(vals)
+
+            # Get matching administrative divisions
+            matches = {}
+            results = []
+            for adm in product(*admin):
+                result = self.adm.get(*adm)
+                for key in attrs:
+                    try:
+                        val = result[key]
+                    except KeyError:
+                        pass
+                    else:
+                        matches.setdefault((key, val[0]), []).extend(
+                            self.adm.query(val, key, **result)
+                        )
+                results.append(result)
+
+            # Update record with preferred names, admin codes, and georeference matches
+            result = combine(*results)
+            result["admin_div_1"] = result.get("state_province", [])
+            result["admin_div_2"] = result.get("county", [])
+            for key, val in result.items():
+                setattr(self, key, val)
+
+            # Map each geonames_id to the corresponding admin field (country, state_province, etc.)
+            for (field, val), rows in matches.items():
+                for row in rows:
+                    gn_id = str(row.geoname_id)
+                    id_to_field[gn_id] = field
+                    val_to_id[(field, val)] = gn_id
+
+        # Map continent and add to ID lookups
+        self.map_continent()
+        if self.continent:
+            continent_id = str(
+                GeoNamesFeatures().search_json(self.continent, fcode="CONT")[0][
+                    "geonameId"
+                ]
+            )
+            id_to_field[continent_id] = "continent"
+            val_to_id[("continent", self.continent)] = continent_id
+            result["continent_code"] = self.continent_code
+            result["continent"] = self.continent
+
+        # Map feature metadata from each site to a GeoDataFrame
+        sites = {}
+        for rec in GeoNamesFeatures().get_many(list(id_to_field)):
+            site = Site(rec)
+            sites[site.location_id] = site
+        gdf = sites_to_geodataframe(sites.values())
+
+        # Update site with georeference info
+        interpreted = {k: sites[v] for k, v in val_to_id.items()}
+        self.interpreted.update(interpreted)
+
+        # Create the admin geodataframe for testing feature intersections
+        fields = pd.DataFrame(id_to_field.items(), columns=["location_id", "field"])
+        gdf = gdf.merge(fields)
+        gdf = (
+            gdf[["field", "geometry", "area"]]
+            .dissolve("field")
+            .sort_values("area", ascending=False)
+            .reset_index()
+        )
+
+        # Add dataframe to cache
+        key = json.dumps([getattr(self, a) for a in adm_fields])
+        self.admin_cache[key] = (gdf, result, interpreted)
+        self.admin_cache[vkey] = self.admin_cache[key]
+
+        return gdf.copy()
 
     def compare_names(self, other, std_func=None):
         """Tests and tracks name comparison"""
@@ -683,7 +806,7 @@ class Site(Record):
             clone.url_mask = self.url_mask
         return clone
 
-    def has_valid_coordinates(self, resize=1.1):
+    def has_valid_coordinates(self):
         """Checks coordinates against admin divisions
 
         Out-of-range latitudes and longitudes are handled by GeoMetry
@@ -698,18 +821,15 @@ class Site(Record):
             except (AssertionError, AttributeError):
                 logger.debug(f'Ocean mismatch: "{ocean}" != "{other}"')
                 return False
-            resize = 1.5
-        # Otherwise verify that the polygons intersect
-        polygons = self.get_admin_polygons()
-        for key in ["county", "state_province", "country"]:
-            try:
-                if not self.intersects(polygons[key].resize(resize)):
-                    mask = "Coordinates fall outside {}: {} "
-                    logger.debug(mask.format(key, self.location_id))
-                    return False
-                return True
-            except KeyError:
-                pass
+        # Otherwise verify that the polygons intersect the given coordinates
+        gdf = self.get_admin_polygons()
+        if not gdf.empty:
+            row = gdf.iloc[-1]
+            geom = GeoMetry(gdf.geometry.iloc[-1:].reset_index(drop=True), gdf.crs)
+            if not self.intersects(geom):
+                mask = "Coordinates fall outside {}: {}"
+                logger.debug(mask.format(row["field"], self.location_id))
+                return False
         return True
 
     def restrict(self, other=None):
@@ -724,12 +844,11 @@ class Site(Record):
             try:
                 fcl = GEOCONFIG.get_feature_class(self.site_kind)
                 if fcl not in {"A", "H", "U"}:
-                    polygons = self.get_admin_polygons()
-                    for key in ("county", "state_province", "country"):
-                        try:
-                            return self.restrict(polygons[key])
-                        except KeyError:
-                            pass
+                    gdf = self.get_admin_polygons()
+                    if not gdf.empty:
+                        row = gdf.geometry.iloc[-1:].reset_index(drop=True)
+                        geom = GeoMetry(row.geometry, gdf.crs)
+                        return self.restrict(geom)
             except KeyError:
                 # Unrecognized classes, including non-GeoNames pipes, end here
                 pass
@@ -753,16 +872,14 @@ class Site(Record):
 
     def get_admin_polygons(self, results=None):
         """Gets polygons for admin divisions"""
+        return self.map_admin()
         if not self.country:
-            return {}
-        self.map_admin_from_names()
+            return gpd.GeoDataFrame()
+        self.map_admin()
         # Check cache for polygons
         key = json.dumps([getattr(self, a) for a in self.adm.code_fields])
         try:
-            polygons = {k: v.clone() for k, v in self.admin_cache[key].items()}
-            if not polygons:
-                raise ValueError("Could not map polygons: {}".format(key))
-            return polygons
+            return self.admin_cache[key].copy()
         except KeyError:
             pass
         # Search for and merge polygons
@@ -775,11 +892,9 @@ class Site(Record):
                 # Limit to primary fields, that is, fields without trailing numbers
                 if result.sites and result.field in admin:
                     sites.extend(result.sites)
-            gdf = sites_to_geodataframe(sites)
-            gdf["geometry"] = gdf["geometry"].scale(1.1, 1.1)
-            gdf["field"] = [s.field for s in sites]
+            gdf = sites_to_geodataframe(sites, field=[s.field for s in sites])
             # Keep all polygons that match a county, state, and country
-            results = gdf.sindex.query_bulk(gdf["geometry"], "intersects")
+            results = gdf.sindex.query(gdf["geometry"], "intersects")
             xing = {}
             for in_geom, x_geom in zip(*results):
                 xing.setdefault(in_geom, []).append(x_geom)
@@ -789,18 +904,18 @@ class Site(Record):
                     sites[i].field for i in matches
                 }:
                     keep.extend(matches)
-            dissolved = gdf.iloc[keep].dissolve("field").reset_index()
-            dissolved["geometry"] = dissolved["geometry"].convex_hull.to_crs(
-                sites[0].crs
+            # Dissolve by field
+            geoms = (
+                gdf.iloc[keep]
+                .dissolve("field")
+                .sort_values("area", ascending=False)
+                .reset_index()
             )
-            geoms = {
-                r["field"]: self._build_geometry(r["geometry"], crs=sites[0].crs)
-                for _, r in dissolved.iterrows()
-            }
-        if not geoms:
-            polygons = list(polygons.values()) + missed
+
+        # Create KML for unrecognized admins
+        if geoms.empty:
+            polygons = list(polygons.values())
             polygons.sort(key=lambda p: p.area)
-            # self.draw_admin(polygons, mask='ERROR: {}')
             # Catch missing or out-of-bounds admin polygons
             names = to_attribute(admin.summarize("admin"))
             fn = "{}_{}.kml".format(names, self.location_id)
@@ -814,11 +929,13 @@ class Site(Record):
             if not sites.get(field):
                 msg = "Admin not found: {}: {}"
             raise ValueError(msg.format(self.location_id, names))
+
         # Rebuild key since it can be changed from mapped names
         key = json.dumps([getattr(self, a) for a in self.adm.code_fields])
-        if not geoms:
+        if geoms.empty:
             raise ValueError("Could not map polygons: {}".format(key))
         self.admin_cache[key] = geoms
+
         return geoms
 
     def map_marine_features(self):
@@ -879,14 +996,15 @@ class Site(Record):
             except KeyError:
                 parsed, _ = self.parse_locality(self.sea_gulf)
                 if len(parsed) == 1:
-                    for variant in parsed[0].variants():
-                        try:
-                            self.ocean = SEAS[variant.lower()]
-                            break
-                        except KeyError:
-                            pass
-                    else:
-                        logger.warning("Unknown sea: {}".format(self.sea_gulf))
+                    logger.warning("Unknown sea: {}".format(self.sea_gulf))
+                    # for variant in parsed[0].variants():
+                    #    try:
+                    #        self.ocean = SEAS[variant.lower()]
+                    #        break
+                    #    except KeyError:
+                    #        pass
+                    # else:
+                    #    logger.warning("Unknown sea: {}".format(self.sea_gulf))
         self.changed(func_name)
 
     def is_marine(self):
@@ -966,21 +1084,12 @@ class Site(Record):
                 return False
         # A small-ish country or state is good enough
         is_marine = self.ocean or self.sea_gulf
-        polygons = self.get_admin_polygons()
-        for field in ["state_province", "country"]:
-            try:
-                if polygons[field].radius_km <= (1000 if is_marine else 500):
-                    return False
-            except (AttributeError, KeyError):
-                pass
+        gdf = self.get_admin_polygons()
+        if not gdf.empty:
+            geom = GeoMetry(gdf.geometry.iloc[-1:].reset_index(drop=True), gdf.crs)
+            if geom.radius_km <= (1000 if is_marine else 500):
+                return False
         return True
-
-    def draw_admin(self, polygons=None, mask="{}"):
-        """Draws the site along with its administrative divisions"""
-        if polygons is None:
-            polygons = list(self.get_admin_polygons().values())
-        title = mask.format(self.summarize("admin"))
-        self.draw(polygons, title=title)
 
     @staticmethod
     def enable_sqlite_cache(path=None):
@@ -988,8 +1097,17 @@ class Site(Record):
         Site.cache = LocalityCache(path)
 
     def _build_geometry(self, geom, **kwargs):
-        kwargs.setdefault("crs", self.geodetic_datum)
-        kwargs.setdefault("radius_km", GEOCONFIG.get_feature_radius(self.site_kind))
+        if not hasattr(geom, "crs") or not geom.crs:
+            kwargs.setdefault(
+                "crs", self.geodetic_datum if self.geodetic_datum else "epsg:4326"
+            )
+        if not hasattr(geom, "radius_km") or not geom.radius_km:
+            try:
+                kwargs.setdefault(
+                    "radius_km", GEOCONFIG.get_feature_radius(self.site_kind)
+                )
+            except KeyError:
+                kwargs.setdefault("radius_km", 10)
         return GeoMetry(geom, **kwargs)
 
     def _parse_dwc(self, data):
@@ -1010,7 +1128,7 @@ class Site(Record):
         self.municipality = data.get("LocTownship")
         self.island = data.get("LocIslandName")
         self.island_group = data.get("LocIslandGrouping")
-        self.water_body = [data.get("LocBaySound")]
+        self.locality = data.get("LocPreciseLocation")
         # Map coordinates
         for latkey, lngkey in [
             ("LatLatitudeVerbatim_nesttab", "LatLongitudeVerbatim_nesttab"),
@@ -1033,15 +1151,7 @@ class Site(Record):
                     self.georeference_remarks = data.get("LatGeoreferencingNotes0")
                     # FIXME: Parse radius
                     break
-        # Map custom fields
-        self.mine = data.get("LocMineName")
-        self.mining_district = data.get("LocMiningDistrict")
-        self.volcano = data.get("VolVolcanoName")
-        self.sea_gulf = data.get("LocSeaGulf")
-        self.ocean = data.get("LocOcean")
-        self.maps = [data.get(k) for k in ["LocQUAD", "MapName"] if data.get(k)]
-        # Map other locations to locality, beginning with PLSS coordinates
-        locality = []
+        # Map PLSS
         labels = [s.lower() for s in data.get("MapOtherKind_tab", [])]
         if "section" in labels and "township range" in labels:
             try:
@@ -1051,19 +1161,27 @@ class Site(Record):
                 rows = zip(labels, data.get("MapOtherCoordB_tab"))
                 plss["range"] = dict(zip(rows))["township"]
                 mask = "{quarter} Sec. {section} {township} {range}"
-                div = mask.format(**plss)
+                plss = mask.format(**plss)
             except KeyError:
                 pass
             else:
-                locality.append(div)
-        # Map generic location fields to locality
-        keys = [
-            "LocPreciseLocation",
-            "LocGeologicSetting",
-            "LocGeomorphologicalLocation",
+                self.plss = plss
+        # Map custom fields
+        self.mine = data.get("LocMineName")
+        self.mining_district = data.get("LocMiningDistrict")
+        self.volcano = data.get("VolVolcanoName")
+        self.bay_sound = data.get("LocBaySound")
+        self.sea_gulf = data.get("LocSeaGulf")
+        self.ocean = data.get("LocOcean")
+        self.maps = [data.get(k) for k in ["LocQUAD", "MapName"] if data.get(k)]
+        # Map generic location fields
+        self.features = [
+            str(f)
+            for f in self.parse_locality(data.get("LocGeomorphologicalLocation", ""))[0]
         ]
-        locality.extend([data.get(k) for k in keys if k in data])
-        self.locality = [s for s in locality if s]
+        self.settings = [
+            str(f) for f in self.parse_locality(data.get("LocGeologicSetting", ""))[0]
+        ]
         # Map site info
         self.site_kind = data.get("LocRecordClassification")
         self.site_num = data.get("LocSiteStationNumber")
@@ -1073,6 +1191,7 @@ class Site(Record):
 
     def _parse_geonames(self, data):
         """Constructs a site from a GeoNames record"""
+        sources = []
         self.from_gazetteer = True
         self.location_id = data.get("geonameId")
         self.continent = data.get("continentCode")
@@ -1237,12 +1356,16 @@ class Site(Record):
         return self
 
 
-def sites_to_geodataframe(sites):
+def sites_to_geodataframe(sites, **kwargs):
     """Creates a geodataframe of all sites using a coherent equal-area CRS"""
-    sites = as_list(sites)
-    return gpd.GeoDataFrame(
-        {
-            "id": [s.location_id for s in sites],
-            "geometry": geom_to_geoseries([s.geometry for s in sites]),
-        }
-    )
+    import numpy as np
+
+    geoms = []
+    metadata = {}
+    for site in as_list(sites):
+        geoms.append(site.geometry)
+        for key, val in site.to_dict().items():
+            if isinstance(val, list):
+                val = " | ".join(val)
+            metadata.setdefault(key, []).append(val if val else np.nan)
+    return geoms_to_geodataframe(geoms, **metadata)

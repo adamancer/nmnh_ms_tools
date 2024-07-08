@@ -1,4 +1,5 @@
 """Defines methods for parsing, comparing, and representing names"""
+
 import re
 
 from collections import namedtuple
@@ -59,7 +60,7 @@ class Person(Record):
 
     @property
     def middle_initial(self):
-        return self.middle[0] if self.middle else ""
+        return re.sub(" +", " ", " ".join(re.split(r"[. ]+", self.middle)).strip())
 
     def parse(self, data):
         """Parses data from various sources to populate class"""
@@ -68,10 +69,12 @@ class Person(Record):
             self._parse_name(data)
         elif "NamLast" in data:
             self._parse_emu(data)
-        elif "last" in data:
+        elif {"last", "organization"} & set(data):
             self._parse(data)
         else:
             raise ValueError("Could not parse {}".format(data))
+
+        self.suffix = self.suffix.rstrip(".")
 
     def same_as(self, other, strict=True):
         """Compares name to another name"""
@@ -152,39 +155,38 @@ class Person(Record):
     def _to_emu(self):
         """Formats record for EMu eparties module"""
         try:
-            irn = self.irns[str(self)]
+            irn = self.__class__.irns[str(self)]
             if irn:
                 return {"irn": int(irn)}
         except KeyError:
-            self.irns[str(self)] = None
-            self.irns = {k: self.irns[k] for k in sorted(self.irns)}
-            print(self.irns)
+            self.__class__.irns[str(self)] = None
 
-        if self.organization:
+        if self.last:
             return {
-                "NamPartyType": "Organization",
-                "NamOrganisation": self.organization,
+                "NamPartyType": "Person",
+                "NamTitle": self.title,
+                "NamFirst": self.first,
+                "NamMiddle": self.middle,
+                "NamLast": self.last,
+                "NamSuffix": self.suffix,
             }
+
         return {
-            "NamPartyType": "Person",
-            "NamTitle": self.title,
-            "NamFirst": self.first,
-            "NamMiddle": self.middle,
-            "NamLast": self.last,
-            "NamSuffix": self.suffix,
+            "NamPartyType": "Organization",
+            "NamOrganisation": self.organization,
         }
 
     def _parse_emu(self, rec):
         """Parses an EMu eparties record"""
         self.verbatim = rec
-        if rec("NamOrganisation"):
-            self.organization = rec("NamOrganisation")
+        if rec.get("NamLast"):
+            self.title = rec.get("NamTitle")
+            self.first = rec.get("NamFirst")
+            self.middle = rec.get("NamMiddle")
+            self.last = rec.get("NamLast")
+            self.suffix = rec.get("NamSuffix")
         else:
-            self.title = rec("NamTitle")
-            self.first = rec("NamFirst")
-            self.middle = rec("NamMiddle")
-            self.last = rec("NamLast")
-            self.suffix = rec("NamSuffix")
+            self.organization = rec.get("NamOrganisation")
 
     def _parse_name(self, name):
         """Parses a name using the nameparser module"""
@@ -227,8 +229,8 @@ class Person(Record):
         # as a first name or part of a last name.
         pattern = r"^({}) [a-z]+$".format("|".join(PREFIXES))
         if re.search(pattern, name, flags=re.I):
-            if name[0].isupper():
-                self.first, self.last = name.split(" ")
+            if name[0].isupper() and " " in name:
+                self.first, self.last = name.rsplit(" ", 1)
             else:
                 self.last = name
             return
@@ -267,6 +269,7 @@ class Person(Record):
                 setattr(self, attr, getattr(name, attr))
 
         # Remove salt
+        self.title = self.title.replace(salt, "").strip()
         self.first = self.first.replace(salt, "").strip()
         self.middle = self.middle.replace(salt, "").strip()
         self.last = self.last.replace(salt, "").strip()
@@ -298,6 +301,11 @@ class Person(Record):
             while len(middle_names[-1].rstrip(".")) > 1:
                 self.last = "{} {}".format(middle_names.pop(), self.last)
             self.middle = " ".join(middle_names)
+
+        # Fix compound middle names
+        if "_" in self.middle:
+            self.middle = self.middle.replace("_", " ")
+            self.middle = self.middle[0].lower() + self.middle[1:]
 
         # Fix compound last names
         if "_" in self.last:
@@ -363,6 +371,8 @@ def parse_names(val, delims="&|;,"):
     Returns:
         list of names
     """
+    if not val:
+        return []
     if not isinstance(val, list):
         # Remove "et al" for string, truncating the string where et al occurs.
         # Then do the same for numbers. Both actions are useful for trimming
@@ -383,6 +393,10 @@ def parse_names(val, delims="&|;,"):
         # Remove commas that precede suffixes
         pattern = r", ?({})".format("|".join(SUFFIXES))
         val = re.sub(pattern, r" \1", val, flags=re.I)
+
+        # Try a simple split and parse
+        pattern = "[" + re.escape(delims) + "]"
+        return [Person(s) for s in [s.strip() for s in re.split(pattern, val)]]
         # Figure out the delimiter
         if is_name(val):
             names = [val]

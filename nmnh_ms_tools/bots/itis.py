@@ -1,4 +1,5 @@
 """Defines bot to interact with the ITIS API"""
+
 import logging
 
 from lxml import etree

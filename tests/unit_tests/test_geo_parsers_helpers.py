@@ -1,4 +1,5 @@
 """Tests DirectionParser"""
+
 import pytest
 
 from nmnh_ms_tools.tools.geographic_names.parsers.helpers import (

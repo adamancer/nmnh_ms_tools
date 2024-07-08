@@ -1,4 +1,5 @@
 """Defines methods for determining the subject area of a string"""
+
 import glob
 import json
 import logging

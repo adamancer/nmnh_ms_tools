@@ -1,4 +1,5 @@
 """Tests DirectionParser"""
+
 import pytest
 
 from shapely.geometry import Point
@@ -53,7 +54,7 @@ def test_validate(site):
 
 
 def test_map_admin(site):
-    site.map_admin_from_names()
+    site.map_admin()
     assert site.country_code == "US"
     assert site.admin_code_1 == ["WA"]
     assert site.admin_code_2 == ["037"]

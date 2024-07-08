@@ -1,4 +1,5 @@
 """Defines methods for depicting simple sites as KML"""
+
 import logging
 import os
 
@@ -20,11 +21,11 @@ class Kml:
         self.sites = []
         self._added = []
         # Polygon for related sites
-        line = {"width": 2}
+        line = {"width": 10}
         poly = None
         self.add_style("related", line=line, poly=poly)
         # Polygon for measured sites
-        line = {"width": 2, "color": "501400FF"}
+        line = {"width": 10, "color": "501400FF"}
         poly = None
         self.add_style("measured", line=line, poly=poly)
         # Polygon for the primary site
@@ -32,15 +33,15 @@ class Kml:
         poly = None
         self.add_style("final", line=line, poly=poly)
         # Line for rivers
-        line = {"width": 10, "color": "50F00014"}
-        poly = None
-        self.add_style("river", line=line, poly=poly)
+        # line = {"width": 50, "color": "50F00014"}
+        # poly = None
+        # self.add_style("river", line=line, poly=poly)
 
     def add_site(self, site, style, name=None, desc=None):
         """Adds a site to the KML file"""
         # Linear features are always rivers
-        if site.geom_type == "LineString":
-            style = "river"
+        # if site.geom_type == "LineString":
+        #    style = "river"
         self.add_placemark(site, style, name=name, desc=desc)
         try:
             for rel in site.related_sites:
@@ -153,9 +154,14 @@ class Kml:
             # Populate elements
             extrude.text = "1"
             altitude_mode.text = "relativeToGround"
-            coordinates.text = " ".join(
-                ["{0},{1}".format(*pt) for pt in geom.exterior.coords]
-            )
+            try:
+                coordinates.text = " ".join(
+                    ["{0},{1}".format(*pt) for pt in geom.exterior.coords]
+                )
+            except AttributeError:
+                coordinates.text = " ".join(
+                    ["{0},{1}".format(*pt) for pt in geom.coords]
+                )
         return self
 
     def add_line(self, parent, site):

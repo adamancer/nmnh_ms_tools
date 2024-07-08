@@ -1,4 +1,5 @@
 """Defines class for summarizing result of a match operation"""
+
 import logging
 
 

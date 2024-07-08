@@ -1,4 +1,5 @@
 """Defines functions to help using dicts"""
+
 from ..lists import as_list, dedupe, iterable
 
 from lxml import etree
@@ -54,31 +55,14 @@ def dictify(obj, cols=None, recurse=True):
     """Converts object with named attributes to a dict"""
     if isinstance(obj, dict):
         return obj
-    test = obj[0] if (isinstance(obj, list) and obj) else obj
-    if not (
-        isinstance(test, tuple) or hasattr(test, "__table__") or hasattr(test, "keys")
-    ):
-        raise TypeError("Object cannot be converted to dict")
     if isinstance(obj, list):
         return [dictify(obj, cols=cols, recurse=recurse) for obj in obj]
-    # Determine columns based on attributes
-    if cols is None:
-        try:
-            # Complete SQLAlchemy objects carry a table attribute
-            cols = [col.name for col in obj.__table__.columns]
-        except AttributeError:
-            # Partial SQLAlchemy objects have an attribute called keys
-            try:
-                cols = obj.keys()
-            except AttributeError:
-                # As a last resort, use list of non-callable public attributes
-                cols = [
-                    c
-                    for c in dir(obj)
-                    if not (c[0] == "_" or callable(getattr(obj, c)))
-                ]
+    # Determine columns for SQLAlchemy objects
     if not cols:
-        raise TypeError("Object cannot be converted to dict")
+        try:
+            cols = list(obj._mapping)
+        except AttributeError:
+            raise TypeError(f"Object cannot be converted to dict: {repr(obj)}")
     # Convert children to dictionaries as well
     if recurse:
         dct = {}

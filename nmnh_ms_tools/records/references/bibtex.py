@@ -1,30 +1,80 @@
 """Defines methods for mapping BibTeX to EMu"""
+
+import warnings
+
 from ...utils.standardizers import Standardizer
 
 
 class BibTeXMapper:
     """Consolidates functions for mapping to/from BibTeX"""
 
+    entry_types = {
+        "article",
+        "book",
+        "inbook",
+        "incollection",
+        "inproceedings",
+        "manual",
+        "mastersthesis",
+        "misc",
+        "phdthesis",
+        "proceedings",
+        "techreport",
+        "unpublished",
+    }
+
+    entry_type_map = {
+        "book series": "book",
+        "chapter": "inbook",
+        "manuscript": "unpublished",
+        "other": "article",
+        "thesis": "{}thesis",
+        "thesis (masters)": "mastersthesis",
+        "thesis (phd)": "phdthesis",
+        # BHL genres
+        "journal": "book",
+        "monograph/item": "book",
+        "monographic component part": "inbook",
+        "serial": "book",
+        "serial component part": "article",
+        # GeoDeepDive/xDD genres
+        "fulltext": "book",
+        #
+        "book chapter": "inbook",
+        "book review": "article",
+        "dataset": "article",
+        "journal article": "article",
+        "magazine article": "article",
+        # Crossref?
+        "book-chapter": "inbook",
+        "component": "inbook",
+        "dissertation": "phdthesis",
+        "journal-article": "article",
+        "journal-issue": "incollection",
+        "monograph": "book",
+        "peer-review": "article",
+        "posted-content": "misc",
+        "proceedings-article": "inproceedings",
+        "reference-entry": "misc",
+        "report": "techreport",
+        "report-component": "techreport",
+    }
+
+    _bad_entry_types = set(entry_type_map.values()) - entry_types
+    if _bad_entry_types != {"{}thesis"}:
+        raise ValueError(f"Invalid entry type mappings: {_bad_entry_types}")
+    del _bad_entry_types
+
     def entry_type(self, kind, modifier=""):
         """Converts custom record type to BibTeX entry type"""
-        custom_to_bibtex = {
-            "book series": "book",
-            "chapter": "inbook",
-            "manuscript": "unpublished",
-            "other": "article",
-            "thesis": "{}thesis",
-            "thesis (masters)": "mastersthesis",
-            "thesis (phd)": "phdthesis",
-            # BHL genres
-            "journal": "book",
-            "monograph/item": "book",
-            "monographic component part": "chapter",
-            "serial": "book",
-            "serial component part": "article",
-            # GeoDeepDive/xDD genres
-            "fulltext": "book",
-        }
-        return custom_to_bibtex.get(kind.lower(), kind).format(modifier).lower()
+        kind = kind.lower()
+        try:
+            entry_type = self.entry_type_map[kind]
+        except KeyError:
+            entry_type = kind
+            if entry_type.lower() not in self.entry_types:
+                warnings.warn(f"Unrecognized entry_type: {entry_type}")
+        return entry_type.format(modifier).lower()
 
     def source_field(self, kind):
         """Returns the BibTeX field for the source/parent publication"""

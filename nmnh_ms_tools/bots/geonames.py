@@ -1,4 +1,5 @@
 """Defines bot to interact with GeoNames webservices"""
+
 import logging
 import sys
 

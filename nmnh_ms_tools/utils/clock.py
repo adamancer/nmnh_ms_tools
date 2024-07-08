@@ -1,4 +1,5 @@
 """Defines simple class to track durations of function calls"""
+
 import csv
 import datetime as dt
 import inspect

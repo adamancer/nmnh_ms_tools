@@ -1,4 +1,5 @@
 """Template for record subclasss"""
+
 from .core import Record
 
 

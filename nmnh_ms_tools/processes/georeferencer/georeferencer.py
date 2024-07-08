@@ -231,7 +231,7 @@ class Georeferencer:
 
     def _georeference_actual(self, site):
         try:
-            site.map_admin_from_names()
+            site.map_admin()
             site.map_marine_features()
             start_time = dt.datetime.now()
             evaluator = MatchAnnotator(site, self.pipes)
@@ -263,6 +263,7 @@ class Georeferencer:
         except TypeError:
             fn = "{}".format(site.location_id)
         evaluator.kml(fn, refsite=site)
+
         result = dict(
             location_id=site.location_id,
             site=evaluator.result,
@@ -380,6 +381,7 @@ class Georeferencer:
 
     def handle_exception(self, exc, site, evaluator=None):
         """Handles exceptions raised while georeferencing"""
+        # raise exc
         self.notify(exc)
         if not isinstance(site, Site):
             location_id = self.get_location_id(site)

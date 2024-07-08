@@ -1,4 +1,5 @@
 """Definds methods to work with chronostratigraphic names"""
+
 import itertools
 import logging
 import os
@@ -13,7 +14,7 @@ from .range import StratRange
 from .unit import StratUnit, parse_strat_unit
 from ...bots.adamancer import AdamancerBot
 from ...config import DATA_DIR
-from ...utils import as_list, dedupe, get_common_items, to_attribute
+from ...utils import dedupe, to_attribute
 
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,6 @@ class ChronoStrat(StratRecord):
     """Defines methods for storing a single chronostratigraphic unit"""
 
     bot = AdamancerBot()
-    keywords = read_keywords(os.path.join(DATA_DIR, "chronostrat", "chronostrat.txt"))
     terms = [
         "eonothem",
         "erathem",
@@ -43,6 +43,7 @@ class ChronoStrat(StratRecord):
         "max_ma",
     ]
     ranks = CHRONOSTRAT_RANKS[:]
+    _keywords = None
 
     def __init__(self, *args, **kwargs):
         # Set lists of original class attributes and reported properties
@@ -75,6 +76,14 @@ class ChronoStrat(StratRecord):
     def name(self):
         vals = [getattr(self, a) for a in self.ranks]
         return ":".join(vals)
+
+    @property
+    def keywords(self):
+        if self.__class__._keywords is None:
+            self.__class__._keywords = read_keywords(
+                os.path.join(DATA_DIR, "chronostrat", "chronostrat.txt")
+            )
+        return self.__class__.keywords
 
     def parse(self, data):
         """Parses data from various sources to populate class"""

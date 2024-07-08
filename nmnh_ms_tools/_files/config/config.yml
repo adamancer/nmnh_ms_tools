@@ -1,16 +1,15 @@
 bots:
   user_agent: null
-  elsevier_api_key: null
   geonames_username: null
   geonames_use_local: False
 data:
   admin: databases/admin.json
   custom: databases/custom.sqlite
   geonames: databases/geonames.sqlite
-  georef_data: databases/georef_data.sqlite
+  geohelper: databases/geohelper.sqlite
   georef_job: job.sqlite
   natural_earth: databases/natural_earth.sqlite
-  natural_earth: databases/thesaurus.yml
+  thesaurus: databases/thesaurus.yml
 processes:
   georeferencing:
     params:

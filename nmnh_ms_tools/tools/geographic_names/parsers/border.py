@@ -1,4 +1,5 @@
 """Defines class to parse borders between two named features"""
+
 import re
 
 from .core import Parser

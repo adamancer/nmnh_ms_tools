@@ -1,4 +1,5 @@
 """Defines a class for systematically naming rocks and minerals"""
+
 import os
 import re
 
@@ -13,9 +14,25 @@ from ...utils import ucfirst
 class TaxaNamer(TaxaTree):
     """Derives names for taxa based on position in a hierarchy"""
 
-    with open(os.path.join(CONFIG_DIR, "config_classification.yml"), "r") as f:
-        config = yaml.safe_load(f)
-    _capex = [str(s) if isinstance(s, int) else s for s in config["capex"]]
+    _capex = None
+    _config = None
+
+    @property
+    def config(self):
+        if not self.__class__._config:
+            with open(os.path.join(CONFIG_DIR, "config_classification.yml"), "r") as f:
+                self.__class__.config = yaml.safe_load(f)
+            self.__class__._capex = [
+                str(s) if isinstance(s, int) else s
+                for s in self.__class__.config["capex"]
+            ]
+        return self.__class__.config
+
+    @property
+    def capex(self):
+        if not self.__class__._capex:
+            self.config
+        return self.__class__._capex
 
     def capped(self, name=None, capitalize=True):
         """Capitalizes taxon name based on simple set of rules and exceptions"""
@@ -25,11 +42,11 @@ class TaxaNamer(TaxaTree):
         if re.match(r"\d", name):
             return name
         name = name.lower()
-        for word in self._capex:
+        for word in self.capex:
             pattern = re.compile(r"\b{}\b".format(word), flags=re.I)
             matches = pattern.findall(name)
             if matches and word.isupper():
-                name = pattern.sub(matches[0][0].upper(), name)
+                name = pattern.sub(matches[0].upper(), name)
             else:
                 name = pattern.sub(word, name)
         return ucfirst(name) if name and capitalize else name

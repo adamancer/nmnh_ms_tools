@@ -1,4 +1,5 @@
 """Defines class to match feature names to custom locality records"""
+
 import logging
 
 logger = logging.getLogger(__name__)

@@ -1,4 +1,5 @@
 """Tests DirectionParser"""
+
 import pytest
 
 from nmnh_ms_tools.records.people import (

@@ -1,4 +1,5 @@
 """Tests georeferencing operations"""
+
 import csv
 import os
 import pytest

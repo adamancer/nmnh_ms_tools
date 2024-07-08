@@ -1,4 +1,5 @@
 """Defines helper functions for the GeoNames SQLite table"""
+
 import csv
 import datetime as dt
 import json
@@ -8,7 +9,7 @@ import re
 
 from requests.structures import CaseInsensitiveDict
 from shapely import wkt
-from sqlalchemy import case, func, or_
+from sqlalchemy import case, or_
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.schema import Index
 
@@ -35,6 +36,22 @@ from ...utils import (
 logger = logging.getLogger(__name__)
 
 
+class Lookup:
+
+    std = LocStandardizer()
+
+    def __init__(self, dct):
+        self._dct = {}
+        for key, val in dct.items():
+            self._dct[self.std(key)] = val
+
+    def __getitem__(self, key):
+        return self._dct[self.std(key)]
+
+    def __setitem__(self, key, val):
+        self._dct[self.std(key)] = val
+
+
 class GeoNamesFeatures:
     """Fills and searches a SQLite db based on the GeoNames text dump file"""
 
@@ -44,7 +61,7 @@ class GeoNamesFeatures:
         self.features = AllCountries
         self.names = AlternateNames
         self.base = Base
-        self.session = Session
+        self._session = None
         self.batch_size = 100000
         self.keys = [
             "geoname_id",
@@ -91,6 +108,12 @@ class GeoNamesFeatures:
         mask = "'{}' object has no attribute '{}'"
         raise AttributeError(mask.format(self.__class__.__name__, attr))
 
+    @property
+    def session(self):
+        if self._session is None:
+            self._session = Session()
+        return self._session
+
     def mapper(self, rowdict, reverse=False):
         """Maps dictionary to GeoNames schema"""
         mapped = {}
@@ -112,17 +135,19 @@ class GeoNamesFeatures:
     def std_names(self, names, std_func=None):
         return std_names(names, std_func=std_func if std_func else self.std)
 
-    def get_json(self, geoname_id):
+    def get_json(self, geoname_id, fill_record=False):
         """Retrieves the feature matching a GeoName ID"""
         geoname_id = self.prep_id(geoname_id)
-        session = self.session()
+        session = self.session
         row = (
             session.query(self.features)
             .filter_by(geoname_id=geoname_id)
             .limit(1)
             .first()
         )
-        if not (row.bbox or row.country_name or row.ocean):
+        if row is None:
+            raise ValueError(f"GeoNames ID does not exist: {geoname_id}")
+        if fill_record and not (row.bbox or row.country_name or row.ocean):
             try:
                 row = self.fill_record(row, session=session)
             except NotImplementedError:
@@ -134,7 +159,7 @@ class GeoNamesFeatures:
     def get_many(self, geoname_ids):
         """Retrieves features matchinng a list of GeoNames IDs"""
         geoname_ids = [self.prep_id(gid) for gid in geoname_ids]
-        session = self.session()
+        session = self.session
         rows = (
             session.query(self.features)
             .filter(self.features.geoname_id.in_(geoname_ids))
@@ -146,7 +171,7 @@ class GeoNamesFeatures:
     def search_json(self, st_name, limit=100, **kwargs):
         """Searches for a feature by name"""
         logger.debug(f"Searching for {st_name} ({kwargs})")
-        session = self.session()
+        session = self.session
         # Map kwargs used by the GeoNames webservice to those needed here
         kwarg_map = {
             "adminCode1": "admin_code_1",
@@ -157,9 +182,18 @@ class GeoNamesFeatures:
             "featureCode": "fcode",
         }
         # Define sort order
-        whens = {k: i + 1 for i, k in enumerate("APHLTVSRU")}
-        whens[None] = len(whens)
-        sort_order = case(value=self.names.fcl, whens=whens)
+        sort_order = case(
+            (self.features.fcl == "A", 1),
+            (self.features.fcl == "P", 2),
+            (self.features.fcl == "H", 3),
+            (self.features.fcl == "L", 4),
+            (self.features.fcl == "T", 5),
+            (self.features.fcl == "V", 6),
+            (self.features.fcl == "S", 7),
+            (self.features.fcl == "R", 8),
+            (self.features.fcl == "U", 9),
+            (self.features.fcl == None, 10),
+        )
         # Build search filter
         if not re.match(r"^[-a-z0-9]$", st_name):
             try:
@@ -209,7 +243,7 @@ class GeoNamesFeatures:
 
     def from_csv(self, fp, delete_existing=True):
         """Fills the database from the GeoNames text dump file"""
-        session = self.session()
+        session = self.session
         if delete_existing:
             self.delete_existing_records()
         # Read data into tables
@@ -228,14 +262,27 @@ class GeoNamesFeatures:
             alt_names = []
             for i, row in enumerate(rows):
                 rowdict = {k: v if v else None for k, v in zip(keys, row)}
-                rowdict = self.mapper(rowdict)
+
+                try:
+                    rowdict = self.mapper(rowdict)
+                except Exception as exc:
+                    logger.warning(f"Skipped unmappable row {rowdict}: {exc}")
+                    continue
 
                 # Check for multiple names in main name field
                 if self.delim in rowdict["name"]:
                     names = [s.strip() for s in rowdict["name"].split(self.delim)]
                     rowdict["name"] = names[0]
-                    assert not rowdict.get("alternate_names")
-                    rowdict["alternate_names"] = self.delim.join(names[1:])
+
+                    # Get alternate names
+                    try:
+                        alt_names_ = rowdict["alternate_names"].split(",") + names[1:]
+                    except (AttributeError, KeyError):
+                        alt_names_ = names[1:]
+
+                    rowdict["alternate_names"] = self.delim.join(
+                        sorted(set(alt_names_))
+                    )
 
                 rowdict = self.assign_short_country_name(rowdict)
                 rowdict = self.finalize_names(rowdict)
@@ -252,7 +299,7 @@ class GeoNamesFeatures:
                 features.append(feature)
 
                 alt_names.extend(self.map_alt_names(rowdict))
-                if i and not i % 10000:
+                if i and not i % 25000:
                     td = dt.datetime.now() - start
                     logger.debug("{:,} records processed (t={}s)".format(i, td))
                     session.bulk_insert_mappings(self.features, features)
@@ -262,8 +309,6 @@ class GeoNamesFeatures:
                     alt_names = []
                     start = dt.datetime.now()
                     # break
-                elif i and not i % 5000:
-                    logger.debug("{:,} records processed".format(i))
 
             # Add remaining features
             logger.debug("{:,} records processed".format(i))
@@ -278,7 +323,7 @@ class GeoNamesFeatures:
 
     def delete_existing_records(self, source=None):
         """Deletes associated records in both tables"""
-        session = self.session()
+        session = self.session
         if source is None:
             session.query(self.names).delete(synchronize_session=False)
             session.query(self.features).delete(synchronize_session=False)
@@ -298,7 +343,7 @@ class GeoNamesFeatures:
 
     def update_alt_names(self, source=None):
         """Regenerates alternate names table"""
-        session = self.session()
+        session = self.session
         # Deindex and clear existing data
         self.drop_indexes()
         if source:
@@ -406,15 +451,18 @@ class GeoNamesFeatures:
         therefore accomplised from a whitelist defined at the class level
         (self.unwanted_synonyms).
         """
-        session = self.session()
+        session = self.session
         for geoname_id, st_name in self.unwanted_names.items():
             for row in session.query(self.features).filter(
                 self.features.geoname_id == geoname_id
             ):
                 synonyms = []
                 for syn in as_list(row.alternate_names, self.delim + "|;,"):
-                    if self.std(syn) != st_name:
-                        synonyms.append(syn)
+                    try:
+                        if self.std(syn) != st_name:
+                            synonyms.append(syn)
+                    except ValueError:
+                        logger.debug(f"Could not standardize {repr(syn)}")
                 synonyms = self.delim.join(synonyms)
                 if synonyms != row.alternate_names:
                     mask = "Updated synonyms for geoname_id={}"
@@ -431,7 +479,7 @@ class GeoNamesFeatures:
 
     def remove_geoname_ids(self, geoname_ids):
         """Removes list of GeoNames features from the database"""
-        session = self.session()
+        session = self.session
         session.query(self.features).filter(
             self.features.geoname_id.in_(geoname_ids)
         ).delete()
@@ -445,10 +493,6 @@ class GeoNamesFeatures:
         """Builds or rebuilds indexes on the self.names table"""
         if create and not drop:
             drop = True
-
-        indexes = {
-            "idx_alt_cont": ["continent_code", "country_code"],
-        }
 
         primary = [
             self.names.fcl,
@@ -469,13 +513,13 @@ class GeoNamesFeatures:
         ]:
             if drop:
                 try:
-                    index.drop(bind=self.base.metadata.bind)
+                    index.drop(bind=self.session.get_bind())
                     logger.debug("Dropped index '%s'" % index.name)
                 except OperationalError as e:
                     pass
             if create:
                 try:
-                    index.create(bind=self.base.metadata.bind)
+                    index.create(bind=self.session.get_bind())
                     logger.debug("Created index '%s'" % index.name)
                 except OperationalError:
                     logger.debug("Failed to create index '%s'" % index.name)
@@ -616,7 +660,7 @@ class GeoNamesFeatures:
 
     def get_country_code(self, name):
         """Gets the country code for the given country name"""
-        return self.country_name_to_code[name]
+        return self.country_name_to_code[self.std(name)]
 
     def get_continent(self, country, return_continent_code=False):
         """Gets the continent name for the given country"""
@@ -637,7 +681,7 @@ class GeoNamesFeatures:
             "Oceania": "OC",
             "South America": "SA",
         }
-        code_to_name = CaseInsensitiveDict({v: k for k, v in name_to_code.items()})
+        code_to_name = Lookup({v: k for k, v in name_to_code.items()})
         # Map common synonyms
         name_to_code["Antarctic"] = "Antarctica"
         name_to_code["Australasia"] = "Oceania"
@@ -656,16 +700,16 @@ class GeoNamesFeatures:
         code_to_cont = {}
         with open(fp, "r", encoding="utf-8", newline="") as f:
             for line in skip_hashed(f):
-                row = line.split("\t")
+                row = line.strip().split("\t")
                 code_to_name[row[0]] = row[4]
                 code_to_cont[row[0]] = row[8]
         # Map missing values that occur in the GeoNames database
         code_to_name["YU"] = "Yugoslavia"
         code_to_cont["YU"] = "Europe"
         name_to_code = {v.lower(): k for k, v in code_to_name.items()}
-        GeoNamesFeatures.country_name_to_code = CaseInsensitiveDict(name_to_code)
-        GeoNamesFeatures.country_code_to_name = CaseInsensitiveDict(code_to_name)
-        GeoNamesFeatures.country_code_to_continent = CaseInsensitiveDict(code_to_cont)
+        GeoNamesFeatures.country_name_to_code = Lookup(name_to_code)
+        GeoNamesFeatures.country_code_to_name = Lookup(code_to_name)
+        GeoNamesFeatures.country_code_to_continent = Lookup(code_to_cont)
 
 
 def to_geonames_api(result):

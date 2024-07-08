@@ -1,4 +1,5 @@
 """Defines the basic pipe, include parsing of the original site"""
+
 import logging
 import re
 from collections import namedtuple
@@ -92,7 +93,7 @@ class MatchPipe:
             return self
         # Construct a standardized version of the site to simplify comparisons
         self._site = site
-        self.site.map_admin_from_names()
+        self.site.map_admin()
         self.std_site = self.site.clone()
         for attr in self.std_site.attributes:
             setattr(self.std_site, attr, self.std(getattr(self.std_site, attr)))
@@ -109,14 +110,19 @@ class MatchPipe:
         if self.verbatim and not self.populated.get(self.field):
             # Note that data was found in the field
             self.populated[self.field] = self.codes
-            features = []
             for val in as_list(self.verbatim, delims="|;"):
-                parsed, leftover = self.parse(val)
-                for group in parsed:
-                    self.features.append(group)
-                if leftover:
-                    self.leftovers.setdefault(self.field, []).append(leftover)
-            self.prepared[self.field] = self.features[:]
+                # Exclude values that have already been interpreted
+                try:
+                    self.site.interpreted[(self.field.rstrip("0123456789"), val)]
+                    break
+                except KeyError:
+                    parsed, leftover = self.parse(val)
+                    for group in parsed:
+                        self.features.append(group)
+                    if leftover:
+                        self.leftovers.setdefault(self.field, []).append(leftover)
+            else:
+                self.prepared[self.field] = self.features[:]
         return self
 
     def prepare_all(self):
@@ -156,11 +162,6 @@ class MatchPipe:
             List of MatchResult objects
         """
         self.prepare(field)
-        # Find features that have already been matched on this field
-        # key = field['field'].rstrip('0123456789')
-        # matched = self.matched.get(key, [])
-        # features = [f for f in self.features if f not in matched]
-        # Match each feature separately
         results = []
         for feature in self.features:
             sites = []
@@ -195,14 +196,12 @@ class MatchPipe:
         if not self.prepared:
             self.prepare_all()
         results = []
-        fields = {}
         for field in CONFIG["georeferencing"]["ordered_field_list"]:
             if field["field"].rstrip("0123456789") in self.populated:
                 results.extend(self.process_one(field, **kwargs))
         if not self.populated:
             mask = "No place names found in site: {}"
             raise ValueError(mask.format(repr(site)))
-            logger.warning(mask.format(repr(site)))
         return results
 
     def extract(self, site=None):
@@ -294,19 +293,21 @@ class MatchPipe:
         self.interpreted = interpreted
         return self
 
-    def add_filter(self):
+    def add_filter(self, site=None):
         """Generates a filter noting what fields were used in the match
 
         The filter is also used during annotation to generate site names.
         """
-        self.site.filter = {"name": self.site.name()}
+        if site is None:
+            site = self.site
+        site.filter = {"name": site.name}
         for attr, code in (
             ("county", "admin_code_2"),
             ("state_province", "admin_code_1"),
             ("country", "country_code"),
         ):
-            if getattr(self.site, attr) or getattr(self.site, code):
-                self.site.filter[code] = 1
+            if getattr(site, attr) or getattr(site, code):
+                site.filter[code] = 1
 
     def copy_from(self, pipe):
         """Copies attributes from another pipe"""

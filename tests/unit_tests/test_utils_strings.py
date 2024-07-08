@@ -1,4 +1,5 @@
 """Tests string utilities"""
+
 import pytest
 
 

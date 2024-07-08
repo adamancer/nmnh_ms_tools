@@ -1,4 +1,5 @@
 """Defines class to match feature names to GeoNames records"""
+
 import logging
 import json
 import re
@@ -9,7 +10,7 @@ from .core import MatchPipe, Georeference
 from ....bots.geonames import GeoNamesBot, FEATURE_TO_CODES
 from ....config import CONFIG, GEOCONFIG
 from ....databases.geonames import GeoNamesFeatures
-from ....databases.georef_data import get_preferred
+from ....databases.geohelper import get_preferred
 from ....records import Site
 from ....tools.geographic_names.caches import RecordCache
 from ....tools.geographic_names.parsers.modified import has_direction
@@ -27,6 +28,7 @@ class MatchGeoNames(MatchPipe):
 
     bot = GeoNamesBot()
     cache = {}
+    use_cache = False
 
     def __init__(
         self,
@@ -45,7 +47,6 @@ class MatchGeoNames(MatchPipe):
         if use_local is None:
             use_local = CONFIG["bots"]["geonames_use_local"]
         self.use_local = use_local if use_local is not None else use_local
-        self.use_cache = False
         self.include_feature_classes = include_feature_classes
         self.hint = self.field  # use to force a particular std function
         self.rows = []
@@ -148,6 +149,9 @@ class MatchGeoNames(MatchPipe):
         use_cache=None,
     ):
         """Georeferences a single name using GeoNames"""
+        if use_cache is None:
+            use_cache = self.use_cache
+
         preferred = self.get_preferred(name)
         if preferred:
             return [preferred]
@@ -183,7 +187,7 @@ class MatchGeoNames(MatchPipe):
         # Check cache to see if this query has been processed before
         min_size = sizes[size]
         key = self.key(name, codes, min_size, **kwargs)
-        if use_cache or (use_cache is None and self.use_cache):
+        if use_cache:
             try:
                 cached = []
                 for site in self.cache[key]:
@@ -200,12 +204,15 @@ class MatchGeoNames(MatchPipe):
         # Create and filter a list of sites. If no records found, retry the
         # search with fewer constraints but require any remaining records to
         # be larger than a certain size.
+        #
+        # Note that this block had use_cache=False. Not sure if that was on
+        # purpose or not.
         results = self.search_json(st_name, **kwargs)
         records = self.filter_records(results, name, codes, min_size, std_func=std_func)
         if not records and size not in {"small", "very large"}:
             logger.debug('Retrying search with min_size="very large"')
             records = self._georeference_actual(
-                name, st_name, codes, "very large", use_cache=False
+                name, st_name, codes, "very large", use_cache=use_cache
             )
         # Log result
         if len(codes) > 20:
@@ -214,7 +221,7 @@ class MatchGeoNames(MatchPipe):
         # logger.debug(mask.format(st_name, name, codes, kwargs, len(records), gids))
         gids = [s.location_id for s in records]
         logger.debug("Search yielded {:,} records: {}".format(len(gids), gids))
-        if use_cache or (use_cache is None and self.use_cache):
+        if use_cache:
             self.cache[key] = records
         return records
 
@@ -254,7 +261,7 @@ class MatchGeoNames(MatchPipe):
                 continue
             # Filter sites from the wrong country or admin division
             try:
-                site.map_admin_from_names()
+                site.map_admin()
             except ValueError:
                 if (
                     site.country
@@ -433,10 +440,10 @@ class MatchGeoNames(MatchPipe):
             return site
         return None
 
-    def get_json(self, geoname_id):
+    def get_json(self, geoname_id, **kwargs):
         """Retrieves the JSON record corresponding to the geoname_id"""
         if self.use_local:
-            return self.local.get_json(geoname_id)
+            return self.local.get_json(geoname_id, **kwargs)
         return self.bot.get_json(geoname_id)
 
     def search_json(self, st_name, **kwargs):
@@ -448,6 +455,7 @@ class MatchGeoNames(MatchPipe):
     @staticmethod
     def enable_sqlite_cache(path=None):
         MatchGeoNames.cache = RecordCache(path)
+        MatchGeoNames.use_cache = True
 
 
 Site.pipe = MatchGeoNames()

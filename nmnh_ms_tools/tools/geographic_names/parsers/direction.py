@@ -11,13 +11,11 @@ from unidecode import unidecode
 from .core import Parser
 from .feature import get_feature_string
 from .multifeature import MultiFeatureParser
-from .modified import ModifiedParser, get_any_feature_pattern
 from ....utils.standardizers import LocStandardizer
 from ....utils import (
     as_numeric,
     lcfirst,
     num_dec_places,
-    oxford_comma,
     to_digit,
     validate_direction,
 )

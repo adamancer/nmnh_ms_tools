@@ -5,7 +5,6 @@ import warnings
 import yaml
 
 from nmnh_ms_tools.records import CatNum, Reference, Site, get_tree
-from nmnh_ms_tools.utils import as_tuple
 from xmu import (
     EMuDate,
     EMuFloat,

@@ -5,7 +5,6 @@ import hashlib
 import logging
 import re
 
-import lxml
 from bs4 import BeautifulSoup, SoupStrainer
 
 from .core import Bot, JSONResponse

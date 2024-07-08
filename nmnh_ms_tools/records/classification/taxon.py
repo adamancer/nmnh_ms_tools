@@ -2,7 +2,6 @@
 
 import pprint as pp
 import re
-from functools import cache
 from itertools import zip_longest
 
 from unidecode import unidecode

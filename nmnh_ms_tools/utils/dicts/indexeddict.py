@@ -1,7 +1,5 @@
 """Defines dict where keys can be accessed as attributes"""
 
-import pprint as pp
-
 from .basedict import BaseDict
 
 

@@ -4,7 +4,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-import pprint as pp
 import re
 
 from .core import Parser

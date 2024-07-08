@@ -5,7 +5,6 @@ from nltk.corpus import stopwords
 
 from ..geographic_names.parsers.feature import FEATURES, OF_WORDS
 from ...utils.lists import oxford_comma
-from ...utils.strings import lcfirst, to_attribute
 
 
 logger = logging.getLogger(__name__)

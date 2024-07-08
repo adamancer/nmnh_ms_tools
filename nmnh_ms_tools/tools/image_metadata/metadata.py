@@ -8,7 +8,6 @@ from pathlib import Path
 import yaml
 
 from ..specimen_numbers import parse_spec_num
-from ...config import CONFIG
 from ...utils import hash_file, hash_image_data, oxford_comma, to_attribute
 
 

@@ -5,7 +5,6 @@ import itertools
 from .core import MatchPipe, Georeference
 from .match_custom import MatchCustom
 from .match_geonames import MatchGeoNames
-from ....config import CONFIG
 from ....tools.geographic_names.parsers import BorderParser, MultiFeatureParser
 
 

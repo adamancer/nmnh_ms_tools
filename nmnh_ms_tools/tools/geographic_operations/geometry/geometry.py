@@ -1,16 +1,14 @@
 """Defines class to handle projection of lat/long data"""
 
 import logging
-import math
 import re
-from functools import cache, cached_property
+from functools import cached_property
 from math import isclose
 
 import geopandas as gpd
-import matplotlib.pyplot as plt
 import numpy as np
 from shapely import wkb, wkt
-from shapely.affinity import scale, translate
+from shapely.affinity import translate
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry import (
     GeometryCollection,

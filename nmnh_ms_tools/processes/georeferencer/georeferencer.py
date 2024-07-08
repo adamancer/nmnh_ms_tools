@@ -7,14 +7,9 @@ import os
 import pprint as pp
 import re
 import shutil
-import sqlite3
-import sys
-import time
 from collections import OrderedDict
-from random import randint
 
 import numpy as np
-import yaml
 
 from .evaluators import MatchAnnotator
 from .pipes import (
@@ -26,26 +21,14 @@ from .pipes import (
     MatchOffshore,
     MatchPLSS,
 )
-from ...bots import Bot
-from ...databases.georef_job import (
-    init_db as init_job_db,
-    Session as GeonamesSession,
-    Localities,
-    Uncertainties,
-)
 from ...records import Site
-from ...tools.geographic_names.parsers import parse_localities
 from ...utils import (
     as_list,
     clear_empty,
-    clock,
-    clock_all_methods,
     configure_log,
-    report,
     skip_hashed,
     to_attribute,
 )
-from ...utils.standardizers import LocStandardizer
 
 
 logger = logging.getLogger(__name__)

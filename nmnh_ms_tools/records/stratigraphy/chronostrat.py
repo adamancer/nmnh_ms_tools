@@ -1,16 +1,13 @@
 """Definds methods to work with chronostratigraphic names"""
 
-import itertools
 import logging
 import os
 import re
 
 import numpy as np
-from shapely.geometry import LineString, Point
 
 from .core import StratRecord
 from .utils import CHRONOSTRAT_RANKS, parse_strat_package, split_strat, split_strat_dict
-from .range import StratRange
 from .unit import StratUnit, parse_strat_unit
 from ...bots.adamancer import AdamancerBot
 from ...config import DATA_DIR

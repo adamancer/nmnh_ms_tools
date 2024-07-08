@@ -4,8 +4,7 @@ import logging
 import itertools
 import re
 
-import geopandas as gpd
-from shapely.geometry import GeometryCollection, box
+from shapely.geometry import GeometryCollection
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
 
@@ -21,7 +20,7 @@ from ....bots.geonames import (
 from ....config import CONFIG, GEOCONFIG
 from ....databases.geohelper import OceanQuery
 from ....tools.geographic_operations.geometry import GeoMetry
-from ....records import Site, sites_to_geodataframe
+from ....records import sites_to_geodataframe
 from ....tools.geographic_names.parsers.modified import abbreviate_direction
 from ....utils import as_set, most_common
 

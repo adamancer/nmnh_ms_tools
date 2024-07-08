@@ -10,7 +10,6 @@ import polars as pl
 import yaml
 from lxml import etree
 
-from ...config import CONFIG
 from ...bots import Bot
 from ...records import CatNum, Record, Site, get_tree
 from ...utils import base_to_int, fast_hash, int_to_base, oxford_comma

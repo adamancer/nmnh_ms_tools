@@ -1,7 +1,5 @@
 """Defines helper functions for the associated database"""
 
-import re
-
 from lxml import etree
 from shapely import equals, from_wkb, wkb
 from shapely.geometry import Polygon

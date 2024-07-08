@@ -1,7 +1,6 @@
 """Defines class for caching results from GeoNames matching"""
 
 import json
-import os
 
 from ....databases.cache import CacheDict
 from ....databases.geonames import GeoNamesFeatures

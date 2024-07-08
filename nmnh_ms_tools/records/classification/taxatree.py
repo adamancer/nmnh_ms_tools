@@ -6,8 +6,6 @@ import pprint as pp
 import os
 from collections.abc import MutableMapping, MutableSequence
 
-from unidecode import unidecode
-
 from .taxalist import TaxaList
 from .taxaparser import TaxaParser
 from .taxon import Taxon

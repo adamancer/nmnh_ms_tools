@@ -2,8 +2,6 @@
 
 from ..lists import as_list, dedupe, iterable
 
-from lxml import etree
-
 
 def combine(*args):
     """Combines a list of dicts, retaining all unique values"""

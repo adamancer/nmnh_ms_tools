@@ -17,7 +17,6 @@ from ..tools.specimen_numbers_old.link import (
     REPLACEMENTS,
 )
 from ..tools.specimen_numbers_old.parser import Parser
-from ..tools.specimen_numbers_old.utils import is_geoscience
 from ..utils import as_list, dedupe, to_attribute, to_camel, to_pattern
 from ..utils.standardizers import Standardizer
 

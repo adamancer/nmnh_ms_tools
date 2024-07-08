@@ -8,7 +8,7 @@ from nameparser import HumanName
 from .core import Record, Records
 from ..utils.standardizers import Standardizer
 from ..utils.lists import oxford_comma
-from ..utils.strings import lcfirst, same_to_length
+from ..utils.strings import same_to_length
 
 
 SimpleName = namedtuple("SimpleName", ["last", "first", "middle"])

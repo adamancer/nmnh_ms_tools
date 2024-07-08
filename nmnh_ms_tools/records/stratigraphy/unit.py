@@ -14,7 +14,6 @@ from .utils import (
     std_modifiers,
     CHRONOSTRAT_RANKS,
     LITHOLOGIES,
-    LITHOSTRAT_ABBRS,
     LITHOSTRAT_RANKS,
     MODIFIERS,
 )

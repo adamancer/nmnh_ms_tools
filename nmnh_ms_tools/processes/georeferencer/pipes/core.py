@@ -2,21 +2,16 @@
 
 import logging
 import re
-from collections import namedtuple
 
 from ..evaluators.results import MatchResult
 from ....config import CONFIG
 from ....records import Site
 from ....tools.geographic_names.parsers import (
-    clean_locality,
-    parse_localities,
     FeatureParser,
-    ModifiedParser,
     MultiFeatureParser,
-    SimpleParser,
 )
 from ....utils import as_list
-from ....utils.standardizers import Standardizer, LocStandardizer
+from ....utils.standardizers import LocStandardizer
 
 
 logger = logging.getLogger(__name__)

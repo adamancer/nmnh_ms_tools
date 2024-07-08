@@ -13,9 +13,8 @@ from unidecode import unidecode
 from .between import BetweenParser
 from .border import BorderParser
 from .direction import DirectionParser
-from .feature import FEATURES, OF_WORDS, FeatureParser
+from .feature import FEATURES, OF_WORDS
 from .measurement import MeasurementParser
-from .modified import ModifiedParser
 from .multifeature import MultiFeatureParser
 from .plss import PLSSParser
 from .simple import SimpleParser
@@ -130,6 +129,7 @@ def deperiod(val, parsers=None):
             PLSSParser,
             DirectionParser,
             BetweenParser,
+            BorderParser,
             MeasurementParser,
             MultiFeatureParser,
         ]

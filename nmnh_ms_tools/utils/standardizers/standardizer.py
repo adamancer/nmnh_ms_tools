@@ -3,7 +3,6 @@
 import logging
 import re
 
-from nltk.stem import SnowballStemmer
 from unidecode import unidecode
 
 

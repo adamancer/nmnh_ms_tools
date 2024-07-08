@@ -12,7 +12,6 @@ import requests_cache
 from lxml import etree
 
 from ..config import CONFIG
-from ..utils import to_attribute
 
 
 logger = logging.getLogger(__name__)

@@ -2,7 +2,7 @@ import logging
 import os
 import re
 
-from .specnum import SpecNum, expand_range, is_range, is_spec_num, parse_spec_num
+from .specnum import SpecNum, expand_range, is_spec_num, parse_spec_num
 
 logger = logging.getLogger(__name__)
 

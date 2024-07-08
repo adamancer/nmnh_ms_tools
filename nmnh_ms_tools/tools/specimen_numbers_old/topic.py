@@ -4,14 +4,9 @@ import glob
 import json
 import logging
 import os
-import pprint as pp
 import re
-import time
 
 from collections import OrderedDict, namedtuple
-from lxml import etree
-import requests
-from unidecode import unidecode
 
 from ...bots import GNRDBot, ITISBot
 from ...utils.standardizers import Standardizer

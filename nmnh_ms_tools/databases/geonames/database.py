@@ -9,7 +9,6 @@ from sqlalchemy import (
     String,
 )
 from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy.schema import Index
 
 from ...config import CONFIG
 from ..helpers import init_helper

@@ -5,7 +5,6 @@ from .match_border import MatchBorder
 from .match_custom import MatchCustom
 from .match_geonames import MatchGeoNames
 from ....tools.geographic_names.parsers import DirectionParser, MultiFeatureParser
-from ....config import CONFIG
 
 
 class MatchDirection(MatchPipe):

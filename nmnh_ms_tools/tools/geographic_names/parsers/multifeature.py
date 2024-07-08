@@ -9,7 +9,6 @@ from .feature import FeatureParser, FEATURES, OF_WORDS, append_feature_type
 from .junction import JunctionParser
 from .modified import ModifiedParser, is_modified_feature
 from .offshore import OffshoreParser
-from .simple import SimpleParser
 from ....utils import as_list, oxford_comma
 
 

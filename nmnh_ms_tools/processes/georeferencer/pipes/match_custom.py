@@ -4,11 +4,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-import csv
-import pickle
-import os
-
-from .core import Georeference
 from .match_geonames import MatchGeoNames
 from ....databases.custom import CustomFeatures, init_db
 

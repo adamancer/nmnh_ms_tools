@@ -7,7 +7,6 @@ from .border import BorderParser
 from .feature import FeatureParser, get_feature_string
 from .junction import is_road
 from .modified import ModifiedParser
-from ....utils import oxford_comma
 
 
 OFFSHORE = [

@@ -2,8 +2,6 @@
 
 import logging
 
-from lxml import etree
-
 from .core import Bot, XMLResponse
 
 

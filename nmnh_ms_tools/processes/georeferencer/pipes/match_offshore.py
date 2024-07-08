@@ -1,14 +1,10 @@
 """Defines class to convert offshore strings to geometries"""
 
-import itertools
-
 from .core import MatchPipe, Georeference
 from .match_border import MatchBorder
 from .match_custom import MatchCustom
 from .match_geonames import MatchGeoNames
-from ..evaluators import MatchEvaluator
 from ....tools.geographic_names.parsers import MultiFeatureParser, OffshoreParser
-from ....tools.geographic_operations.geometry import GeoMetry
 
 
 class MatchOffshore(MatchPipe):

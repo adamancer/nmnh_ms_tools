@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 import re
 
-from ....utils import as_list, repr_class, str_class
+from ....utils import as_list, repr_class
 
 
 class Parser:

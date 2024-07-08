@@ -4,7 +4,6 @@ import datetime as dt
 import html
 import logging
 import re
-from collections import namedtuple
 
 import bibtexparser
 import pandas as pd

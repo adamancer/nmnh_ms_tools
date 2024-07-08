@@ -1,7 +1,6 @@
 """Defines class for caching parsed locality strings"""
 
 import json
-import os
 
 from ....databases.cache import CacheDict
 from ....tools.geographic_names.parsers.between import BetweenParser

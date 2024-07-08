@@ -1,16 +1,11 @@
-"""Defines constants and functions used in the stratigraphy submodule"""
+"""Defines constants and utility functions used in the stratigraphy submodule"""
 
-import copy
 import itertools
 import re
 
-import numpy as np
 from titlecase import titlecase
 
 from .range import StratRange
-from ..core import Record
-from ...bots.adamancer import AdamancerBot
-from ...bots.macrostrat import MacrostratBot
 from ...utils import as_list, std_case, to_attribute
 
 

@@ -1,7 +1,6 @@
 """Defines tables in the custom feature SQL file"""
 
 import logging
-import os
 
 from sqlalchemy import (
     Column,

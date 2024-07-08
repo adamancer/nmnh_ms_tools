@@ -7,7 +7,6 @@ import logging
 import os
 import re
 
-from requests.structures import CaseInsensitiveDict
 from shapely import wkt
 from sqlalchemy import case, or_
 from sqlalchemy.exc import OperationalError

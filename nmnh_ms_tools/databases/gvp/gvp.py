@@ -1,11 +1,9 @@
 import glob
 import os
 import re
-import warnings
 from collections import namedtuple
 
 import pandas as pd
-from unidecode import unidecode
 
 from ...config import CONFIG
 

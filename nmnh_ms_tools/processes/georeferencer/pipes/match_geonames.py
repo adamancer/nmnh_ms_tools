@@ -4,8 +4,6 @@ import logging
 import json
 import re
 
-from sqlalchemy import or_
-
 from .core import MatchPipe, Georeference
 from ....bots.geonames import GeoNamesBot, FEATURE_TO_CODES
 from ....config import CONFIG, GEOCONFIG
@@ -14,7 +12,7 @@ from ....databases.geohelper import get_preferred
 from ....records import Site
 from ....tools.geographic_names.caches import RecordCache
 from ....tools.geographic_names.parsers.modified import has_direction
-from ....utils import as_str, as_list
+from ....utils import as_list
 
 
 logger = logging.getLogger(__name__)

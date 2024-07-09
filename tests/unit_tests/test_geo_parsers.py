@@ -6,7 +6,6 @@ from nmnh_ms_tools.tools.geographic_names.parsers import (
     BetweenParser,
     BorderParser,
     DirectionParser,
-    JunctionParser,
     parse_localities,
 )
 from nmnh_ms_tools.tools.geographic_names.parsers.junction import get_road, get_junction

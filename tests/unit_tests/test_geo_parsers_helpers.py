@@ -6,9 +6,6 @@ from nmnh_ms_tools.tools.geographic_names.parsers.helpers import (
     clean_locality,
     debreviate,
     deperiod,
-    get_leftover,
-    parse_localities,
-    split_localities,
 )
 
 

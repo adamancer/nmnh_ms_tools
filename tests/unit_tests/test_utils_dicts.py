@@ -6,7 +6,6 @@ import pytest
 from nmnh_ms_tools.utils.dicts import (
     AttrDict,
     IndexedDict,
-    NamedDict,
     StaticDict,
     combine,
     get_common_items,

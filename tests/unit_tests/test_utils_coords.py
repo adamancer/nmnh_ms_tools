@@ -1,4 +1,4 @@
-"""Tests functions in AdamancerBot class"""
+"""Tests functions in coords"""
 
 import pytest
 from pytest import approx
@@ -62,17 +62,17 @@ def test_coordinate_str(test_input, kind, expected):
 @pytest.mark.parametrize(
     "test_input,expected",
     [
-        ("45 N", 111),
-        ("45 30 N", 2),
-        ("45 30 30 N", 0.03),
-        (45.5, 11.1),
-        (45.25, 1.11),
-        (45.125, 0.111),
+        ("45 N", 55.3),
+        ("45 30 N", 0.921),
+        ("45 30 30 N", 0.0154),
+        (45.5, 5.53),
+        (45.25, 0.553),
+        (45.125, 0.0553),
     ],
 )
-def test_estimate_precision(test_input, expected):
+def test_estimate_uncertainty(test_input, expected):
     coord = parse_coordinate(test_input, "latitude")[0]
-    assert coord.estimate_precision() == approx(expected, rel=1e-2)
+    assert coord.estimate_uncertainty() == approx(expected, rel=1e-2)
 
 
 @pytest.mark.parametrize(
@@ -89,7 +89,7 @@ def test_out_of_bounds_coordinates(test_input, kind):
 
 @pytest.mark.parametrize("test_input", [None])
 def test_invalid_input(test_input):
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         parse_coordinate(test_input, "latitude")
 
 

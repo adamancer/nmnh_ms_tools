@@ -7,7 +7,7 @@ class BaseDict(dict):
     def __init__(self, *args, **kwargs):
         if not hasattr(self, "_coerce_dicts_to"):
             self._coerce_dicts_to = None
-        self.keymap = {}
+        self._keymap = {}
         self.update(*args, **kwargs)
 
     def __getitem__(self, key):
@@ -16,7 +16,7 @@ class BaseDict(dict):
     def __setitem__(self, key, val):
         """Coerces dictionaries when key is set"""
         formatted = self.format_key(key)
-        self.keymap.setdefault(formatted, key)
+        self._keymap.setdefault(formatted, key)
         super().__setitem__(formatted, self._coerce_dicts(val))
 
     def __delitem__(self, key):

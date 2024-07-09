@@ -38,7 +38,6 @@ class AttrDict(BaseDict):
         self._check_key(key)
         if self._keys is not None and isinstance(key, int):
             key = self._keys[key]
-            keys = (k for k in self._keys if k != key)
         super(AttrDict, self).__delitem__(key)
 
     def __getattr__(self, attr):

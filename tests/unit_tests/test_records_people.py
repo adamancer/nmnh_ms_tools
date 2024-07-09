@@ -1,14 +1,8 @@
-"""Tests DirectionParser"""
+"""Tests Person"""
 
 import pytest
 
-from nmnh_ms_tools.records.people import (
-    Person,
-    combine_names,
-    combine_authors,
-    parse_names,
-)
-
+from nmnh_ms_tools.records.people import Person
 
 @pytest.mark.parametrize(
     "test_input, expected",

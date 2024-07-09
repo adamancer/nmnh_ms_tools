@@ -8,7 +8,6 @@ import pytest
 from nmnh_ms_tools.utils.clock import (
     clock,
     clock_snippet,
-    update_results,
     report,
     clock_all_methods,
 )

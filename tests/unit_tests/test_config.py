@@ -3,7 +3,7 @@
 import pytest
 
 
-from nmnh_ms_tools.config import CONFIG
+from nmnh_ms_tools.config import GEOCONFIG
 
 
 codes = [
@@ -29,32 +29,32 @@ codes = [
 
 
 def test_filter_codes():
-    assert set(CONFIG.filter_codes("P")) == {c[0] for c in codes}
+    assert set(GEOCONFIG.filter_codes("P")) == {c[0] for c in codes}
 
 
 @pytest.mark.parametrize("test_input", codes)
 def test_filter_sizes(test_input):
-    assert test_input[0] in CONFIG.filter_codes(min_size=4, max_size=16)
+    assert test_input[0] in GEOCONFIG.filter_codes(min_size=4, max_size=16)
 
 
 def test_sizes():
-    assert CONFIG.min_size([c[0] for c in codes]) == 4
-    assert CONFIG.max_size([c[0] for c in codes]) == 16
+    assert GEOCONFIG.min_size([c[0] for c in codes]) == 4
+    assert GEOCONFIG.max_size([c[0] for c in codes]) == 16
 
 
 def test_get_feature_classes():
-    assert CONFIG.get_feature_classes([c[0] for c in codes]) == ["P"]
+    assert GEOCONFIG.get_feature_classes([c[0] for c in codes]) == ["P"]
 
 
 @pytest.mark.parametrize("test_input", codes)
 def test_get_feature_class(test_input):
-    assert CONFIG.get_feature_class(test_input[0]) == "P"
+    assert GEOCONFIG.get_feature_class(test_input[0]) == "P"
 
 
 def test_get_feature_codes():
-    assert set(CONFIG.get_feature_codes("P")) == {c[0] for c in codes}
+    assert set(GEOCONFIG.get_feature_codes("P")) == {c[0] for c in codes}
 
 
 @pytest.mark.parametrize("test_input,expected", codes)
 def test_get_feature_radius(test_input, expected):
-    assert CONFIG.get_feature_radius(test_input) == expected
+    assert GEOCONFIG.get_feature_radius(test_input) == expected

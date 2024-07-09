@@ -100,7 +100,7 @@ class Specimen(Record):
         self._references = None
 
         # Initialize instance
-        super(Specimen, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     # def __str__(self):
     #    return self.name

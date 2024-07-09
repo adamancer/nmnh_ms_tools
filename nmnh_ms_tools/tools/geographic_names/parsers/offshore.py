@@ -30,7 +30,7 @@ class OffshoreParser(Parser):
     attributes = ["kind", "verbatim", "feature"]
 
     def __init__(self, *args, **kwargs):
-        super(OffshoreParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def parse(self, val):
         feature = get_offshore(val)

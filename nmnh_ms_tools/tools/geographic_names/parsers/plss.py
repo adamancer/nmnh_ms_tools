@@ -67,7 +67,7 @@ class PLSSParser(Parser):
         self._sections = re.compile(sections, re.I)
         self._quarter_sections = re.compile(qtr_sections, re.I)
         self._bad_prefixes = re.compile(bad_prefixes + " ?[0-9]+", re.I)
-        super(PLSSParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def name(self):
         """Returns a string describing the parsed locality"""

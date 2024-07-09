@@ -22,7 +22,7 @@ class MatchAnnotator(MatchEvaluator):
     std = LocStandardizer()
 
     def __init__(self, *args, **kwargs):
-        super(MatchAnnotator, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.description = None
 
     @property

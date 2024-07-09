@@ -36,7 +36,7 @@ class MatchGeoNames(MatchPipe):
         include_feature_classes=False,
         **kwargs,
     ):
-        super(MatchGeoNames, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         if username is not None:
             MatchGeoNames.bot.username = username
         self.fields = GEOCONFIG.fields

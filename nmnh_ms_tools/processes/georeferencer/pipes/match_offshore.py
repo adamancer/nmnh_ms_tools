@@ -13,7 +13,7 @@ class MatchOffshore(MatchPipe):
     parser = OffshoreParser
 
     def __init__(self, pipes=None):
-        super(MatchOffshore, self).__init__()
+        super().__init__()
         self.pipes = pipes if pipes else [MatchCustom(), MatchGeoNames()]
 
     def test(self, feature):

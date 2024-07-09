@@ -12,7 +12,7 @@ class RecordCache(CacheDict):
     local = GeoNamesFeatures()
 
     def __init__(self, path=None):
-        super(RecordCache, self).__init__()
+        super().__init__()
         if path is not None:
             self.init_db(path)
 

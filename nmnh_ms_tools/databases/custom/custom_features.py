@@ -90,7 +90,7 @@ class CustomFeatures(GeoNamesFeatures):
                 sources.append(rowdict["site_source"])
         for source in set(sources):
             self.delete_existing_records(source)
-        return super(CustomFeatures, self).from_csv(fp, delete_existing=False)
+        return super().from_csv(fp, delete_existing=False)
 
     def fill_record(self, *args, **kwargs):
         raise NotImplementedError

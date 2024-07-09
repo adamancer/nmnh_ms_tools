@@ -21,7 +21,7 @@ class ABCEncoder(json.JSONEncoder):
     """Defines methods to encode ABC and datetime objects as JSON"""
 
     def __init__(self, *args, **kwargs):
-        super(ABCEncoder, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def default(self, val):
         try:

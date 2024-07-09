@@ -12,7 +12,7 @@ class StaticDict(BaseDict):
         # Map values to a tuple if given as [(k1, v1)...]
         self._name = self.__class__.__name__
         self._coerce_dicts_to = self.__class__
-        super(StaticDict, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def __str__(self):
         return "{}({})".format(self._name, pp.pformat(self))
@@ -21,7 +21,7 @@ class StaticDict(BaseDict):
         try:
             self[key]
         except KeyError:
-            super(StaticDict, self).__setitem__(key, val)
+            super().__setitem__(key, val)
         else:
             raise KeyError("{} already set".format(key))
 

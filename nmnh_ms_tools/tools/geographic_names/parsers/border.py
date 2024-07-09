@@ -22,7 +22,7 @@ class BorderParser(Parser):
     attributes = ["kind", "verbatim", "feature", "features"]
 
     def __init__(self, *args, **kwargs):
-        super(BorderParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def parse(self, val):
         self.verbatim = val

@@ -45,7 +45,7 @@ class Person(Record):
         self.suffix = ""
         self.organization = ""
         # Initialize instance
-        super(Person, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def __str__(self):
         return self.name

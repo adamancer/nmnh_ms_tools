@@ -60,7 +60,7 @@ class ChronoStrat(StratRecord):
         self.age_geom = None
 
         # Initialize instance
-        super(ChronoStrat, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         # Define additional attributes
         self.intervals = [getattr(self, k) for k in self.ranks]

@@ -76,7 +76,7 @@ class Reference(Record):
         self._doi = ""
 
         # Initialize instance
-        super(Reference, self).__init__()
+        super().__init__()
         self.resolve_parsed_doi = resolve_parsed_doi
         self.formatter = CSEFormatter
 
@@ -776,7 +776,7 @@ class Citation(Record):
         self._class_attrs = set(dir(self))
 
         # Initialize instance
-        super(Citation, self).__init__((text, reference, matches))
+        super().__init__((text, reference, matches))
 
         self.emu_note_mask = "This citation mentions the following specimens:\n{}"
 

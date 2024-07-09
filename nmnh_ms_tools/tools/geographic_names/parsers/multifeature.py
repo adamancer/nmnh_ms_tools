@@ -31,7 +31,7 @@ class MultiFeatureParser(Parser):
     def __init__(self, *args, **kwargs):
         self.features = []
         self.specific = False
-        super(MultiFeatureParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def __iter__(self):
         return iter(self.features)  # list of lists

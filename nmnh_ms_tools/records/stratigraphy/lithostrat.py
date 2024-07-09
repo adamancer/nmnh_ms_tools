@@ -39,7 +39,7 @@ class LithoStrat(Record):
         self.current_latitude = np.nan
         self.current_longitude = np.nan
         # Initialize instance
-        super(LithoStrat, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         # Define additional attributes
         self._geometry = None
 

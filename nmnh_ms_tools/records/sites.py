@@ -385,9 +385,9 @@ class Site(Record):
         elif attr in {"country", "state_province", "county"}:
             if hasattr(self, attr) and val != getattr(self, attr):
                 self.admin_polygons = {}
-            super(Site, self).__setattr__(attr, val)
+            super().__setattr__(attr, val)
         else:
-            super(Site, self).__setattr__(attr, val)
+            super().__setattr__(attr, val)
 
     @property
     def name(self):

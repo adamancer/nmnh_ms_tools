@@ -16,7 +16,7 @@ class MatchBetween(MatchPipe):
     parser = BetweenParser
 
     def __init__(self, pipes=None):
-        super(MatchBetween, self).__init__()
+        super().__init__()
         self.pipes = pipes if pipes else [MatchCustom(), MatchGeoNames()]
 
     def test(self, feature):

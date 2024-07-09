@@ -12,7 +12,7 @@ class MeasurementParser(Parser):
     attributes = ["kind", "verbatim", "feature", "features"]
 
     def __init__(self, *args, **kwargs):
-        super(MeasurementParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.specific = False
 
     def parse(self, val):

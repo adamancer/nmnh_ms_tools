@@ -12,7 +12,7 @@ class MatchPLSS(MatchPipe):
     bot = PLSSBot()
 
     def __init__(self):
-        super(MatchPLSS, self).__init__()
+        super().__init__()
 
     def test(self, feature):
         """Tests if matcher can be used on the given locality string"""

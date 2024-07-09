@@ -15,7 +15,7 @@ class Template(Record):
         self._properties = []
         # Explicitly define defaults for all reported attributes
         # Define additional attributes required for parse
-        super(Template, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         # Define additional attributes
 
     def __str__(self):

@@ -126,7 +126,7 @@ class TaxaTree(TaxaIndex):
 
     def __init__(self, *args, **kwargs):
         self.disable_index = False
-        super(TaxaTree, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.indexers = {"name_index": NameIndex, "stem_index": StemIndex}
 
     def __contains__(self, key):
@@ -297,7 +297,7 @@ class NameIndex(TaxaIndex):
     path = CONFIG["data"]["name_index"]
 
     def __init__(self, tree):
-        super(NameIndex, self).__init__()
+        super().__init__()
         try:
             self.from_json(self.path)
         except (IOError, OSError):
@@ -328,7 +328,7 @@ class StemIndex(TaxaIndex):
     path = CONFIG["data"]["name_index"]
 
     def __init__(self, tree):
-        super(StemIndex, self).__init__()
+        super().__init__()
         try:
             self.from_json(self.path)
         except (IOError, OSError):

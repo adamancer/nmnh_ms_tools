@@ -28,7 +28,7 @@ class JunctionParser(Parser):
     attributes = ["kind", "verbatim", "feature", "features"]
 
     def __init__(self, *args, **kwargs):
-        super(JunctionParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def parse(self, val):
         """Parses roads and junctions"""

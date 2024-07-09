@@ -69,7 +69,7 @@ class DirectionParser(Parser):
         self._bearing = None
         self._feature = None
         self.precision = None
-        super(DirectionParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     @property
     def min_dist(self):

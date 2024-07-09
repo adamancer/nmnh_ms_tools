@@ -16,7 +16,7 @@ class StratRecord(Record):
         self.age_geom = None
 
         # Initialize instance
-        super(StratRecord, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     @property
     def min_ma(self):

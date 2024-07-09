@@ -22,7 +22,7 @@ class SimpleParser(Parser):
     ]
 
     def __init__(self, *args, **kwargs):
-        super(SimpleParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def name(self):
         """Returns a string describing the parsed locality"""

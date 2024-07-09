@@ -440,7 +440,7 @@ class SESARRecord(Record):
         # Define additional attributes required for parse
         self.verbatim = None
         self.inferred_igsn = False
-        super(SESARRecord, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         # Check for IGSN if none provided
         if not self.igsn:
             self.infer_igsn()

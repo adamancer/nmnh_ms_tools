@@ -49,9 +49,9 @@ class CatNum(Record):
         self.mask = "default"
         # Parse numbers
         if args:
-            super(CatNum, self).__init__(args[0])
+            super().__init__(args[0])
         else:
-            super(CatNum, self).__init__(kwargs)
+            super().__init__(kwargs)
         # Enforce formatting for some attributes
         if self.code:
             self.code = self.code.upper()
@@ -478,7 +478,7 @@ class CatNums(Records):
     item_class = CatNum
 
     def __init__(self, *args):
-        super(CatNums, self).__init__()
+        super().__init__()
         if len(args) == 1:
             if isinstance(args[0], (list, tuple)):
                 catnums = args[0]

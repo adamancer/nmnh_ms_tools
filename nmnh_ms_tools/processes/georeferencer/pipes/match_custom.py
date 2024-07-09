@@ -14,7 +14,7 @@ class MatchCustom(MatchGeoNames):
     cache = {}
 
     def __init__(self, fp=None, url_mask=None, **kwargs):
-        super(MatchCustom, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         if fp:
             init_db(fp)
         self.url_mask = url_mask

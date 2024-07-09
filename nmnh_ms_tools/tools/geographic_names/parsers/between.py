@@ -22,7 +22,7 @@ class BetweenParser(Parser):
         self.features = None
         self.inclusive = False
         self.specific = None
-        super(BetweenParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     @property
     def feature(self):

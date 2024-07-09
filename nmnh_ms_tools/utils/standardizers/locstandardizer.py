@@ -62,7 +62,7 @@ class LocStandardizer(Standardizer):
         kwargs.setdefault("stopwords", stopwords)
         kwargs.setdefault("move_to_beginning", move_to_beginning)
         kwargs.setdefault("strip_parentheticals", True)
-        super(LocStandardizer, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         # Create lookup for feature-specific standardization functions
         self.features = {
             "admin": self.std_admin,
@@ -87,7 +87,7 @@ class LocStandardizer(Standardizer):
         val = self.std_directions(val)
         val = self.std_companies(val)
         val = self.denumber(val)
-        return super(LocStandardizer, self)._std(val, *args, **kwargs)
+        return super()._std(val, *args, **kwargs)
 
     def sitify(self, val, patterns=None):
         """Converts a description approximating a site to that site's name"""

@@ -9,7 +9,7 @@ class StratRange(Record):
         # Explicitly define defaults for all reported attributes
         self.units = []
         # Initialize instance
-        super(StratRange, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     @property
     def min_ma(self):

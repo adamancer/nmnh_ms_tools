@@ -28,7 +28,7 @@ class ModifiedParser(Parser):
         self.adj = False  # verbatum uses adjective form of direction
         self.delimited = False  # verbatim uses comma-delimited direction
         self.feature = None
-        super(ModifiedParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     @property
     def modified(self):

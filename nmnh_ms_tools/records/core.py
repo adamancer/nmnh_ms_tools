@@ -109,7 +109,7 @@ class Record:
         except (AttributeError, KeyError):
             pass
         try:
-            super(Record, self).__setattr__(attr, val)
+            super().__setattr__(attr, val)
         except AttributeError as e:
             raise AttributeError("{}: {} = {}".format(e, attr, val))
 

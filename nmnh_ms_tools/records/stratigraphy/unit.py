@@ -40,7 +40,7 @@ class StratUnit(Record):
         # Define additional attributes required for parse
         self._hint = "[{}]".format(hint.lower()) if hint else None
         # Initialize instance
-        super(StratUnit, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def __str__(self):
         return self.long_name()

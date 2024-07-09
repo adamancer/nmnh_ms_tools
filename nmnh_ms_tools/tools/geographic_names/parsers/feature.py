@@ -168,7 +168,7 @@ class FeatureParser(Parser):
 
     def __init__(self, *args, **kwargs):
         self._variants = []
-        super(FeatureParser, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def variants(self):
         """Returns a list of plausible variants on a feature name"""

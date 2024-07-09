@@ -29,7 +29,7 @@ class LocalityCache(CacheDict):
     """Caches parses of locality strings"""
 
     def __init__(self, path=None):
-        super(LocalityCache, self).__init__()
+        super().__init__()
         if path is not None:
             self.init_db(path)
 

@@ -599,7 +599,8 @@ class Site(Record):
         # Check cache for polygons
         adm_fields = ["continent", "country", "state_province", "county"]
         vals = [getattr(self, a) for a in adm_fields]
-        if not any(vals):
+        vals = [s for s in vals if s and "?" not in "".join(s)]
+        if not vals:
             return gpd.GeoDataFrame()
 
         vkey = json.dumps(vals)
@@ -628,6 +629,7 @@ class Site(Record):
             if getattr(self, code):
                 codes += 1
         attrs = list(attrs) if names > codes else list(attrs.values())
+        is_name = names > codes
 
         result = {}
         val_to_id = {}
@@ -647,16 +649,17 @@ class Site(Record):
             matches = {}
             results = []
             for adm in product(*admin):
-                result = self.adm.get(*adm)
+                result = self.adm.get(*adm, is_name=is_name)
                 for key in attrs:
                     try:
                         val = result[key]
                     except KeyError:
                         pass
                     else:
-                        matches.setdefault((key, val[0]), []).extend(
-                            self.adm.query(val, key, **result)
-                        )
+                        if val:
+                            matches.setdefault((key, val[0]), []).extend(
+                                self.adm.query(val, key, **result)
+                            )
                 results.append(result)
 
             # Update record with preferred names, admin codes, and georeference matches
@@ -706,6 +709,14 @@ class Site(Record):
             .sort_values("area", ascending=False)
             .reset_index()
         )
+
+        # Check for admin units that have not been assigned polygons
+        has_area = gdf[gdf["area"] != 0]
+        no_area = set(gdf["field"]) - set(has_area["field"])
+        if no_area:
+            print(
+                f"No polygon for {no_area} {(self.country, self.state_province, self.county)})"
+            )
 
         # Add dataframe to cache
         key = json.dumps([getattr(self, a) for a in adm_fields])
@@ -823,6 +834,9 @@ class Site(Record):
                 return False
         # Otherwise verify that the polygons intersect the given coordinates
         gdf = self.get_admin_polygons()
+        if not self.verbatim_latitude or not self.verbatim_longitude:
+            logger.debug(f"Coordinates not specified: {self}")
+            return False
         if not gdf.empty:
             row = gdf.iloc[-1]
             geom = GeoMetry(gdf.geometry.iloc[-1:].reset_index(drop=True), gdf.crs)
@@ -873,70 +887,6 @@ class Site(Record):
     def get_admin_polygons(self, results=None):
         """Gets polygons for admin divisions"""
         return self.map_admin()
-        if not self.country:
-            return gpd.GeoDataFrame()
-        self.map_admin()
-        # Check cache for polygons
-        key = json.dumps([getattr(self, a) for a in self.adm.code_fields])
-        try:
-            return self.admin_cache[key].copy()
-        except KeyError:
-            pass
-        # Search for and merge polygons
-        fields = [f for f in self.adm.name_fields if getattr(self, f)]
-        admin = self.clone([f for f in fields if getattr(self, f)])
-        polygons = {}
-        if admin:
-            sites = []
-            for result in results if results else self.pipe.process(admin):
-                # Limit to primary fields, that is, fields without trailing numbers
-                if result.sites and result.field in admin:
-                    sites.extend(result.sites)
-            gdf = sites_to_geodataframe(sites, field=[s.field for s in sites])
-            # Keep all polygons that match a county, state, and country
-            results = gdf.sindex.query(gdf["geometry"], "intersects")
-            xing = {}
-            for in_geom, x_geom in zip(*results):
-                xing.setdefault(in_geom, []).append(x_geom)
-            keep = []
-            for idx, matches in xing.items():
-                if idx not in keep and not set(fields) - {
-                    sites[i].field for i in matches
-                }:
-                    keep.extend(matches)
-            # Dissolve by field
-            geoms = (
-                gdf.iloc[keep]
-                .dissolve("field")
-                .sort_values("area", ascending=False)
-                .reset_index()
-            )
-
-        # Create KML for unrecognized admins
-        if geoms.empty:
-            polygons = list(polygons.values())
-            polygons.sort(key=lambda p: p.area)
-            # Catch missing or out-of-bounds admin polygons
-            names = to_attribute(admin.summarize("admin"))
-            fn = "{}_{}.kml".format(names, self.location_id)
-            fp = os.path.join("errors", fn)
-            # Convert site dict to list
-            sitelist = []
-            for fld in fields:
-                sitelist.extend(sites.get(fld, []))
-            write_kml(fp, sitelist)
-            msg = "Admin disjoint: {}: {}"
-            if not sites.get(field):
-                msg = "Admin not found: {}: {}"
-            raise ValueError(msg.format(self.location_id, names))
-
-        # Rebuild key since it can be changed from mapped names
-        key = json.dumps([getattr(self, a) for a in self.adm.code_fields])
-        if geoms.empty:
-            raise ValueError("Could not map polygons: {}".format(key))
-        self.admin_cache[key] = geoms
-
-        return geoms
 
     def map_marine_features(self):
         """Maps marine features to specific field"""

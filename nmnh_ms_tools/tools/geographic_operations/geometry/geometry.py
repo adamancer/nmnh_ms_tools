@@ -171,10 +171,8 @@ class GeoMetry:
             for geom in self.as_wgs84.geom.iloc[0].geoms:
                 for x, _ in geom.exterior.coords:
                     meridians.append(int(x))
-        vals, bins = np.histogram(meridians, bins=6, range=(-180, 180))
-        midpoints = [np.mean((val, bins[i])) for i, val in enumerate(bins[1:])]
-        return {int(m) for m, v in zip(midpoints, vals) if v}
-
+        return get_meridians(meridians)
+    
     @cached_property
     def lat(self):
         return self.y
@@ -193,7 +191,7 @@ class GeoMetry:
             return list(self.geom.iloc[0].coords)
         elif self.geom_type == "Point":
             return [(self.geom.iloc[0].x, self.geom.iloc[0].y)]
-        logger.debug(f"Getting coords for {self.geom_type}")
+        logger.debug(f"Getting coords for {self.geom_type} (crs={self.crs})")
         return list(self.convex_hull.coords)
 
     @cached_property
@@ -229,15 +227,15 @@ class GeoMetry:
         # Return centroid if polygon does not cross the dateline
         geom = self.geom.to_crs(4326)
         x1, y1, x2, y2 = geom.total_bounds
-        lat = (y1 + y2) / 2
-        lon = (x1 + x2) / 2
+        lat = 0 #(y1 + y2) / 2
+        lon = get_meridian([(x1 + x2) / 2])
         # Return centroid if polygon does not cross the dateline
         if abs(x1 - x2) < 180:
             proj_string = self.equal_area_mask.format(lat=lat, lon=lon)
             centroid = geom.to_crs(proj_string).centroid
             return self.match(centroid)
         # Reproject until polygon is in one piece
-        for lon in range(-180, 180, 15):
+        for lon in range(-180, 180, 60):
             reproj = geom.to_crs(self.lat_lon_mask.format(lat=lat, lon=lon))
             x1_, _, x2_, _ = reproj.total_bounds
             if abs(x1_ - x2_) < 180:
@@ -266,7 +264,7 @@ class GeoMetry:
     def bounds(self):
         logger.debug(f"Calculating the bounds of {_truncate(self.geom)}")
         if self.geom_type == "Point":
-            return self.polygon.geom.total_bounds
+            bounds = self.polygon.geom.total_bounds
         return self.geom.total_bounds
 
     @cached_property
@@ -295,11 +293,27 @@ class GeoMetry:
 
     @cached_property
     def as_equal_area(self):
-        return self.to_crs(self.customize_proj_string(self.equal_area_mask))
+        mask = self.equal_area_mask
+        name = mask.split(" ")[0]
+        if str(self.crs).startswith(name):
+            return self.copy()
+        proj_string = self.customize_proj_string(mask)
+        # Use standard 53012 if meridian is 0
+        if "lat0=0 " in proj_string:
+            proj_string = 53012
+        return self.to_crs(proj_string)
 
     @cached_property
     def as_lat_lon(self):
-        return self.to_crs(self.customize_proj_string(self.lat_lon_mask))
+        mask = self.lat_lon_mask
+        name = mask.split(" ")[0]
+        if str(self.crs).startswith(name):
+            return self.copy()
+        proj_string = self.customize_proj_string(mask)
+        # Use standard 4326 if meridian is 0
+        if "lat0=0 " in proj_string:
+            proj_string = 4326
+        return self.to_crs(proj_string)
 
     @cached_property
     def as_wgs84(self):
@@ -370,7 +384,8 @@ class GeoMetry:
     def to_crs(self, crs, validate=True):
         """Reprojects geometry to another crs"""
         geom = self.verbatim_geom.copy(True)
-        if crs != geom.crs:
+        
+        if not geom.crs.equals(crs):
             logger.debug(
                 f"Reprojecting from {repr(str(self.verbatim_geom.crs))}"
                 f" to {repr(str(crs))}"
@@ -383,7 +398,7 @@ class GeoMetry:
         geom = self.__class__(geom, validate=False)
         geom.verbatim_geom = self.verbatim_geom.copy()
         if validate:
-            geom.geom = geom.validate_shape()
+            geom.validate_shape()
         geom.validate = validate
 
         # Copy metadata
@@ -402,14 +417,14 @@ class GeoMetry:
                 if str(e) != "Could not infer CRS":
                     raise
                 other = self.__class__(other, crs=self.crs)
-        if self.crs != other.crs:
+        if not self.crs.equals(other.crs):
             other = other.to_crs(self.crs)
         return other
 
     def copy(self):
         logger.debug(f"Creating a copy of {_truncate(self)}")
         copy = self.__class__(self.verbatim_geom.copy())
-        if self.crs != self.verbatim_geom.crs:
+        if not self.crs.equals(self.verbatim_geom.crs):
             copy = copy.to_crs(self.crs)
         copy.name = self.name
         copy.parents = self.parents.copy()
@@ -447,7 +462,7 @@ class GeoMetry:
 
     def customize_proj_string(self, proj_string):
         point = self.representative_point
-        return proj_string.format(lat=point.y, lon=point.x)
+        return proj_string.format(lat=0, lon=get_meridian([point.x]))
 
     def equals_exact(self, other, tolerance=0.1):
         geom, other = self.reproject(other)
@@ -574,10 +589,9 @@ class GeoMetry:
     def combine(self, others, allow_hull=True):
         """Combines list of shapes using their union or convex hull"""
         geoms = [s.geom.iloc[0] for s in self.reproject(others)]
-        geom = geoms[0]
-        others = geoms[1:]
-        if geom.intersects_all(others):
-            return self.match(unary_union(geoms))
+        #geom = geoms[0]
+        #others = geoms[1:]
+        return self.match(unary_union(geoms))
         if allow_hull:
             return self.match(GeometryCollection(geoms).convex_hull)
         raise ValueError("Could not combine shapes")
@@ -746,6 +760,8 @@ class GeoMetry:
         return dist_km
 
     def get_common_projection(self, others):
+        if others is None:
+            return self.crs
         if not isinstance(others, (list, tuple)):
             others = [others]
         others = [self.__class__(o) for o in others]
@@ -773,7 +789,8 @@ class GeoMetry:
         geoms = [self] + [self.__class__(o) for o in as_list(others)]
         if len(geoms) == 1:
             return [self.as_equal_area]
-        return [g.to_crs(geoms[0].get_common_projection(geoms[1:])) for g in geoms]
+        crs = geoms[0].get_common_projection(geoms[1:])
+        return [g.to_crs(crs) for g in geoms]
 
     def crosses_dateline(self):
         x1, _, x2, _ = self.bounds
@@ -794,7 +811,7 @@ class GeoMetry:
         return self
 
     def validate_shape(self):
-
+        return
         if not self.is_valid:
             geom = self.clip(validate=False)
             if geom.is_valid:
@@ -871,10 +888,12 @@ class GeoMetry:
 
     def plot(self, others=None, **kwargs):
         """Draws a set of geometries"""
+        logger.debug(f"Plotting {_truncate(self)} and others")
+        crs = kwargs.pop("crs", self.get_common_projection(others))
         geoms = [self] + as_list(others)
-        geoms = [g.polygon if g.geom_type == "Point" else g for g in geoms]
+        geoms = [g if g.geom_type == "Point" else g for g in geoms]
         geoms.sort(key=lambda g: -g.area)
-        return geoms_to_geoseries(geoms).plot(**kwargs)
+        return geoms_to_geoseries(geoms, crs=crs).plot(**kwargs)
 
     def buffer(self, dist, how="km"):
         """Buffers an object by distance in km"""
@@ -888,7 +907,7 @@ class GeoMetry:
             dist *= 1000
             # Buffer and crop the geometry
             proj_string = self.equal_area_mask.format(
-                lat=0, lon=self.representative_point.x
+                lat=0, lon=get_meridian([self.representative_point.x])
             )
             geom = self.geom.to_crs(proj_string)
             buffered = geom.buffer(dist).clip(self.equal_area_bounds)
@@ -1029,21 +1048,21 @@ class GeoMetry:
         if isinstance(obj, GeoMetry):
             logger.debug("Parsed geometry from GeoMetry")
             geom = obj.geom.copy()
-            if crs and geom.crs != crs:
+            if crs and not obj.crs.equals(crs):
                 geom = geom.to_crs(crs)
             return geom
 
         # Object is a GeoDataFrame
         if isinstance(obj, gpd.GeoDataFrame):
             logger.debug("Parsed geometry from GeoDataFrame")
-            if crs and obj.crs != crs:
+            if crs and not obj.crs.equals(crs):
                 obj = obj.to_crs(crs)
             return obj.geometry.iloc[-1:].reset_index(drop=True)
 
         # Object is a GeoSeries
         if isinstance(obj, gpd.GeoSeries):
             logger.debug("Parsed geometry from GeoSeries")
-            if crs and obj.crs != crs:
+            if crs and not obj.crs.equals(crs):
                 obj = obj.to_crs(crs)
             return obj.geometry.iloc[-1:].reset_index(drop=True)
 
@@ -1084,7 +1103,7 @@ class GeoMetry:
                 geoms = []
                 for geom in obj:
                     geom = self.__class__(geom.verbatim_geom, crs=geom.verbatim.crs)
-                    if geom.crs != crs:
+                    if not geom.crs.equals(crs):
                         geom = geom.to_crs(crs)
                     geoms.append(geom.geom.iloc[0])
                 obj = geoms
@@ -1198,9 +1217,10 @@ class GeoMetry:
         return obj.is_valid
 
 
-def geoms_to_geoseries(geoms):
+def geoms_to_geoseries(geoms, crs=None):
     """Converts list of geoms to a GeoSeries with a coherent equal-area CRS"""
-    geoms = reproject(geoms)
+    if crs is None:
+        geoms = reproject(geoms)
     return gpd.GeoSeries([g.geom.iloc[0] for g in geoms], crs=geoms[0].crs)
 
 
@@ -1213,6 +1233,20 @@ def geoms_to_geodataframe(geoms, **kwargs):
     gdf["area"] = gdf["geometry"].area
     return gdf.sort_values("area", ascending=False)
 
+
+def get_meridians(lons):
+    vals, bins = np.histogram(lons, bins=3, range=(-180, 180))
+    midpoints = [np.mean((val, bins[i])) for i, val in enumerate(bins[1:])]
+    vals = [int(m) for m, v in zip(midpoints, vals) if v]
+    if 0 in vals:
+        vals.insert(0, vals.pop(vals.index(0)))
+    return set(vals)
+
+
+def get_meridian(lons):
+    for lon in get_meridians(lons):
+        return lon
+    
 
 def reproject(geoms):
     return geoms[0].reproject(geoms[1:])

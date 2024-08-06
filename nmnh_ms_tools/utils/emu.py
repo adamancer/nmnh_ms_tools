@@ -1,3 +1,5 @@
+"""Creates structured notes for changes and dynamic properties in EMu"""
+
 import re
 from datetime import datetime
 
@@ -6,28 +8,28 @@ import yaml
 from .lists import as_list, oxford_comma
 
 
-def create_note(text, module=None, mod="+", maxlen=80, **kwargs):
-    """Creates a note explaining a change
-
-    The note should be formatted as follows:
-
-    Short description of why change was made
-    - Field1: Added/removed/changed
-    - Field2: Added/removed/changed
-
-    Long description if needed
+def create_note(text, module=None, mod="", maxlen=80, **kwargs):
+    """Creates a note formatted for EMu
 
     Parameters
     ----------
     text : str
         note formatted as a markdown list.
     module : str
-        name of the module. If None, may not generate a valid note.
+        name of the module. If None, uses the most common note format in EMu.
+    mod : str
+        an EMu grid update modifier (e.g., +, -, or a number like 1=). Defaults to
+        no modifier.
+    maxlen : int
+        maximum line length for note
+    kwargs :
+        optional keyword argumetns for date, kind, by, and publish. If given,
+        overrides the default value for that field in the final note.
 
     Returns
     -------
     dict
-        note formated as an append
+        note formated for EMu
     """
     mappings = {
         "ecatalogue": {
@@ -76,28 +78,31 @@ def create_note(text, module=None, mod="+", maxlen=80, **kwargs):
     return {f"{mapping[k]}{mod}": v for k, v in note.items()}
 
 
-def create_markdown_note(data, text, **kwargs):
-    """Creates a note explaining a change
+def create_markdown_note(data, text, mod="+", **kwargs):
+    """Creates a note explaining a change in EMu
 
-    The note should be formatted as follows:
+    The note is generally formatted as follows:
 
     Short description of why change was made
-    - Field1: Added/removed/changed
-    - Field2: Added/removed/changed
-
-    Long description if needed
+    - Field1: Added/removed/changed value
+    - Field2: Added/removed/changed value
 
     Parameters
     ----------
+    data : list of tuple
+        changed fields as a list of tuples containing (key, old, new)
     text : str
-        note formatted as a markdown list.
-    module : str
-        name of the module. If None, may not generate a valid note.
+        the title of the note
+    mod : str
+        an EMu grid update modifier (e.g., +, -, or a number like 1=). Defaults to
+        append.
+    kwargs :
+        keyword arguments passed to `create_note()`
 
     Returns
     -------
     dict
-        note formatted as an append
+        note formatted as an append by default
     """
     kwargs.setdefault("maxlen", 240)
     content = [text]
@@ -132,10 +137,29 @@ def create_markdown_note(data, text, **kwargs):
             elif new != old:
                 content.append(f'- {key}: Changed "{old}" to "{new}"')
 
-    return create_note("\n".join(content), **kwargs)
+    return create_note("\n".join(content), mod=mod, **kwargs)
 
 
 def create_yaml_note(data, text, quote_numeric=False, **kwargs):
+    """Creates a YAML note for EMu
+
+    Parameters
+    ----------
+    data : dict
+        mapping of keys to values for note
+    text : str
+        the title of the note
+    quote_numeric : bool
+        whether to quote numberic values (default is False)
+    kwargs :
+        keyword arguments passed to `create_note()`
+
+    Returns
+    -------
+    dict
+        note formatted for EMu
+    """
+    kwargs.setdefault("kind", "Structured Note")
     content = [f"# {text.lstrip('# ')}"]
     flow_style = any(isinstance(v, list) for v in data.values())
     if flow_style:

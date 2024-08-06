@@ -270,7 +270,8 @@ class Validator:
         # Custom validations
         if validation == "PathExists":
             try:
-                open(obj)
+                # Convert Citrix paths to local for validation
+                open(obj.replace("\\\\Client\\C$", "C:", 1))
                 return True
             except FileNotFoundError:
                 return False

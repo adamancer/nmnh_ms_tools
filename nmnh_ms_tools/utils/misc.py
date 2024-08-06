@@ -9,6 +9,7 @@ import re
 import sys
 from textwrap import fill
 
+import pandas as pd
 from pytz import timezone
 
 from .lists import as_list
@@ -174,13 +175,15 @@ def nullify(val, remove_empty=True):
         "not applicable",
         "not provided",
         "not given",
+        "not known",
         "not stated",
         "null",
+        "unknown",
     }
-    if isinstance(val, list):
+    if isinstance(val, (list, tuple)):
         vals = [nullify(val) for val in val]
         return [val for val in vals if val] if remove_empty else vals
-    return None if str(val).lower().strip(" .[]") in nulls else val
+    return None if pd.isna(val) or str(val).lower().strip(" .[]()") in nulls else val
 
 
 def coerce(val, coerce_to, delim=" | "):

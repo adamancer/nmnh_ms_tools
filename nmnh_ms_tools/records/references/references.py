@@ -175,7 +175,7 @@ class Reference(Record):
             self._parse_bhl(data)
             parse_doi = False
         elif "_gddid" in data:
-            self._parse_geodeepdive(data)
+            self._parse_xdd(data)
         elif "provider" in data:
             self._parse_jstor(data)
         elif "item_type_name" in data or "item_type" in data:
@@ -600,8 +600,8 @@ class Reference(Record):
         if self.doi:
             self.url = "https://doi.org/{}".format(self.doi)
 
-    def _parse_geodeepdive(self, data):
-        """Parses GeoDeepDive article record"""
+    def _parse_xdd(self, data):
+        """Parses xDD article record"""
         self.kind = data.get("type", "").title()
         src_field = self._btm.source_field(self.kind)
         # Get basic metadata
@@ -626,7 +626,7 @@ class Reference(Record):
                 self.url = data["url"]
             else:
                 self.url = (
-                    f'https://geodeepdive.org/api/articles?docid={data["_gddid"]}'
+                    f'https://xdd.org/api/articles?docid={data["_gddid"]}'
                 )
         else:
             self.url = "https://doi.org/{}".format(self.doi)

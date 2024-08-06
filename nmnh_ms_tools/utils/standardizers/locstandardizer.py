@@ -145,6 +145,7 @@ class LocStandardizer(Standardizer):
             "federal",
             "municipality",
             "oblast",
+            "palata",
             "parish",
             "prefecture",
             "province",

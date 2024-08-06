@@ -37,7 +37,7 @@ class BibTeXMapper:
         "monographic component part": "inbook",
         "serial": "book",
         "serial component part": "article",
-        # GeoDeepDive/xDD genres
+        # xDD/xDD genres
         "fulltext": "book",
         #
         "book chapter": "inbook",

@@ -5,7 +5,7 @@ from .. import _ImportClock
 with _ImportClock("bots"):
     from .core import Bot, JSONResponse
     from .adamancer import AdamancerBot
-    from .geodeepdive import GeoDeepDiveBot
+    from .xddbot import xDDBot
     from .geogallery import GeoGalleryBot
     from .geonames import GeoNamesBot, FEATURE_TO_CODES
     from .gnrd import GNRDBot

@@ -443,7 +443,7 @@ def std_spec_num(val, strip_leading_zeroes=True, drop_zero_suffixes=False):
     str
         standardized text version of the specimen number
     """
-    parts = re.split(r"[^A-Z0-9]+", unidecode(val).upper())
+    parts = re.split(r"[^A-Z0-9]+", unidecode(str(val)).upper())
     vals = []
     for part in parts:
 

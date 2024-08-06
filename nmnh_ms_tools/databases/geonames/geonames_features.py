@@ -324,8 +324,11 @@ class GeoNamesFeatures:
         """Deletes associated records in both tables"""
         session = self.session
         if source is None:
-            session.query(self.names).delete(synchronize_session=False)
-            session.query(self.features).delete(synchronize_session=False)
+            for table in (self.names, self.features):
+                try:
+                    session.query(table).delete(synchronize_session=False)
+                except OperationalError:
+                    pass
         else:
             # If source is specified, delete only the rows matching that source
             query = session.query(self.features).filter_by(source=source)

@@ -309,11 +309,13 @@ def combine_regions():
 
     rows = []
     for _, row in gdf.iterrows():
-        rows.append({
-            "table": row["table"],
-            "name": row["name"],
-            "GEOMETRY": to_wkb(row["GEOMETRY"]),
-        })
+        rows.append(
+            {
+                "table": row["table"],
+                "name": row["name"],
+                "GEOMETRY": to_wkb(row["GEOMETRY"]),
+            }
+        )
 
     session = Session()
     session.bulk_insert_mappings(NaturalEarthCombined, rows)

@@ -118,7 +118,7 @@ class Cluster:
             vals = [s for s in vals if not re.match(r"\d+\.\d+$", s)]
 
             # Rejoin values as a string
-            val = re.sub(f"(\d) ([A-Z]?\d)", r"\1, \2", " ".join(vals))
+            val = re.sub(rf"(\d) ([A-Z]?\d)", r"\1, \2", " ".join(vals))
 
             # Check for stray hyphens
             if re.search(r"\d-[A-Z]?\d", val):

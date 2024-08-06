@@ -347,7 +347,7 @@ class Georeferencer:
             and site.geometry
             and not site.has_valid_coordinates()
         ):
-            self.notify("Skipped (coordinates invalid)")
+            self.notify("Skipped (invalid coordinates)")
             return False
         return True
 

@@ -1,4 +1,4 @@
-"""Defines bot to interact with the GeoDeepDive API"""
+"""Defines bot to interact with the xDD API"""
 
 import logging
 
@@ -11,17 +11,17 @@ from ..utils import as_list
 logger = logging.getLogger(__name__)
 
 
-class GeoDeepDiveBot(Bot):
-    """Defines methods to interact with https://geodeepdive.org/api"""
+class xDDBot(Bot):
+    """Defines methods to interact with https://xdd.wisc.edu/api"""
 
     def __init__(self, *args, **kwargs):
-        kwargs.setdefault("wrapper", GeoDeepDiveResponse)
+        kwargs.setdefault("wrapper", xDDResponse)
         super().__init__(*args, **kwargs)
         self._docid_clusters = {}
 
     def get_snippets(self, term=None, **kwargs):
-        """Gets snippets matching given criteria from the GeoDeepDive API"""
-        url = "https://geodeepdive.org/api/snippets"
+        """Gets snippets matching given criteria from the xDD API"""
+        url = "https://xdd.wisc.edu/api/snippets"
 
         # Use the scrollID if given
         if kwargs.get("scroll_id"):
@@ -43,15 +43,15 @@ class GeoDeepDiveBot(Bot):
         return self._get_clustered(url, params=params)
 
     def get_article(self, identifier):
-        """Gets article matching given docid or doi from the GeoDeepDive API"""
-        url = "https://geodeepdive.org/api/articles"
+        """Gets article matching given docid or doi from the xDD API"""
+        url = "https://xdd.wisc.edu/api/articles"
         key = "doi" if identifier.startswith("10.") else "docid"
         params = {key: identifier}
         return self.get(url, params=params)
 
     def get_articles(self, **kwargs):
-        """Gets articles matching given criteria from the GeoDeepDive API"""
-        url = "https://geodeepdive.org/api/articles"
+        """Gets articles matching given criteria from the xDD API"""
+        url = "https://xdd.wisc.edu/api/articles"
         return self._get_clustered(url, params=kwargs)
 
     def list_coauthors(self, name, **kwargs):
@@ -106,8 +106,8 @@ class GeoDeepDiveBot(Bot):
         return self.get(url, params=params)
 
 
-class GeoDeepDiveResponse(JSONResponse):
-    """Defines path containing results in a GeoDeepDive API call"""
+class xDDResponse(JSONResponse):
+    """Defines path containing results in a xDD API call"""
 
     def __init__(self, response, **kwargs):
         kwargs.setdefault("results_path", ["success", "data"])

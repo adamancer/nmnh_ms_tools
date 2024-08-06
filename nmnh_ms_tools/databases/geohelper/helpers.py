@@ -265,7 +265,9 @@ def fill_alternative_polygons_table():
 
                 # Combine other shapes
                 else:
-                    row["geometry"] = GeoMetry(geoms[0], crs=4326).combine(geoms[1:])
+                    print(rows[0].gn_id)
+                    geoms = [GeoMetry(g, crs=4326) for g in geoms]
+                    row["geometry"] = GeoMetry(geoms, crs=4326).combine(geoms)
 
                 break
 
@@ -275,3 +277,47 @@ def fill_alternative_polygons_table():
     session.bulk_insert_mappings(AlternativePolygons, updates)
     session.commit()
     session.close()
+
+
+def combine_regions():
+    """Combines regions in adm 1 table"""
+    session = NaturalEarthSession()
+
+    attrs = (
+        "region",
+        "iso_a2",
+        "GEOMETRY",
+    )
+
+    rows = []
+    for row in session.query(StatesProvinces):
+        rowdict = {"table": StatesProvinces.__name__}
+        for attr in attrs:
+            try:
+                rowdict[attr] = getattr(row, attr)
+            except AttributeError:
+                rowdict[attr] = None
+        rowdict["name"] = rowdict.pop("region")
+        rowdict["GEOMETRY"] = from_wkb(rowdict["GEOMETRY"])
+        rows.append(rowdict)
+
+    session.close()
+
+    df = pd.DataFrame(rows)
+    gdf = gpd.GeoDataFrame(df, geometry="GEOMETRY", crs=4326)
+    gdf = gdf.dissolve(["iso_a2", "name"]).reset_index()
+
+    rows = []
+    for _, row in gdf.iterrows():
+        rows.append({
+            "table": row["table"],
+            "name": row["name"],
+            "GEOMETRY": to_wkb(row["GEOMETRY"]),
+        })
+
+    session = Session()
+    session.bulk_insert_mappings(NaturalEarthCombined, rows)
+    session.commit()
+    session.close()
+
+    return rows

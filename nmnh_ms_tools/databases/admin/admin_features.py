@@ -1,9 +1,9 @@
-import csv
-import datetime as dt
+import itertools
 import json
 import logging
 from collections import OrderedDict
 
+import yaml
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.schema import Index
 
@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 class AdminCache(CacheDict):
     @staticmethod
     def keyer(key):
-        names, kind, admin = key
+        names, kind, is_name, admin = key
         admin = {k: v for k, v in admin.items() if k}
-        return json.dumps([names, kind, admin], sort_keys=True).lower()
+        return json.dumps([names, kind, is_name, admin], sort_keys=True).lower()
 
 
 class AdminFeatures(GeoNamesFeatures):
@@ -90,34 +90,58 @@ class AdminFeatures(GeoNamesFeatures):
         return std_names(names, std_func=std_func if std_func else self.std)
 
     def get(self, *args, **kwargs):
+        logger.debug("Calling get_admin from get")
         return self.get_admin(*args, **kwargs)
 
-    def get_admin(self, country, state_province=None, county=None, **kwargs):
+    def get_admin(
+        self, country, state_province=None, county=None, is_name=True, **kwargs
+    ):
         if not country:
             raise ValueError("country is required")
 
         if county and not state_province:
             raise ValueError("state_province is required when resolving a county")
 
+        logger.debug(f"Running get_admin on {(country, state_province, county)}")
+
         result = {}
+        resolved = []
+
         # Get country info
-        resolved = self.resolve_admin(country, "country")
-        for key, vals in resolved.items():
+        resolved.append(self.resolve_admin(country, "country", is_name=is_name))
+        for key, vals in resolved[-1].items():
             result.setdefault(key, []).extend(vals)
         # Get state_province/province info
         if state_province and "state_province" in result:
             logger.warning("state_province from thesaurus supersedes kwarg")
         elif state_province:
-            resolved = self.resolve_admin(state_province, "state_province", **result)
-            for key, vals in resolved.items():
+            resolved.append(
+                self.resolve_admin(
+                    state_province, "state_province", is_name=is_name, **result
+                )
+            )
+            for key, vals in resolved[-1].items():
                 result.setdefault(key, []).extend(vals)
         # Get county info
         if county and "county" in result:
             logger.warning("county from thesaurus supersedes kwarg")
         elif county:
-            resolved = self.resolve_admin(county, "county", **result)
-            for key, vals in resolved.items():
+            resolved.append(
+                self.resolve_admin(county, "county", is_name=is_name, **result)
+            )
+            for key, vals in resolved[-1].items():
                 result.setdefault(key, []).extend(vals)
+        # Rebuild result from last resolved
+        result = {}
+        for key, vals in resolved[-1].items():
+            result.setdefault(key, []).extend(vals)
+        # Clear fields that were emptied during mapping
+        if state_province and not result.get("state_province"):
+            result["state_province"] = []
+            result["admin_code_1"] = []
+        if state_province and not result.get("county"):
+            result["county"] = []
+            result["admin_code_2"] = []
         result.update(kwargs)
         result = {k: dedupe(v) for k, v in result.items()}
         # Remove the 00 state/province code that GeoNames provides for countries
@@ -125,19 +149,23 @@ class AdminFeatures(GeoNamesFeatures):
             result["admin_code_1"] = [c for c in result["admin_code_1"] if c != "00"]
         except KeyError:
             pass
+        logger.debug(f"Result: {result}")
         return result
 
-    def resolve_admin(self, names, kind, **admin):
+    def resolve_admin(self, names, kind, is_name=True, **admin):
         assert names, "no names provided"
         try:
-            return self.cache[(names, kind, admin)]
+            return self.cache[(names, kind, is_name, admin)]
         except KeyError:
             pass
         # Do not map names that indicate uncertainty
         if "?" in str(names):
             raise ValueError("Names uncertain: {}".format(names))
-        rows = self.query(names, kind, **admin)
+        logger.debug(f"Resolving {names} ({kind}, {admin})")
+        rows = self.query(names, kind, is_name=is_name, **admin)
         unresolved = self.unresolved(names, kind, rows)
+        if unresolved:
+            logger.debug(f"Unresolved: {unresolved}")
         if unresolved:
             args = []
             keys = ["country", "state_province", "county"]
@@ -149,6 +177,10 @@ class AdminFeatures(GeoNamesFeatures):
                 while not args[-1]:
                     args = args[:-1]
                 admin.update(self.map_deprecated(*args))
+                # Map depreacted does not return codes, so existing codes must be
+                # removed
+                admin = {k: v for k, v in admin.items() if "code" not in k}
+                logger.debug("Calling get_admin from map_deprecated")
                 return self.get_admin(**admin)
             raise ValueError("{}={} superseded by thesaurus".format(kind, unresolved))
         # Restrict to needed fields
@@ -162,14 +194,17 @@ class AdminFeatures(GeoNamesFeatures):
         resolved[kind] = resolved["name"]
         del resolved["name"]
         del resolved["st_name"]
-        self.cache[(names, kind, admin)] = resolved
+        self.cache[(names, kind, is_name, admin)] = resolved
+        logger.debug(f"Resolved {names} ({kind}) as {resolved}")
         return resolved
 
     def get_admin_codes(self, *args, **kwargs):
+        logger.debug("Calling get_admin from get_admin_codes")
         admin = self.get_admin(*args, **kwargs)
         return {k: v for k, v in admin.items() if k in self.code_fields}
 
     def get_admin_names(self, *args, **kwargs):
+        logger.debug("Calling get_admin from get_admin_names")
         admin = self.get_admin(*args, **kwargs)
         return {k: v for k, v in admin.items() if k in self.name_fields}
 
@@ -220,6 +255,7 @@ class AdminFeatures(GeoNamesFeatures):
         session.close()
 
     def map_deprecated(self, country, state_province=None, county=None):
+        logger.debug(f"Mapping {(country, state_province, county)} from thesaurus")
         vals = [dedupe(as_list(n)) for n in [country, state_province, county]]
         fltr = []
         vals = []
@@ -242,10 +278,10 @@ class AdminFeatures(GeoNamesFeatures):
         mappings = []
         for row in rows:
             try:
-                obj = json.loads(row.mapping)
-            except TypeError:
-                raise ValueError("{} resolves to empty mapping".format(vals))
-            except json.decoder.JSONDecodeError:
+                obj = yaml.safe_load(row.mapping)
+            except (AttributeError, TypeError):
+                raise ValueError(f"{vals} resolves to empty mapping")
+            except yaml.YAMLError:
                 obj = {update_key: row.mapping}
             else:
                 if not isinstance(obj, dict):
@@ -255,10 +291,11 @@ class AdminFeatures(GeoNamesFeatures):
             vals = [dedupe(as_list(n)) for n in [country, state_province, county]]
             while not vals[-1]:
                 vals = vals[:-1]
-            # Exclude amibiguous names like multiple states/multiple counties
-            if self.update_thesaurus and not any([len(s) > 1 for s in vals[:-1]]):
-                vals = [s[0].title().replace("'S", "'s") if s else None for s in vals]
-                session.add(AdminThesaurus(**dict(zip(self.name_fields, vals))))
+            # Exclude amibiguous combinations like multiple states/multiple counties
+            if self.update_thesaurus and len([s for s in vals if len(s) > 1]) <= 1:
+                # Get all combinations
+                for vals in list(itertools.product(*vals)):
+                    session.add(AdminThesaurus(**dict(zip(self.name_fields, vals))))
                 session.commit()
             raise ValueError("{} does not resolve".format(vals))
         session.close()
@@ -273,6 +310,7 @@ class AdminFeatures(GeoNamesFeatures):
         except (IndexError, TypeError, ValueError):
             pass
         self.update_thesaurus = update_thesaurus
+        logger.debug(f"Mapped {country} > {state_province} > {county} to {mapping}")
         return mapping
 
     def delete_unmapped_synonyms(self):
@@ -322,7 +360,7 @@ class AdminFeatures(GeoNamesFeatures):
             .filter(AdminThesaurus.mapping != None, AdminThesaurus.id == 197)
             .order_by(AdminThesaurus.id)
         )
-        for i, row in enumerate(rows):
+        for row in rows:
             vals = [row.country, row.state_province, row.county]
             mapping = self.map_deprecated(*vals)
             admin = {k: v for k, v in mapping.items() if k in self.name_fields}
@@ -458,7 +496,7 @@ class AdminFeatures(GeoNamesFeatures):
             admin = {}
         elif kind == "state_province":
             admin = {k: v for k, v in admin.items() if k == "country_code"}
-        for name, code in self.kinds.items():
+        for code in self.kinds.values():
             field = getattr(self.names, code)
             try:
                 vals = as_list(admin[code])

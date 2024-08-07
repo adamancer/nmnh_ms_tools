@@ -1,3 +1,5 @@
+"""Parses measurements, including ranges"""
+
 import re
 
 
@@ -53,8 +55,8 @@ class Measurement:
         self.short_unit = ""
 
         try:
-            self._parse(val, unit, conj)
-        except (KeyError, ValueError):
+            self._parse(val, unit)
+        except KeyError:
             raise ValueError(f"Could not parse measurement: {self.verbatim}")
 
     def __str__(self):
@@ -62,6 +64,9 @@ class Measurement:
         if self.from_val != self.to_val:
             vals.append(f"{self.to_mod}{self.to_val}")
         return f"{self.conj.join(vals)} {self.short_unit}".strip()
+
+    def __eq__(self, other):
+        return self.text == other.text
 
     def __repr__(self):
         return (
@@ -92,14 +97,26 @@ class Measurement:
         """
         return str(self)
 
-    def _parse(self, val, unit, conj):
+    def copy(self):
+        return self.__class__(self.verbatim, self.unit, self.conj)
+
+    def _parse(self, val, unit):
         if isinstance(val, Measurement):
-            return val
+            self.verbatim = val.verbatim
+            self.conj = val.conj
+            self.from_val = val.from_val
+            self.from_mod = val.from_mod
+            self.to_val = val.to_val
+            self.to_mod = val.to_mod
+            self.unit = val.unit
+            self.short_unit = val.short_unit
+            return
+
+        if not isinstance(val, str):
+            val = str(val)
 
         vals = []
         units = []
-
-        verbatim = val
 
         negative = val.startswith("-")
         val = val.lstrip("-")
@@ -122,8 +139,11 @@ class Measurement:
         from_mod = vals[0][0] if vals[0][0] in "<>~" else ""
         to_mod = vals[-1][0] if vals[-1][0] in "<>~" else ""
 
+        if unit and units and unit not in units:
+            raise ValueError(f"Inconsistent units: {repr(val)} (repr({unit}))")
+
         if len(set(units)) == 1:
-            unit = units[0] if units else ""
+            unit = units[0]
 
         try:
             from_val, to_val = vals
@@ -141,17 +161,9 @@ class Measurement:
         self.to_val = to_val.lstrip("<>~")
         self.to_mod = to_mod
         self.unit = unit
-        self.short_unit = SHORT_UNITS.get(unit, "")
+        self.short_unit = SHORT_UNITS.get(unit, unit)
 
         return self
-
-        vals = [from_val]
-        if from_val != to_val:
-            vals.append(to_val)
-        text = f"{conj.join(vals)} {SHORT_UNITS.get(unit, '')}".strip()
-        return Measurement(
-            from_val, to_val, unit, SHORT_UNITS.get(unit, ""), text, verbatim
-        )
 
 
 def parse_measurement(val, unit="", conj=" to "):
@@ -191,7 +203,6 @@ def parse_measurements(val_from, val_to=None, unit="", conj=" to "):
                 )
 
             # Check units
-            units = [m.unit for m in (val_from, val_to) if m.unit]
             if len({m.unit for m in (val_from, val_to) if m.unit}) > 1:
                 raise ValueError(
                     f"Inconsistent units: {val_from.verbatim}, {val_to.verbatim}"

@@ -1,14 +1,33 @@
+"""Defines the PrefixedNum class to parse simple prefixed numbers"""
+
 import re
 from functools import total_ordering
 
 
 @total_ordering
 class PrefixedNum:
+    """Parses and supports simple arithmetic for prefixed numbers
+
+    Parameters
+    ----------
+    val : str
+        an identifier as a string
+
+    Attributes
+    ----------
+    prefix : str
+        an alphabetic prefix
+    number : int
+        a numeric identifier
+    """
+
     def __init__(self, val):
+        self._prefix = None
+        self._number = None
         val = str(val)
         if re.search(r"^([A-z]+[- ]?)?\d+$", val):
             match = re.search(r"^[A-z]+[- ]?", val)
-            self.prefix = match.group() if match else ""
+            self.prefix = match.group().rstrip("- ") if match else ""
             self.number = int(re.search(r"\d+$", val).group())
         else:
             raise ValueError(f"Invalid prefixed number: {val}")
@@ -23,29 +42,21 @@ class PrefixedNum:
         return f"{self.prefix}{self.number}"
 
     def __repr__(self):
-        return str(self)
+        return f"PrefixedNum(prefix={repr(self.prefix)}, number={self.number})"
 
     def __add__(self, other):
         """Adds value to number"""
-        if isinstance(other, int):
-            return self.__class__(f"{self.prefix}{self.number + other}")
+        return self.__class__(f"{self.prefix}{self.number + other}")
 
-        if not isinstance(other, self.__class__):
-            other = self.__class__(other)
-        if other.prefix and self.prefix != other.prefix:
-            raise ValueError("Can't add two numbers with different prefixes")
-        return self.number + other.number
+    def __iadd__(self, other):
+        return self + other
 
     def __sub__(self, other):
         """Substracts value from number"""
-        if isinstance(other, int):
-            return self.__class__(f"{self.prefix}{self.number - other}")
+        return self.__class__(f"{self.prefix}{self.number - other}")
 
-        if not isinstance(other, self.__class__):
-            other = self.__class__(other)
-        if other.prefix and self.prefix != other.prefix:
-            raise ValueError("Can't subtract two numbers with different prefixes")
-        return self.number - other.number
+    def __isub__(self, other):
+        return self - other
 
     def __eq__(self, other):
         if not isinstance(other, self.__class__):
@@ -58,3 +69,27 @@ class PrefixedNum:
         if self.prefix == other.prefix:
             return self.number < other.number
         return self.prefix < other.prefix
+
+    @property
+    def prefix(self):
+        return self._prefix
+
+    @prefix.setter
+    def prefix(self, val):
+        if self._number is not None:
+            raise AttributeError("Cannot change prefix once set")
+        self._prefix = val
+
+    @property
+    def number(self):
+        return self._number
+
+    @number.setter
+    def number(self, val):
+        if self._number is not None:
+            raise AttributeError("Cannot change number once set")
+        self._number = val
+
+    def copy(self):
+        """Creates a copy of the object"""
+        return self.__class__(f"{self.prefix}{self.number}")

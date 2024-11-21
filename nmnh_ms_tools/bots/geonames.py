@@ -385,7 +385,9 @@ class GeoNamesBot(Bot):
             "maxRows",
             "name",
             "name_equals",
+            "name_startsWith",
             "q",
+            "startRow",
             "state",
             "style",
         }
@@ -394,7 +396,7 @@ class GeoNamesBot(Bot):
             raise ValueError("Illegal params: {}".format(invalid))
         if name is not None:
             params["name"] = name
-        if len(set(params) & {"name", "name_equals", "q"}) != 1:
+        if len(set(params) & {"name", "name_equals", "name_startsWith", "q"}) != 1:
             raise ValueError(
                 "Illegal params: Exactly one of name," " name_equals, or q required"
             )

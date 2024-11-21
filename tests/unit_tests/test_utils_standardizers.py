@@ -3,7 +3,7 @@
 import pytest
 
 
-from nmnh_ms_tools.utils.standardizers import LocStandardizer
+from nmnh_ms_tools.utils.standardizers import Standardizer, LocStandardizer
 
 
 @pytest.mark.parametrize(

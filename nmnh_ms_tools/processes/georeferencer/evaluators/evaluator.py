@@ -22,7 +22,7 @@ from ....databases.geohelper import OceanQuery
 from ....tools.geographic_operations.geometry import GeoMetry
 from ....records import sites_to_geodataframe
 from ....tools.geographic_names.parsers.modified import abbreviate_direction
-from ....utils import as_set, most_common
+from ....utils import as_set, custom_copy, most_common, mutable
 
 
 logger = logging.getLogger(__name__)
@@ -61,14 +61,14 @@ REJECTED = {
 }
 # Job parameters
 MAX_SITES = 150
-CONT_SHELF_WIDTH_KM = 200
+CONT_SHELF_WIDTH_KM = 50
 RESIZE = 1.1
 
 
 class MatchEvaluator:
     """Georeferences a site by parsing, matching, and evaluating place names"""
 
-    def __init__(self, site, pipes, results=None):
+    def __init__(self, site=None, pipes=None, results=None):
         self.site = site
         self.pipes = pipes
         self.geometry = None
@@ -83,6 +83,7 @@ class MatchEvaluator:
         self.ocean = OceanQuery()
         self.multiples = {}
         self.smallest_encompassing = None
+        self.max_dist_km = 100
         # Configure sites property
         self._sites = None
         self.sites = []
@@ -96,8 +97,9 @@ class MatchEvaluator:
         try:
             return getattr(self.geometry, attr)
         except AttributeError:
-            mask = "'{}' object has no attribute '{}'"
-            raise AttributeError(mask.format(self.__class__.__name__, attr))
+            raise AttributeError(
+                f"'{self.__class__.__name__}' object has no attribute {repr(attr)}"
+            )
 
     def __iter__(self):
         return iter(self.results)
@@ -136,12 +138,13 @@ class MatchEvaluator:
     def result(self):
         """Represents the final georeference as a simple site"""
         if self._result is None:
-            result = self.site.clone()
-            result.site_names = ["Georeference"]
-            result.geometry = self.geometry
-            if self.interpreted_as("selected"):
-                result.georeference_remarks = self.describe()
-            result.sources = self.sources
+            result = self.site.copy()
+            with mutable(result):
+                result.site_names = ["Georeference"]
+                result.geometry = self.geometry
+                if self.interpreted_as("selected"):
+                    result.georeference_remarks = self.describe()
+                result.sources = self.sources
             self._result = result
         return self._result
 
@@ -155,13 +158,13 @@ class MatchEvaluator:
         self._results = results[:]
         self.update_lists()
 
-    def clone(self):
-        """Clones the evaluator object"""
-        return self.__class__(self.site, self.pipes, self.results[:])
+    def copy(self):
+        """Copies the evaluator object"""
+        return custom_copy(self)
 
     def reset(self):
         """Resets the evaluator object"""
-        clone = self.clone()
+        clone = self.copy()
         self.site = clone.site
         self.pipes = clone.pipes
         self.geometry = None
@@ -214,12 +217,15 @@ class MatchEvaluator:
         self.leftovers = {k: set(v) for k, v in self.leftovers.items()}
         self.features = basepipe.extract(self.site)
 
-    def encompass(self, sites=None, max_dist_km=100):
+    def encompass(self, sites=None, max_dist_km=None):
         """Calculate coordinates and radius using info from results"""
         if not self.results:
             self.process()
         if sites is None or sites == self.sites:
             sites = self.sites[:]
+
+        if max_dist_km is None:
+            max_dist_km = self.max_dist_km
 
         # Standardize keys that use compass directions
         keys = {}
@@ -300,12 +306,15 @@ class MatchEvaluator:
         if not sites:
             sites = self.uninterpret(status="encompassing")
 
-        # Ignore oceans and continents
+        # Ignore oceans and continents unless that's all there is
         for site in self.active():
             if site.site_kind in {"CONT", "OCN"}:
                 self.interpret(site, "very large", True)
         sites = self.uninterpreted(sites)
-        logger.debug("Not continent or ocean: {}".format(self.names(sites)))
+        if sites:
+            logger.debug("Not continent or ocean: {}".format(self.names(sites)))
+        else:
+            sites = self.uninterpret(status="encompassing")
 
         # Limit to mutually intersecting sites if possible. If a large
         # number of distinct names are found, the intersection is still
@@ -511,7 +520,7 @@ class MatchEvaluator:
                 and extended.area < terr[0].area
                 and extended.radius_km <= max_dist_km
             ):
-                logger.debug("Matched combination of marine and" " terrestial features")
+                logger.debug("Matched combination of marine and terrestial features")
                 self.interpret(marine, "less specific")
                 return self.select(terr, extend_into_ocean=True)
 
@@ -538,8 +547,8 @@ class MatchEvaluator:
         enc = self.interpreted_as("encompassing")
         if enc:
             # If admin polygons are smaller than other features, skip this block
-            admin_radii = [s.radius_km for s in self.site.get_admin_polygons().values()]
-            enc_radii = [s.radius_km for s in enc]
+            admin_radii = list(self.site.map_admin()["area"])
+            enc_radii = [s.area for s in enc]
             if not admin_radii or min(enc_radii) < min(admin_radii):
                 geom = self.encompass_sites(self.most_specific_sites(enc))
                 if geom.radius_km <= max_dist_km * 5:
@@ -574,7 +583,7 @@ class MatchEvaluator:
                     return self.select([admin[0]], geom)
 
             # Failing that, fall back to major admin divisions
-            gdf = self.site.get_admin_polygons()
+            gdf = self.site.map_admin()
             if not gdf.empty:
                 row = gdf.iloc[-1]
                 geom = GeoMetry(row.geometry, gdf.crs)
@@ -600,9 +609,7 @@ class MatchEvaluator:
             self.reset()
             logger.debug("Retrying with radius={} km".format(estimated))
             return self.encompass(max_dist_km=estimated)
-        mask = "Could not encompass sites within {} km"
-        logger.debug(mask.format(max_dist_km))
-        raise ValueError(mask.format(max_dist_km))
+        raise ValueError(f"Could not encompass sites within {max_dist_km} km")
 
     def select(self, sites, geom=None, extend_into_ocean=False):
         """Select sites and compute geometry"""
@@ -613,6 +620,8 @@ class MatchEvaluator:
 
         # Compile source info from all active records
         for site in self.active():
+            if None in site.sources:
+                raise ValueError(f"Invalid sources: {site}")
             self.sources.extend(site.sources)
 
         self.sources = sorted(set(self.sources))
@@ -630,7 +639,7 @@ class MatchEvaluator:
         # given for the location the directions are calculated from and
         # may be misleading if applied to the direction.
         if not any([s.site_kind == "direction" for s in sites]):
-            gdf = self.site.get_admin_polygons()
+            gdf = self.site.map_admin()
             if not gdf.empty:
                 row = gdf.iloc[-1]
                 geom_ = GeoMetry(row.geometry, gdf.crs)
@@ -639,7 +648,11 @@ class MatchEvaluator:
                     geom = self.constrain(geom, geom_, row.field, name=admin)
 
         # Extend polygon into ocean
-        if extend_into_ocean or self.site.is_marine():
+        if (
+            extend_into_ocean
+            or self.site.is_marine()
+            or any((s.site_kind == "offshore" for s in sites))
+        ):
             try:
                 geom = self.extend_into_ocean(geom)
             except ValueError:
@@ -653,14 +666,6 @@ class MatchEvaluator:
         if len(selected) == 1 and "(near)" in self.key(selected[0]):
             geom.radius_km *= 2
         self.geometry = geom
-
-        # Summarize selection
-        if False:
-            import pprint as pp
-
-            pp.pprint(sorted([self.key(s) for s in self._sites]))
-            pp.pprint(self.interpreted)
-            self.geometry.draw()
 
         return geom
 
@@ -676,18 +681,18 @@ class MatchEvaluator:
                 if name:
                     logging.debug("Checking intersection with {}".format(name))
                 # Do not constrain small features on the edges of large polygons
-                if xtn.area / geom.area > 0.1:
+                if xtn.geom_type != "Polygon" or xtn.area / geom.area > 0.1:
                     # Constrain to all sites matched on field
                     sites_ = [s for s in self._sites if s.field == field]
                     self.interpret(sites_, "constrained")
                     return xtn
         except KeyError:
             pass
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as exc:
             # Capture failed intersections. Not necessarily an error
             # because directions, etc. might fall outside of the
             # specified political geography
-            logger.warning("Could not constrain to {}".format(name))
+            logger.warning("Could not constrain to {} ({exc})".format(name))
         return geom
 
     def disentangle_names(self, sites=None, aggressive=True):
@@ -695,12 +700,12 @@ class MatchEvaluator:
 
         This function is one source of the "best match" for names
         corresponding to multiple sites in MatchAnnotator. The best match
-        will be a town/city, if present. Failing that, the best match is
-        anything that isn't classified by GeoNames as a spot.
+        prefers administrative divisions, then cities, then anything that
+        isn't classified by GeoNames as a spot.
         """
         if sites is None:
             sites = self.sites[:]
-        for name, group in self.group_by_name(sites).items():
+        for _, group in self.group_by_name(sites).items():
             # Check for mutually intersecting groups
             if len(group) > 1 and group[0].intersects_all(group[1:]):
 
@@ -784,7 +789,8 @@ class MatchEvaluator:
         # Verify that there is at least one active terrestrial feature
         terr, marine = self.split_land_sea(self.active())
         marine = [m for m in marine if m not in self.interpreted_as("selected")]
-        if terr and marine:
+        offshore = [s for s in terr if s.site_kind == "offshore"]
+        if terr and (marine or offshore):
             logger.debug("Extending polygon into ocean")
             marine.sort(key=lambda s: s.radius_km)
             # Separate oceans from other marine localities
@@ -793,21 +799,21 @@ class MatchEvaluator:
             # Resize the base geometry. If the resize fails, return the
             # original geometry immediately so the function doesn't incorrectly
             # report that the result is constrained to the ocean/sea
-            resized = geom.resize(RESIZE, min_diff_km=CONT_SHELF_WIDTH_KM)
-            if geom == resized:
+            resized = geom.resize(CONT_SHELF_WIDTH_KM)
+            if resized in (geom, geom.envelope):
                 logger.debug("Resize failed: {:.1f} km".format(geom.radius_km))
                 return geom
             # Map intersection of geometry with ocean
-            tiles = self.ocean.query(resized, ocean=ocean)
+            tiles = self.ocean.query(resized.to_crs(4326), ocean=ocean)
             if tiles:
                 # Get intersection of proposed geometry with the world ocean
-                shape = self.adjacent(tiles)
+                shape = GeoMetry(self.adjacent(tiles), crs=4326)
                 geom = resized.intersection(shape)
 
                 # Limit to smaller named water body possible
                 for wtr_body in [s for s in marine if s.site_kind != "OCN"]:
                     try:
-                        xtn = geom.intersection(wtr_body.resize(RESIZE))
+                        xtn = geom.intersection(wtr_body.resize(RESIZE, how="rel"))
                         diff_km = abs(
                             round(xtn.radius_km, 1) - round(geom.radius_km, 1)
                         )
@@ -831,6 +837,8 @@ class MatchEvaluator:
                         self.interpret(oceans, "intersecting")
                 # FIXME: Fails with combinations of marine features
                 # geom = geom.difference(orig)
+
+                geom = geom.to_crs(4326)
         return geom
 
     def to_gdf(self, sites=None, resize=False):
@@ -969,7 +977,7 @@ class MatchEvaluator:
 
         # Get admin polygons and use admin codes to filter out low-quality
         # matches on country, state_province, and county
-        gdf = self.site.get_admin_polygons()
+        gdf = self.site.map_admin()
         reject = []
         for name_field, code_field in zip(
             self.site.adm.name_fields, self.site.adm.code_fields
@@ -1044,7 +1052,7 @@ class MatchEvaluator:
                     enc.append(site)
             if enc:
                 enc.sort(key=lambda s: s.radius_km)
-                polygon = enc[0].geometry.resize(RESIZE)
+                polygon = enc[0].geometry.resize(RESIZE, how="rel")
                 field = enc[0].field
 
             # If single island found, use it to refine the reference polygon
@@ -1058,7 +1066,7 @@ class MatchEvaluator:
                     islands.append(site)
             if len(islands) == 1 and islands[0].geom_type != "Point":
                 field = "island"
-                polygon = polygon.intersection(islands[0]).resize(RESIZE)
+                polygon = polygon.intersection(islands[0]).resize(RESIZE, how="rel")
                 # self.interpret(islands[0], 'encompassing', True)
                 # terr = [s for s in terr if s != islands[0]]
 
@@ -1071,7 +1079,7 @@ class MatchEvaluator:
             sites = terr + marine
             for site in sites[:]:
                 for rel in site.related_sites:
-                    rel = rel.clone()
+                    rel = rel.copy()
                     rel.location_id = site.location_id
                     sites.append(rel)
 
@@ -1088,7 +1096,7 @@ class MatchEvaluator:
             if sites:
                 gdf = self.to_gdf(sites)
                 eq_area_poly = polygon.to_crs(gdf.crs)
-                gdf["geometry"] = gdf["geometry"].scale(RESIZE, RESIZE)
+                gdf["geometry"] = gdf["geometry"].scale(RESIZE, RESIZE, how="rel")
                 xing = gdf.iloc[
                     gdf.sindex.query(eq_area_poly.geom.iloc[0], "intersects")
                 ]
@@ -1129,7 +1137,7 @@ class MatchEvaluator:
                         in_bounds.append(site_)
                         self.admin_match_type[site_.location_id] = 'centroid'
                         break
-                    if site_.convex_hull.resize(RESIZE).intersects(polygon):
+                    if site_.convex_hull.resize(RESIZE, how="rel").intersects(polygon):
                         in_bounds.append(site_)
                         self.admin_match_type[site_.location_id] = 'polygon'
                         break
@@ -1190,10 +1198,10 @@ class MatchEvaluator:
 
             if site.intersects(in_bounds[-1]):
                 in_bounds.append(site)
-                last_parent = site.resize(RESIZE)
+                last_parent = site.resize(RESIZE, how="rel")
             elif site.intersects(last_parent):
                 in_bounds.append(site)
-                last_parent = site.resize(RESIZE)
+                last_parent = site.resize(RESIZE, how="rel")
             else:
                 mask = '"{}" does not intersect {}'
                 logger.debug(mask.format(site.summarize(), in_bounds[-1].name))
@@ -1239,7 +1247,7 @@ class MatchEvaluator:
             for site in sites:
                 if not site.intersects(geom):
                     try:
-                        admin = site.get_admin_polygons().get(fallback)
+                        admin = site.map_admin().get(fallback)
                         if not admin or not admin.intersects(geom):
                             disjoint.append(site)
                     except ValueError as e:
@@ -1254,11 +1262,12 @@ class MatchEvaluator:
         """Splits list into marine and terrestrial sites"""
         if sites is None or sites == self.sites:
             sites = self.sites[:]
-        # Marine features recognized only if ocean/sea given
+        # Marine features recognized only if ocean/sea given or explicitly marked
         marine = []
         if self.site.ocean or self.site.sea_gulf:
             codes = set(CODES_MARINE + CODES_SHORES + CODES_UNDERSEA)
-            marine = [s for s in sites if s.site_kind in codes]
+            marine = [s for s in sites if s.site_kind in codes and s not in marine]
+        # Offshore localities are counted as terrestrial
         terrestrial = [s for s in sites if s not in marine]
         return terrestrial, marine
 
@@ -1276,6 +1285,7 @@ class MatchEvaluator:
         logger.debug("Finding most specific names")
         if sites is None or sites == self.sites:
             sites = self.sites[:]
+
         groups = self.group_by_name(sites)
         names = []
         sizes = []
@@ -1283,7 +1293,7 @@ class MatchEvaluator:
             size_range = [s.radius_km for s in group]
             sizes.append([name, min(size_range), max(size_range)])
             # Include directions even if they're large
-            if group[0].site_source == "DirectionParser":
+            if group[0].site_source in ("DirectionParser", "OffshoreParser"):
                 names.append(name)
         # Use a multiplier and a minimum size so we're not too stingy
         min_size = min([s[1] for s in sizes]) * 1.5 if sizes else 0
@@ -1356,9 +1366,11 @@ class MatchEvaluator:
             crs=geoms[0].crs,
         )
 
-    def encompass_name(self, sites, max_dist_km=100):
+    def encompass_name(self, sites, max_dist_km=None):
         """Encompasses one name matching multiple sites"""
         logger.debug("Encompassing multiple sites matching one name")
+        if max_dist_km is None:
+            max_dist_km = self.max_dist_km
         geom = self.encompass_sites(sites)
         if geom.radius_km < max_dist_km:
             return geom, True
@@ -1403,8 +1415,8 @@ class MatchEvaluator:
 
         for parent, child in zip(*gdf.sindex.query(scaled, "contains")):
             if parent != child:
-                parent_id = gdf.iloc[parent]["id"]
-                child_id = gdf.iloc[child]["id"]
+                parent_id = gdf.iloc[parent]["location_id"]
+                child_id = gdf.iloc[child]["location_id"]
                 rel[child_id]["parents"].append(parent_id)
                 rel[parent_id]["children"].append(child_id)
         return rel
@@ -1422,7 +1434,9 @@ class MatchEvaluator:
                 sid = site.location_id
                 intersections.setdefault(sid, []).append(sid)
                 for other in sites[i + 1 :]:
-                    if site.resize(RESIZE).intersects(other.resize(RESIZE)):
+                    if site.resize(RESIZE, how="rel").intersects(
+                        other.resize(RESIZE, how="rel")
+                    ):
                         oid = other.location_id
                         intersections.setdefault(sid, []).append(oid)
                         intersections.setdefault(oid, []).append(sid)
@@ -1830,6 +1844,7 @@ class MatchEvaluator:
         neighbors = []
         for shape in shapes:
             neighbors.append(tree.query(shape))
+        neighbors = [tree.geometries.take(i) for i in neighbors]
         # Use the largest cluster as the base geometry
         adjacent = sorted(neighbors, key=len)[-1]
         shapes = [s for s in shapes if s not in adjacent]

@@ -7,7 +7,8 @@ import os
 import pprint as pp
 import re
 import shutil
-from collections import OrderedDict
+import sys
+import warnings
 
 import numpy as np
 
@@ -21,11 +22,13 @@ from .pipes import (
     MatchOffshore,
     MatchPLSS,
 )
-from ...records import Site
+from ...records import RecordEncoder, Site
 from ...utils import (
     as_list,
     clear_empty,
     configure_log,
+    fast_hash,
+    mutable,
     skip_hashed,
     to_attribute,
 )
@@ -73,6 +76,8 @@ class Georeferencer:
         self.allow_invalid_coords = False
         self.require_coords = False
         self.include_failed = True
+        self.raise_on_error = False
+        self.eval_params = {}
         # Set read params
         self.id_key = r".*"
         self.skip = skip
@@ -81,7 +86,11 @@ class Georeferencer:
         self.callback = callback
         # Initialize containers
         self.key = None
-        self.evaluated = {}
+        try:
+            with open("evaluated.json", encoding="utf-8") as f:
+                self.evaluated = json.load(f)
+        except:
+            self.evaluated = {}
         self.results = []
         self.misses = {}
         self.admin_failed = {}
@@ -148,7 +157,9 @@ class Georeferencer:
         else:
             self.path = None
             self.slug = "records"
-            self._records = records[self.skip :]
+            for _ in range(self.skip):
+                next(records)
+            self._records = records
 
     def georeference(self):
         """Georeferences a set of records"""
@@ -170,7 +181,7 @@ class Georeferencer:
             kill = False
             try:
                 site = self.build_site(rec)
-                result = self.georeference_one(site)
+                self.georeference_one(site)
             except Exception as e:
                 self.handle_exception(e, rec)
                 site = pp.pformat(rec)
@@ -218,6 +229,10 @@ class Georeferencer:
             site.map_marine_features()
             start_time = dt.datetime.now()
             evaluator = MatchAnnotator(site, self.pipes)
+            for key, val in self.eval_params.items():
+                if not hasattr(evaluator, key):
+                    raise AttributeError(f"MatchEvaluator has no attribute {repr(key)}")
+                setattr(evaluator, key, val)
             evaluator.encompass()
             # Test that result is valid
             str(evaluator.result)
@@ -248,16 +263,19 @@ class Georeferencer:
         evaluator.kml(fn, refsite=site)
 
         result = dict(
+            key=self.keyer(site),
             location_id=site.location_id,
-            site=evaluator.result,
-            found=True,
-            has_coords=bool(site.geometry),
+            result="success",
             description=evaluator.describe(),
+            geometry=evaluator.result.geometry.wkt,
+            crs=str(evaluator.result.geometry.crs),
             radius_km=evaluator.radius_km,
+            has_coords=bool(site.geometry),
             dist_km=dist_km,
             est_km=estimated,
             within_unc=within_unc,
             within_est=within_est,
+            site=str(site),
         )
         self.evaluated[self.key] = result
         self.results.append(result)
@@ -282,7 +300,7 @@ class Georeferencer:
                 if self.limit and len(self) >= self.limit:
                     logger.debug("Checked {:,} total records".format(i))
                     break
-                rowdict = OrderedDict(zip(keys, row))
+                rowdict = dict(zip(keys, row))
                 yield rowdict
 
     def read_tests(self, mixed):
@@ -298,7 +316,7 @@ class Georeferencer:
                 rows = csv.reader(skip_hashed(f), dialect=dialect)
                 keys = next(rows)
                 for row in rows:
-                    rowdict = OrderedDict(zip(keys, row))
+                    rowdict = dict(zip(keys, row))
                     if rowdict.get("runTest", "TRUE") == "TRUE":
                         tests.setdefault(rowdict.get("filename", ""), []).append(
                             rowdict[list(rowdict)[0]]
@@ -364,27 +382,38 @@ class Georeferencer:
 
     def handle_exception(self, exc, site, evaluator=None):
         """Handles exceptions raised while georeferencing"""
-        # raise exc
-        self.notify(exc)
         if not isinstance(site, Site):
             location_id = self.get_location_id(site)
             if not location_id:
-                location_id = site
-            logger.error(f"{location_id}: {exc}", exc_info=exc)
+                location_id = site.location_id
+            if "resolves to empty mapping" in str(exc):
+                warnings.warn(str(exc))
+            else:
+                self.notify(f"Failed to parse site: {exc}")
+                logger.error(f"{location_id}: {exc}", exc_info=exc)
+                if self.raise_on_error:
+                    try:
+                        raise exc
+                    finally:
+                        sys.exit()
             return
-        if evaluator is not None:
-            rec = {k: v for k, v in site.verbatim.items() if v}
-            result = {"error": str(exc)}
-            result = OrderedDict(
-                location_id=site.location_id,
-                found=False,
-                has_coords=bool(site.geometry),
-                description=evaluator.describe(),
-            )
-            self.evaluated[self.key] = result
-            if self.include_failed:
-                self.results.append(result)
+
+        desc = evaluator.describe() if evaluator else f"{exc.__class__.__name__}: {exc}"
+        result = dict(
+            key=self.keyer(site),
+            location_id=site.location_id,
+            result="failed",
+            radius_km="",
+            has_coords=bool(site.geometry),
+            description=desc,
+            site=str(site),
+        )
+        self.evaluated[self.key] = result
+        if self.include_failed:
+            self.results.append(result)
+            if evaluator is not None:
                 evaluator.kml(f"miss_{site.location_id}", refsite=site)
+        self.notify(f"Failed: {exc}")
         # Count misses on admin names
         if "Could not map admin names:" in str(exc):
             names = [clear_empty(n) for n in json.loads(str(exc).split(": ", 1)[-1])]
@@ -406,12 +435,17 @@ class Georeferencer:
             # Unknown error, so include the traceback in the log
             msg = "Georeference failed: {} (error)".format(site.location_id)
             logger.error(msg, exc_info=exc)
+            if self.raise_on_error:
+                try:
+                    raise exc
+                finally:
+                    sys.exit()
 
     def summarize(self, archive):
         """Summarizes performance for sites with known coordinates"""
         timestamp = archive.split("_", 1)[0]
         filename = archive.split("_", 1)[-1].rsplit("_", 1)[0]
-        summary = OrderedDict(
+        summary = dict(
             timestamp=timestamp,
             filename=filename,
             archive=archive,
@@ -524,10 +558,11 @@ class Georeferencer:
         try:
             return rec[key]
         except KeyError:
-            try:
-                return re.search(key, str(rec)).group()
-            except AttributeError:
-                return hashlib.md5(json.dumps(rec).encode("utf-8")).hexdigest()
+            pass
+        try:
+            return re.search(key, str(rec)).group()
+        except AttributeError:
+            return hashlib.md5(json.dumps(rec).encode("utf-8")).hexdigest()
 
     def configure_log(self, level="WARNING", stream=True):
         """Set up log based on whether or not there are tests"""
@@ -542,9 +577,10 @@ class Georeferencer:
             configure_log("geo", level=level, stream=stream)
 
     def notify(self, outcome):
+        succeeded = len([r for r in self.results if r["result"] == "success"])
         msg = (
             f"{self._loc_id}: {outcome}"
-            f" ({len(self.results):,}/{self._index + 1:,} succeeded)"
+            f" ({succeeded:,}/{self._index + 1:,} succeeded)"
         )
         print(msg)
         logger.info(msg)
@@ -553,41 +589,49 @@ class Georeferencer:
     def build_site(self, rowdict):
         from ...bots.geonames import GeoNamesBot
 
-        # rowdict = {
-        #    'occurrence_id': 'debug',
-        #    'country': 'United States',
-        #    'locality': 'Off east coast of Maine',
-        #    'decimal_latitude': 44,
-        #    'decimal_longitude': -68
-        # }
+        rowdict["location_id"] = self._loc_id
+
         try:
             site = Site(rowdict)
         except KeyError:
             site = Site({k: v for k, v in rowdict.items() if k in ATTRS and v})
-        site.location_id = self._loc_id
-        site.bot = GeoNamesBot()
-        try:
-            site.decimal_latitude = rowdict["decimal_latitude"]
-            site.decimal_longitude = rowdict["decimal_longitude"]
-        except KeyError:
-            try:
-                site.decimal_latitude = rowdict["verbatim_latitude"]
-                site.decimal_longitude = rowdict["verbatim_longitude"]
-            except KeyError:
-                pass
-        try:
-            site.site_names = ["Original Coordinates"]
-            site.geometry.radius_km = 0.1
-        except AttributeError:
-            pass
+
+        # Remove sites from less specific fields
+        sitedict = site.to_dict()
+        geom = sitedict.pop("geometry", None)
+        vals = []
+        for key, vals_ in sitedict.items():
+            if key != "locality":
+                if isinstance(vals_, list):
+                    vals.extend(vals_)
+                else:
+                    vals.append(vals_)
+        vals = set(vals)
+
+        loc = []
+        for val in site.locality.split("|"):
+            val = val.strip()
+            if val not in vals:
+                loc.append(val)
+        with mutable(site):
+            site.locality = " | ".join(loc)
+
+        site.__class__.bot = GeoNamesBot()
+
+        if geom:
+            with mutable(site):
+                site.site_names = ["Original Coordinates"]
+                site.geometry = geom
 
         return site
 
     @staticmethod
     def keyer(site):
-        site_dict = {k: v for k, v in site.to_dict().items() if v}
+        site_dict = {k: v for k, v in site.to_dict(drop_empty=True).items() if v}
         del site_dict["location_id"]
-        return json.dumps(site_dict, sort_keys=True).lower()
+        return fast_hash(
+            json.dumps(site_dict, sort_keys=True, cls=RecordEncoder).lower()
+        )
 
     @staticmethod
     def _prep(val):

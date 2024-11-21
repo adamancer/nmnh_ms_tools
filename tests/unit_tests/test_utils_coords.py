@@ -4,7 +4,7 @@ import pytest
 from pytest import approx
 
 
-from nmnh_ms_tools.utils.coords import parse_coordinate
+from nmnh_ms_tools.utils.coords import estimate_uncertainty, parse_coordinate
 
 
 @pytest.mark.parametrize(
@@ -127,6 +127,20 @@ def test_dms_with_decimals(test_input, expected):
     assert str(parse_coordinate(test_input, "latitude")[0]) == expected
 
 
+def test_estimate_uncertainty_pair():
+    assert estimate_uncertainty("45 N", "90 W", "km") == approx(67.9, rel=1e-2)
+
+
 def test_illegal_dms_with_decimals():
     with pytest.raises(ValueError):
         parse_coordinate("45 30.5 30 N", "latitude")
+
+
+def test_invalid_type():
+    with pytest.raises(TypeError):
+        parse_coordinate(True)
+
+
+def test_invalid_kind():
+    with pytest.raises(ValueError):
+        parse_coordinate("45 N", "catitude")

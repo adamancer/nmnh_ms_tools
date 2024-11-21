@@ -11,8 +11,10 @@ class Attachment:
     irns = {}
     fields = []
 
-    def __init__(self, rec):
+    def __init__(self, rec, irns=None):
         self.rec = deepcopy(rec)
+        if irns:
+            self.__class__.irns = irns
 
     def __str__(self):
         return str(self.rec)

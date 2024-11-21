@@ -4,6 +4,7 @@ import re
 import warnings
 import yaml
 
+from nmnh_ms_tools.bots import Bot
 from nmnh_ms_tools.records import CatNum, Reference, Site, get_tree
 from xmu import (
     EMuDate,
@@ -21,6 +22,7 @@ class Validator:
     def __init__(self, import_path):
         self.import_path = import_path
         self.schema = EMuSchema()
+        self.bot = Bot()
         self.results = {}
         self.invalid = {}
         self.unvalidated = {}
@@ -275,6 +277,9 @@ class Validator:
                 return True
             except FileNotFoundError:
                 return False
+
+        if validation == "URLExists":
+            return self.bot.head(obj).status_code == 200
 
         if validation == "YesNo":
             return obj in ["Yes", "No"]

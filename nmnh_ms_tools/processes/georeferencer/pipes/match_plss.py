@@ -3,6 +3,7 @@
 from .core import MatchPipe, Georeference
 from ....bots.plss import PLSSBot
 from ....tools.geographic_names.parsers import PLSSParser
+from ....utils import mutable
 
 
 class MatchPLSS(MatchPipe):
@@ -44,7 +45,7 @@ class MatchPLSS(MatchPipe):
                     box = box.subsection(div)
                     divs = " ".join(qtrs[1 : i + 1][::-1])
                 name = " ".join([divs, parsed.sec, parsed.twp, parsed.rng])
-                site = self.create_site(
+                site = self.build_site(
                     '"{}"'.format(name.strip()),
                     site_kind="plss",
                     site_source=parsed.__class__.__name__,
@@ -55,12 +56,14 @@ class MatchPLSS(MatchPipe):
                 site.field = self.field
                 # Update location ID with direction info
                 if divs:
-                    site.location_id = "{}_{}".format(site.location_id, divs)
+                    with mutable(site):
+                        site.location_id = "{}_{}".format(site.location_id, divs)
                 related_sites.append(site)
-            site = related_sites.pop(-1)
-            site.site_names[0] = str(parsed)
-            site.related_sites = related_sites
-            site.sources = ["BLM GIS webservices"]
+            with mutable(site):
+                site = related_sites.pop(-1)
+                site.site_names[0] = str(parsed)
+                site.related_sites = related_sites
+                site.sources = ["BLM GIS webservices"]
             # Manually add the site filter
             for site_ in [site] + site.related_sites:
                 site_.filter = {

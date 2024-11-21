@@ -1,6 +1,9 @@
 """Parses measurements, including ranges"""
 
 import re
+from functools import cached_property
+
+from .classes import custom_copy, custom_eq, mutable, set_immutable
 
 
 UNITS = {
@@ -43,7 +46,7 @@ for prefix in ["milli", "centi", "", "kilo"]:
 
 class Measurement:
 
-    def __init__(self, val, unit="", conj=" to "):
+    def __init__(self, val=None, unit="", conj=" to "):
         self.verbatim = val
         self.conj = conj
 
@@ -54,10 +57,25 @@ class Measurement:
         self.unit = ""
         self.short_unit = ""
 
-        try:
-            self._parse(val, unit)
-        except KeyError:
-            raise ValueError(f"Could not parse measurement: {self.verbatim}")
+        if val:
+            with mutable(self):
+                try:
+                    self._parse(val, unit)
+                except KeyError:
+                    raise ValueError(f"Could not parse measurement: {self.verbatim}")
+
+    def __setattr__(self, attr, val):
+        set_immutable(self, attr, val)
+
+    def __int__(self):
+        if self.from_val != self.to_val:
+            raise ValueError(f"Cannot convert range to int: {self}")
+        return int(self.from_val)
+
+    def __float__(self):
+        if self.from_val != self.to_val:
+            raise ValueError(f"Cannot convert range to float: {self}")
+        return float(self.from_val)
 
     def __str__(self):
         vals = [f"{self.from_mod}{self.from_val}"]
@@ -66,7 +84,7 @@ class Measurement:
         return f"{self.conj.join(vals)} {self.short_unit}".strip()
 
     def __eq__(self, other):
-        return self.text == other.text
+        return custom_eq(self, other)
 
     def __repr__(self):
         return (
@@ -89,7 +107,7 @@ class Measurement:
             vals.append(f"{self.to_mod}{to_val}")
         return f"{self.conj.join(vals)} {self.short_unit}".strip()
 
-    @property
+    @cached_property
     def text(self):
         """Returns string representation of measurement
 
@@ -97,8 +115,16 @@ class Measurement:
         """
         return str(self)
 
+    @cached_property
+    def numeric(self):
+        """Returns a non-range measurement as an int or float"""
+        if self.from_val != self.to_val:
+            raise ValueError(f"Cannot convert range to numeric: {self}")
+        val = re.sub(r"\.0+$", "", self.from_val)
+        return float(val) if "." in val else int(val)
+
     def copy(self):
-        return self.__class__(self.verbatim, self.unit, self.conj)
+        return custom_copy(self)
 
     def _parse(self, val, unit):
         if isinstance(val, Measurement):
@@ -164,6 +190,57 @@ class Measurement:
         self.short_unit = SHORT_UNITS.get(unit, unit)
 
         return self
+
+    def convert_to(self, unit):
+        """Converts the measurement to another unit"""
+
+        from_val = float(self.from_val) if "." in self.from_val else int(self.from_val)
+        to_val = float(self.to_val) if "." in self.to_val else int(self.to_val)
+
+        short_unit = self.__class__(f"1 {unit}").short_unit
+
+        # Convert to the base metric unit (m, g, etc.)
+        conv_to_metric = {
+            "dist": {
+                "km": 1000,
+                "cm": 100,
+                "m": 1,
+                "mm": 0.001,
+                "mi": 1609.344,
+                "yd": 0.9144,
+            },
+            "mass": {
+                "kg": 1000,
+                "g": 1,
+                "mg": 0.001,
+            },
+        }
+        for key, vals in conv_to_metric.items():
+            try:
+                vals[self.short_unit]
+                conv_to_metric = vals
+                break
+            except KeyError:
+                pass
+
+        scalar = conv_to_metric[self.short_unit]
+        if scalar == 1:
+            return self.copy()
+
+        from_metric = from_val * scalar
+        to_metric = to_val * scalar
+
+        # Convert to the specified unit
+        try:
+            scalar = 1 / conv_to_metric[short_unit]
+        except KeyError:
+            raise ValueError(f"Invalid unit for type {repr(key)}: {unit}")
+        from_val = str(from_metric * scalar)
+        to_val = str(to_metric * scalar)
+
+        val = "-".join([from_val, to_val]) if from_val != to_val else from_val
+        val = re.sub(r"\.0+", "", val)
+        return parse_measurement(val, unit, conj=self.conj)
 
 
 def parse_measurement(val, unit="", conj=" to "):

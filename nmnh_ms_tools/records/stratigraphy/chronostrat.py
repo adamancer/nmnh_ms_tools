@@ -80,16 +80,17 @@ class ChronoStrat(StratRecord):
             self.__class__._keywords = read_keywords(
                 os.path.join(DATA_DIR, "chronostrat", "chronostrat.txt")
             )
-        return self.__class__.keywords
+        return self.__class__._keywords
 
     def parse(self, data):
         """Parses data from various sources to populate class"""
-        for key, val in self.parse_to_dict(data).items():
-            if isinstance(val, (list, tuple)):
-                if len(val) > 1:
-                    raise TypeError("Attributes must be str or float")
-                val = val[0]
-            setattr(self, key, val)
+        if data:
+            for key, val in self.parse_to_dict(data).items():
+                if isinstance(val, (list, tuple)):
+                    if len(val) > 1:
+                        raise TypeError("Attributes must be str or float")
+                    val = val[0]
+                setattr(self, key, val)
         return self
 
     def parse_to_dict(self, data):

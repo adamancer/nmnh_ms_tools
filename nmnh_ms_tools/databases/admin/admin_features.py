@@ -1,14 +1,17 @@
+import csv
+import datetime as dt
 import itertools
 import json
 import logging
 from collections import OrderedDict
 
 import yaml
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, UnboundExecutionError
 from sqlalchemy.schema import Index
 
 from .database import Base, Session, AdminNames, AdminThesaurus
 from ..cache import CacheDict
+from ..geohelper import get_alt_geometry
 from ..geonames import GeoNamesFeatures
 from ...utils import (
     LocStandardizer,
@@ -84,6 +87,8 @@ class AdminFeatures(GeoNamesFeatures):
         return self._session
 
     def std(self, val):
+        if val is None:
+            return ""
         return val if val.isnumeric() else self._std.std_admin(val)
 
     def std_names(self, names, std_func=None):
@@ -111,6 +116,7 @@ class AdminFeatures(GeoNamesFeatures):
         resolved.append(self.resolve_admin(country, "country", is_name=is_name))
         for key, vals in resolved[-1].items():
             result.setdefault(key, []).extend(vals)
+
         # Get state_province/province info
         if state_province and "state_province" in result:
             logger.warning("state_province from thesaurus supersedes kwarg")
@@ -122,6 +128,7 @@ class AdminFeatures(GeoNamesFeatures):
             )
             for key, vals in resolved[-1].items():
                 result.setdefault(key, []).extend(vals)
+
         # Get county info
         if county and "county" in result:
             logger.warning("county from thesaurus supersedes kwarg")
@@ -131,19 +138,24 @@ class AdminFeatures(GeoNamesFeatures):
             )
             for key, vals in resolved[-1].items():
                 result.setdefault(key, []).extend(vals)
+
         # Rebuild result from last resolved
-        result = {}
-        for key, vals in resolved[-1].items():
-            result.setdefault(key, []).extend(vals)
+        # FIXME: This does not behave as expected. The last item in resolved only
+        #        includes the specific key.
+        # result = {}
+        # for key, vals in resolved[-1].items():
+        #    result.setdefault(key, []).extend(vals)
+
         # Clear fields that were emptied during mapping
         if state_province and not result.get("state_province"):
             result["state_province"] = []
             result["admin_code_1"] = []
-        if state_province and not result.get("county"):
+        if county and not result.get("county"):
             result["county"] = []
             result["admin_code_2"] = []
         result.update(kwargs)
         result = {k: dedupe(v) for k, v in result.items()}
+
         # Remove the 00 state/province code that GeoNames provides for countries
         try:
             result["admin_code_1"] = [c for c in result["admin_code_1"] if c != "00"]
@@ -153,7 +165,8 @@ class AdminFeatures(GeoNamesFeatures):
         return result
 
     def resolve_admin(self, names, kind, is_name=True, **admin):
-        assert names, "no names provided"
+        if not names:
+            raise ValueError("No names provided")
         try:
             return self.cache[(names, kind, is_name, admin)]
         except KeyError:
@@ -177,7 +190,7 @@ class AdminFeatures(GeoNamesFeatures):
                 while not args[-1]:
                     args = args[:-1]
                 admin.update(self.map_deprecated(*args))
-                # Map depreacted does not return codes, so existing codes must be
+                # Map deprecated does not return codes, so existing codes must be
                 # removed
                 admin = {k: v for k, v in admin.items() if "code" not in k}
                 logger.debug("Calling get_admin from map_deprecated")
@@ -199,14 +212,54 @@ class AdminFeatures(GeoNamesFeatures):
         return resolved
 
     def get_admin_codes(self, *args, **kwargs):
+        """Returns the resolved admin codes"""
         logger.debug("Calling get_admin from get_admin_codes")
         admin = self.get_admin(*args, **kwargs)
         return {k: v for k, v in admin.items() if k in self.code_fields}
 
     def get_admin_names(self, *args, **kwargs):
+        """Returns the resolved admin names"""
         logger.debug("Calling get_admin from get_admin_names")
         admin = self.get_admin(*args, **kwargs)
         return {k: v for k, v in admin.items() if k in self.name_fields}
+
+    def get_children(self, country, state_province=None):
+        """Returns the children of the given country or state/province"""
+        parent = self.get(country=country, state_province=state_province)
+
+        if state_province is None:
+            children = (
+                self.session.query(AdminNames)
+                .filter(
+                    AdminNames.country_code == parent["country_code"][0],
+                    AdminNames.fcode.in_(("ADM1", "ADM1H")),
+                )
+                .all()
+            )
+        else:
+            children = (
+                self.session.query(AdminNames)
+                .filter(
+                    AdminNames.country_code == parent["country_code"][0],
+                    AdminNames.admin_code_1 == parent["admin_code_1"][0],
+                    AdminNames.fcode.in_(("ADM2", "ADM2H")),
+                )
+                .all()
+            )
+
+        # Convert results to dict
+        results = []
+        for child in children:
+            child = {k: v for k, v in child.__dict__.items() if not k.startswith("_")}
+            try:
+                child["geometry"], child["source"] = get_alt_geometry(
+                    str(child["geoname_id"])
+                )
+            except UnboundExecutionError:
+                pass
+            results.append(child)
+
+        return results
 
     def unresolved(self, names, kind, rows):
         """Finds unresolved names"""
@@ -475,10 +528,12 @@ class AdminFeatures(GeoNamesFeatures):
             pass
         else:
             is_name = False
+        # NOTE: Historical entities are nominally searchable but will not appear unless
+        # the st_name field is populated in the admin division database.
         fcodes = {
             "country": ["PCL", "PCLD", "PCLF", "PCLH", "PCLI", "PCLIX", "PCLS", "TERR"],
-            "state_province": ["ADM1"],
-            "county": ["ADM2"],
+            "state_province": ["ADM1", "ADM1H"],
+            "county": ["ADM2", "ADM2H"],
         }
         names = as_list(names)
         st_names = self.std_names(names)
@@ -491,7 +546,7 @@ class AdminFeatures(GeoNamesFeatures):
             fltr.append(self.names.st_name.in_(st_names))
         else:
             fltr.append(code_fld.in_(names))
-        limit = len(names)
+
         if kind == "country":
             admin = {}
         elif kind == "state_province":
@@ -504,10 +559,13 @@ class AdminFeatures(GeoNamesFeatures):
                 pass  # fltr.append(field == None)
             else:
                 fltr.append(field.in_(vals))
-                limit *= len(vals)
         session = self.session
-        result = session.query(self.names).distinct().filter(*fltr).limit(limit).all()
+
+        result = session.query(self.names).distinct().filter(*fltr).all()
         session.close()
+
+        # Try the search using codes instead of names if no result
         if is_name and not result:
-            return self.query(names, kind, is_name=False, **admin)
+            result = self.query(names, kind, is_name=False, **admin)
+
         return result

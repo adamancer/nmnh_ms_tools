@@ -2,6 +2,8 @@ from ..core import Record
 
 
 class StratRange(Record):
+    terms = ["units"]
+
     def __init__(self, *args, **kwargs):
         # Set lists of original class attributes and reported properties
         self._class_attrs = set(dir(self))

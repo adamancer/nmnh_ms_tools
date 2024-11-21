@@ -8,7 +8,7 @@ from .references import Reference
 from .sites import Site
 from .stratigraphy import LithoStrat
 from ..tools.geographic_names.parsers.helpers import parse_localities
-from ..tools.specimen_numbers_old.link import (
+from ..tools.specimen_match.link import (
     MatchMaker,
     MatchObject,
     validate_dept,
@@ -16,7 +16,7 @@ from ..tools.specimen_numbers_old.link import (
     STOPWORDS,
     REPLACEMENTS,
 )
-from ..tools.specimen_numbers_old.parser import Parser
+from ..tools.specimen_numbers.parsers import Parser
 from ..utils import as_list, dedupe, to_attribute, to_camel, to_pattern
 from ..utils.standardizers import Standardizer
 

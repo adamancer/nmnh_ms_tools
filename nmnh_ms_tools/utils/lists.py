@@ -69,7 +69,7 @@ def oxford_comma(lst, lowercase=False, delim=", ", conj="and"):
     if len(lst) <= 1:
         return "".join(lst)
     if len(lst) == 2:
-        return " {} ".format(conj if conj else delim).join(lst)
+        return (" " + conj.strip() + " " if conj else delim).join(lst)
     last = lst.pop()
     return delim.join(lst) + delim + conj + " " + last
 

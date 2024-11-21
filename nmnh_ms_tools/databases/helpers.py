@@ -4,6 +4,8 @@ import datetime as dt
 import logging
 import os
 
+import pandas as pd
+import shapely
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import DeferredReflection
 from sqlalchemy.pool import NullPool
@@ -44,3 +46,17 @@ def time_query(query):
     msg = "{} (t={})".format(compiled, dt.datetime.now() - start_time)
     logger.debug(msg)
     print(msg)
+
+
+def from_csv(sessionmaker, table, path, **kwargs):
+    rows = [r.to_dict() for _, r in pd.read_csv(path, **kwargs).iterrows()]
+    for row in rows:
+        try:
+            row["geometry"] = shapely.from_wkt(row["geometry"]).wkb
+        except KeyError:
+            pass
+
+    session = sessionmaker()
+    session.bulk_insert_mappings(table, rows)
+    session.commit()
+    session.close()

@@ -7,18 +7,9 @@ import re
 import numpy as np
 from geographiclib.geodesic import Geodesic
 from pyproj import Geod
-from shapely.geometry import (
-    GeometryCollection,
-    MultiLineString,
-    MultiPoint,
-    MultiPolygon,
-    Point,
-    Polygon,
-    box,
-)
+from shapely.geometry import Point, Polygon
 
 from .lists import as_list
-from .standardizers import Standardizer
 
 
 logger = logging.getLogger(__name__)
@@ -26,55 +17,6 @@ logger = logging.getLogger(__name__)
 
 GEODESIC_GEOLIB = Geodesic.WGS84
 GEODESIC_PYPROJ = Geod(ellps="WGS84")
-SHAPE_TO_MULTISHAPE = {
-    "LineString": MultiLineString,
-    "Point": MultiPoint,
-    "Polygon": MultiPolygon,
-}
-STD = Standardizer(minlen=1, delim="")
-
-
-def bounding_box(lat1, lon1, lat2, lon2, close=False):
-    """Calculates a bounding box from two sets of coordinates"""
-    if lat1 == lat2 or lon1 == lon2:
-        args = lat1, lon1, lat2, lon2
-        raise ValueError("Not a box: {}".format(args))
-    lat1, lat2 = sorted([lat1, lat2])
-    lon1, lon2 = sorted([lon1, lon2])
-    return box(lon1, lat1, lon2, lat2)
-
-
-def epsg_id(val):
-    """Maps name to EPSG identifier"""
-    systems = {
-        # Full names
-        "Clarke 1858": "EPSG:4007",  # datum based on EPSG:7007 ellipsoid
-        "Fundamental de Ocotepeque": "EPSG:5451",
-        "Japanese Geodetic Datum 2000 ": "EPSG:6612",
-        "Ocotepeque 1935": "EPSG:5451",
-        # Common shorthand
-        "NAD27": "EPSG:4267",
-        "NAD83": "EPSG:4269",
-        "PRP-M": "EPSG:4248",  # not sure about this one
-        "WGS84": "EPSG:4326",
-        # Strings designating no info
-        "not recorded": "EPSG:4326",
-        "unknown": "EPSG:4326",
-    }
-    # Return EPSG codes as uppercase
-    if val.lower().startswith("epsg:"):
-        return val.upper()
-    # Return WKT definitions as is
-    if val.startswith("PROJCRS"):
-        return val
-    # Extract parentheticals
-    pattern = r"\((.*?)\)"
-    if re.search(pattern, val):
-        val = re.search(pattern, val).group(1)
-    # Remove 19 from 19xx years
-    val = re.sub(r"19(\d\d)", r"\1", val)
-    epsg_id = {STD(k): v for k, v in systems.items()}.get(STD(val), val.upper())
-    return epsg_id
 
 
 def get_azimuth(bearing):
@@ -133,68 +75,9 @@ def draw_polygon(lat, lon, dist_km, sides=4):
     return translate(lats, lons, azimuths, dists_km)
 
 
-def get_spoke_km(dist_km):
-    """Calculates length of spoke in km
-
-    This method originally split the difference between two possible
-    interpretations of a radius (diagonal or along axis). The MaNIS guidelines
-    use the diagonal, and that approach is adopted here.
-    """
-    s1 = (2 * dist_km**2) ** 0.5  # circle contains square (x along diagonal)
-    # s2 = (dist_km ** 2 / 2) ** 0.5  # square contains circle (x along axes)
-    # return (s1 + s2) / 2            # split the difference
-    return s1
-
-
-def fix_shape(shape, multipolygon="largest"):
-    """Fixes invalid shape using shapely buffer trick, then convex hull"""
-    shape = normalize_shape(shape)
-    if not shape.is_valid:
-        # Buffer then crop to ensure the shape is valid in lat-long space. Note that this
-        # fix assumes the original shape is basically okay and only goes out-of-bounds
-        # because of the buffer.
-        shape = shape.buffer(0.1)
-        cropped = shape.intersection(box(-180, -90, 180, 90))
-        if shape != cropped and cropped.area / shape.area > 0.5:
-            shape = cropped
-        if not shape.is_valid:
-            shape = shape.convex_hull
-    # For MultiPolygons, simplify to either the largest multipolygon or the
-    # hull encompassing the set of polygons. The former option is preferred
-    # for most locality parsing operations, the latter is needed for
-    # associating farflung provinces with the correct country.
-    if isinstance(shape, MultiPolygon):
-        geoms = sorted(shape.geoms, key=lambda g: g.area)
-        # Keep largest polygon only if it is much bigger than the rest (so
-        # keep the continental US but not like half of Malaysia) and quite
-        # large itself, since this exists to catch places on the order of
-        # countries or states.
-        #
-        # Thresholds are rough and based on the following:
-        # + Area of Alaska / continental US = 4.7
-        # + Area of Rhode Island: ~3,000 km²
-        # + Area of the big island of Hawaii: ~11,000 km²
-        if (
-            multipolygon == "largest"
-            and geoms[-1].area > 2
-            and geoms[-1].area / geoms[-2].area > 3
-        ):
-            shape = geoms[-1]
-        else:
-            shape = shape.convex_hull
-    elif isinstance(shape, (GeometryCollection, MultiLineString)):
-        shape = shape.convex_hull
-    return shape
-
-
 def get_dist_km(lat1, lon1, lat2, lon2):
     """Calculates the distance in kilometers between two points"""
-    try:
-        return get_dist_km_pyproj(lat1, lon1, lat2, lon2)
-    except ValueError:
-        if lat1 == lat2 and lon1 == lon2:
-            return 0
-        raise ValueError(f"Could not calculate distance: {(lat1, lon1, lat2, lon2)}")
+    return get_dist_km_pyproj(lat1, lon1, lat2, lon2)
 
 
 def get_dist_km_geolib(lat1, lon1, lat2, lon2):
@@ -260,9 +143,9 @@ def translate_geolib(lats, lons, bearings, dists_km):
 
 def translate_pyproj(lats, lons, bearings, dists_km):
     """Calculates points at a distance along a bearing with pyproj.Geod"""
-    lats, lons, azm, dists_km = _prep_translate(lats, lons, bearings, dists_km)
+    lats, lons, azm, dists_m = _prep_translate(lats, lons, bearings, dists_km)
     # pyprog.Geod uses lon, lat order
-    lons, lats, _ = GEODESIC_PYPROJ.fwd(lons, lats, azm, dists_km)
+    lons, lats, _ = GEODESIC_PYPROJ.fwd(lons, lats, azm, dists_m)
     if len(lats) == 1:
         return Point(lons[0], lats[0])
     return Polygon([(x, y) for x, y in zip(lons, lats)])
@@ -308,16 +191,6 @@ def azimuth_uncertainty(azimuth, min_uncertainty=5.75):
     elif not azimuth % 22.5:
         return 11.25
     return min_uncertainty
-
-
-def forward_azimuth(lat1, lon1, lat2, lon2):
-    """Calculates the inverse geodesic using pyproj"""
-    return GEODESIC_PYPROJ.inv(lon1, lat1, lon2, lat2)[0]
-
-
-def similar(num, other, threshold=0.01):
-    """Tests if two numbers are similar"""
-    return abs(num - other) <= threshold
 
 
 def slope(point, other):
@@ -369,106 +242,11 @@ def sort_geoms(geoms, direction):
     raise ValueError("Bad direction: {}".format(direction))
 
 
-def encircle(lat_s):
-    """Calculates centroid and radius for a circle around a set of lat-lons"""
-    lat_lons = normalize_coords(lat_lons)
-    mpt = MultiPoint([(lon, lat) for lat, lon in lat_lons])
-    centroid = mpt.centroid
-    clat, clon = centroid.y, centroid.x
-    hull = mpt.convex_hull.exterior.coords
-    # Calculate distance between centroid and each point
-    radius = max([get_dist_km(clat, clon, lat, lon) for lon, lat in hull])
-    return draw_circle(clat, clon, radius)
-
-
-def enhull(lat_lons):
-    """Calculates hull around a set of lat-lons"""
-    lat_lons = normalize_coords(lat_lons)
-    return MultiPoint([(lon, lat) for lat, lon in lat_lons]).convex_hull
-
-
-def get_coordinates(shape):
-    """Extracts a list of coordinates from a shapely object"""
-    if not shape:
-        return []
-    if shape.geom_type == "Point":
-        return [(shape.y, shape.x)]
-    try:
-        return [(y, x) for x, y in shape.exterior.coords]
-    except AttributeError:
-        pass
-    try:
-        return [(y, x) for x, y in shape.coords]
-    except NotImplementedError:
-        pass
-    raise ValueError("Could not parse '{}'".format(shape))
-
-
-def normalize_shape(shape, to_antimeridian=None):
-    """Calculates shape to ensure it is not split by the antimeridian"""
-    orig = shape
-    multishape = None
-    if hasattr(shape, "geoms"):
-        multishape = shape.__class__
-        shape = list(shape.geoms)
-    if isinstance(shape, list):
-        if multishape:
-            minlon, _, maxlon, _ = orig.bounds
-            to_antimeridian = crosses_180([minlon, maxlon])
-        else:
-            # For lists, normalize to antimeridian if any shape crosses it
-            lons = []
-            if to_antimeridian is None:
-                to_antimeridian = False
-                for geom in shape:
-                    minlon, _, maxlon, _ = geom.bounds
-                    if crosses_180([minlon, maxlon]):
-                        to_antimeridian = True
-                        break
-                    else:
-                        lons.extend([minlon, maxlon])
-            # Final check to catch shapes where no individual feature crosses
-            # the antimeridian but the group itself does
-            if not to_antimeridian:
-                to_antimeridian = crosses_180(lons)
-        shapes = [normalize_shape(g, to_antimeridian) for g in shape]
-        return multishape(shapes) if multishape is not None else shapes
-    # Map transformed coordinates back to original shape
-    lat_lons = get_coordinates(shape)
-    xy = [(x, y) for y, x in normalize_coords(lat_lons, to_antimeridian)]
-    return shape.__class__(xy)
-
-
-def normalize_coords(lat_lons, to_antimeridian=None):
-    """Calculates longitudes to ensure they are not split by the antimeridian"""
-    lats, lons = zip(*lat_lons)
-    if to_antimeridian is None:
-        to_antimeridian = crosses_180(lons)
-    lons = am_longitudes(lons) if to_antimeridian else pm_longitudes(lons)
-    return list(zip(lats, lons))
-
-
 def crosses_180(lons):
     """Tests if longitudes cross the antimeridian"""
     min_lon = min(lons)
     max_lon = max(lons)
     return abs(max_lon) > 180 or abs(min_lon) > 180 or max_lon - min_lon > 180
-
-
-def am_longitudes(lons):
-    """Normalizes longitudes to between 0 and 360"""
-    # return [(lon + 360 if lon < 0 else lon) for lon in lons]
-    am_lons = []
-    for lon in lons:
-        orig = lon
-        # Convert very negative longitudes to equivalent positive values
-        if lon < -180:
-            lon += 360
-        # Normalize negative longitudes (-180 to 0)
-        if lon < 0:
-            lon += 360
-        am_lons.append(lon)
-    return am_lons
 
 
 def pm_longitudes(lons):

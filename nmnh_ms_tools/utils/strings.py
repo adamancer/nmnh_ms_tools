@@ -56,6 +56,8 @@ def ucfirst(val, lower=False):
     Returns:
         Capitalized string
     """
+    if val == "":
+        return val
     if lower:
         val = val.lower()
     chars = []

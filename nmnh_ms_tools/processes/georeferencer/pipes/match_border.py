@@ -59,7 +59,7 @@ class MatchBorder(MatchPipe):
                     sources.extend(refsite.sources)
                 sources = sorted(set(sources))
                 # Create site summarizing the match
-                site = self.create_site(
+                site = self.build_site(
                     str(parsed),
                     location_id=location_id + "_BORDER",
                     site_kind="border",
@@ -97,7 +97,7 @@ class MatchBorder(MatchPipe):
         for i in range(len(fields)):
             if i:
                 fields.pop()
-            refsite = self.site.clone(fields)
+            refsite = self.site.copy(fields)
             matches = self.match_site(feature, refsite, self.pipes, **kwargs)
             if matches:
                 return matches

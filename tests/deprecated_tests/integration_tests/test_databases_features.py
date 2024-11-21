@@ -1,6 +1,5 @@
 """Tests geographic name database operations"""
 
-import csv
 import json
 import os
 
@@ -20,7 +19,7 @@ def test_get_json():
 
 def test_get_many():
     feat_db = GeoNamesFeatures()
-    rows = feat_db.session().query(feat_db.features.geoname_id)
+    rows = feat_db.session.query(feat_db.features.geoname_id)
     expected = {r.geoname_id for r in rows}
     results = feat_db.get_many(expected)
     assert {r["geonameId"] for r in results} == expected
@@ -34,7 +33,7 @@ def test_search_json():
 
 def test_fill_record():
     feat_db = GeoNamesFeatures()
-    session = feat_db.session()
+    session = feat_db.session
     row = session.query(feat_db.features).filter_by(geoname_id=5793639).first()
     row.admin_name_1 = None
     session.merge(row)
@@ -49,7 +48,7 @@ def test_fill_record():
 
 def test_fill_record_undersea():
     feat_db = GeoNamesFeatures()
-    session = feat_db.session()
+    session = feat_db.session
     row = session.query(feat_db.features).filter_by(geoname_id=4031274).first()
     row.ocean = None
     session.merge(row)
@@ -65,7 +64,7 @@ def test_fill_record_undersea():
 @pytest.mark.parametrize("feat_db_class", [GeoNamesFeatures, CustomFeatures])
 def test_update_alt_names(feat_db_class):
     feat_db = feat_db_class()
-    session = feat_db.session()
+    session = feat_db.session
     expected = set(session.query(feat_db.names.st_name))
     feat_db.update_alt_names()
     assert set(session.query(feat_db.names.st_name)) == expected
@@ -94,8 +93,8 @@ def test_to_csv(tmp_path):
 @pytest.mark.parametrize(
     "feat_db_class,fn",
     [
-        (GeoNamesFeatures, "test_geonames.csv"),
-        (CustomFeatures, "test_custom.csv"),
+        (GeoNamesFeatures, "db_geonames.csv"),
+        (CustomFeatures, "db_custom.csv"),
     ],
 )
 def test_from_csv(feat_db_class, fn):
@@ -103,7 +102,7 @@ def test_from_csv(feat_db_class, fn):
     feat_db.keys = None
     feat_db.delim = "|"
     feat_db.csv_kwargs = {"dialect": "excel"}
-    session = feat_db.session()
+    session = feat_db.session
     expected = set(session.query(feat_db.features.geoname_id))
     feat_db.from_csv(os.path.join(TEST_DIR, fn))
     assert set(session.query(feat_db.features.geoname_id)) == expected
@@ -191,7 +190,7 @@ def test_map_deprecated():
     with pytest.raises(ValueError):
         result = admin.get("United States", "Washington", "Ellensburg")
     # Add mapping to thesaurus and repeat query
-    session = admin.session()
+    session = admin.session
     row = session.query(AdminThesaurus).filter_by(county="Ellensburg").first()
     row.mapping = json.dumps({"county": "Kittitas", "municipality": "Ellensburg"})
     session.merge(row)

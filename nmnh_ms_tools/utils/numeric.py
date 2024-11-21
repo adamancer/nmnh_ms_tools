@@ -72,3 +72,8 @@ def num_dec_places(val, max_dec_places=5):
         return len(dec) if len(dec) < max_dec_places else max_dec_places
     except ValueError:
         return 0
+
+
+def similar(num, other, threshold=0.01):
+    """Tests if two numbers are similar"""
+    return abs(num - other) <= threshold

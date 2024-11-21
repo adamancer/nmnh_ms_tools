@@ -20,8 +20,7 @@ def site():
             "county": "Kittitas Co",
             "municipality": "Ellensburg",
             "synonyms": ["Ellen's Burgh", "Robbers Roost"],
-            "verbatim_latitude": "N 46° 59' 47'",
-            "verbatim_longitude": "W 120° 32' 52''",
+            "geometry": "<GeoMetry name=None crs='EPSG:4326' radius_km=0.0 geom='POINT (-120.55 46.99)'",
         }
     )
 
@@ -31,9 +30,9 @@ def test_name(site):
 
 
 def test_geometry(site):
-    assert isinstance(site.geometry.valid_shape, Point)
-    assert site.geometry.valid_shape.y == pytest.approx(46.99, rel=1e-2)
-    assert site.geometry.valid_shape.x == pytest.approx(-120.55, rel=1e-2)
+    assert site.geom_type == "Point"
+    assert site.y == pytest.approx(46.99, rel=1e-2)
+    assert site.x == pytest.approx(-120.55, rel=1e-2)
 
 
 def test_site_class(site):
@@ -59,15 +58,15 @@ def test_map_admin(site):
     assert site.admin_code_1 == ["WA"]
     assert site.admin_code_2 == ["037"]
     # Clear names and remap from codes
-    site.update({"country": None, "state_province": None, "county": None})
-    site.map_admin_from_codes()
+    site = site.update({"country": None, "state_province": None, "county": None})
+    site.map_admin()
     assert site.country == "United States"
     assert site.state_province == ["Washington"]
     assert site.county == ["Kittitas County"]
 
 
 def test_map_continent(site):
-    site.map_continent()
+    site.map_admin()
     assert site.continent_code == "NA"
 
 
@@ -78,29 +77,24 @@ def test_has_name(site):
 
 
 def test_subsection(site):
-    subsection = site.clone().subsection("N")
+    subsection = site.subsection("N")
     assert site in subsection.related_sites
     # Shape is a box, so area of subsection should be roughly half the original
     assert subsection.area / site.area == pytest.approx(0.5, rel=1e-2)
 
 
-def test_clone(site):
-    assert site == site.clone()
+def test_copy(site):
+    assert site == site.copy()
+    assert site is not site.copy()
 
 
-def test_partial_clone(site):
-    clone = site.clone(["country", "state_province", "county"])
-    assert site.country == clone.country
-    assert site.state_province == clone.state_province
-    assert site.county == clone.county
-    assert not clone.location_id
-    assert not clone.site_names
-
-
-# def test_valid_coordinates(site):
-#    assert site.has_valid_coordinates()
-#    site.geometry = Point(0, 0)
-#    assert site.has_valid_coordinates()
+def test_partial_copy(site):
+    pcopy = site.copy(["country", "state_province", "county"])
+    assert site.country == pcopy.country
+    assert site.state_province == pcopy.state_province
+    assert site.county == pcopy.county
+    assert not pcopy.location_id
+    assert not pcopy.site_names
 
 
 def test_terrestrial(site):

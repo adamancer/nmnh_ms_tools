@@ -12,7 +12,7 @@ Decimal places:
 import logging
 import re
 
-from .classes import repr_class
+from .classes import repr_class, custom_copy, custom_eq
 from .geo import get_dist_km
 
 
@@ -83,8 +83,11 @@ class Coordinate:
         except ValueError:
             return format(float(self), format_spec)
 
+    def __eq__(self, other):
+        return custom_eq(self, other)
+
     def copy(self):
-        return self.__class__(self.verbatim)
+        return custom_copy(self)
 
     def parse(self):
         """Parses verbatim coordinats into decimal degress and deg-min-sec"""

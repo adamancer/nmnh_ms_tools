@@ -135,19 +135,31 @@ class IGSN:
     _df = None
 
     def __init__(self, val, code=None, prefix="10.58151"):
+        self.verbatim = val
         if isinstance(val, self.__class__):
+            self.verbatim = val.verbatim
             val = str(val)
         if isinstance(val, int):
             val = int_to_base(val, 36)
+        # Clean up URLs
+        if val.lower().startswith(("http", "doi.org", "igsn.org")):
+            val = re.split(r"(?:doi.org|igsn.org)/", val, flags=re.I)[1]
+        # Use a default prefix
         if not val.startswith("10."):
             val = f"{prefix}/{val}"
         # Map a specimen name to an IGSN
         if not re.match(r"10\.\d{5}/[A-Z]{3}[A-Z0-9]{6}$", val):
-            igsn = self.df.filter(Name=val)[0]["IGSN"]
-            if self.name == val:
-                val = igsn
+            try:
+                print(val)
+                val = self.df.filter(Name=val)[0]["IGSN"]
+                print(self.df.filter(Name=val))
+                print(self.verbatim, val)
+            except IndexError:
+                raise ValueError(f"Not an IGSN: {val}")
         if not val.startswith("10."):
             raise ValueError(f"No prefix: {val}")
+        if not isinstance(val, str):
+            raise
         self.value = val
         self._code = code
 
@@ -538,22 +550,22 @@ class SESARRecord(Record):
             val = getattr(self, attr)
             if not val:
                 setattr(self, attr, None)
-            elif isinstance(val, str) and re.match("-?\d+\.\d+$", val):
-                setattr(self, attr, re.sub("0+$", "", val))
+            elif isinstance(val, str) and re.match(r"-?\d+\.\d+$", val):
+                setattr(self, attr, re.sub(r"0+$", "", val))
 
     def same_hash(self):
         if not self.igsn:
             raise ValueError("No IGSN in record")
         return self.hash() in self.df.filter(IGSN=self.igsn.suffix)["Hash"].to_list()
 
-    def diff(self, check_sesar=True):
+    def diff(self, check_sesar=True, check_hash=True):
 
         # Records that haven't been registered return an empty dict
         if not self.igsn:
             return {}
 
         # Record hash matches database
-        if self.same_hash():
+        if check_hash and self.same_hash():
             return {}
 
         # Find differences
@@ -595,6 +607,15 @@ class SESARRecord(Record):
         if len(missing) == 1:
             attr = list(missing)[0]
             diff[attr] = (getattr(rec, attr), getattr(self, attr))
+
+        # Ele
+        for key in ("elevation", "elevation_end"):
+            if key in diff and not "elevation_unit" in diff:
+                diff["elevation_unit"] = (
+                    getattr(rec, "elevation_unit"),
+                    getattr(self, "elevation_unit"),
+                )
+                break
 
         # Catch IGSN and name mismatches, which are serious errors
         for attr in ["igsn", "name"]:
@@ -764,6 +785,7 @@ class SESARRecord(Record):
     def _parse_emu(self, data):
         evt = data.get("BioEventSiteRef", {})
         other_nums = data.grid("CatOtherNumbersValue_tab").add_columns()
+        rels = data.grid("RelRelationship_tab").add_columns()
         taxa = [t["ClaScientificName"] for t in data.get("IdeTaxonRef_tab", [])]
 
         # Map primary taxon to a SESAR classification
@@ -828,22 +850,19 @@ class SESARRecord(Record):
         self.material = material
 
         try:
-            igsn = other_nums[{"CatOtherNumbersType_tab": "IGSN"}][0][
+            self.igsn = other_nums[{"CatOtherNumbersType_tab": "IGSN"}][0][
                 "CatOtherNumbersValue_tab"
             ]
         except IndexError:
             pass
-        else:
-            self.igsn = igsn
 
+        # Check other numbers and relationships for IGSNs
         try:
-            igsn = other_nums[{"CatOtherNumbersType_tab": "Parent IGSN"}][0][
-                "CatOtherNumbersValue_tab"
-            ]
+            self.parent_igsn = rels[
+                {"RelRelationship_tab": "Child", "RelNhIDType_tab": "IGSN"}
+            ][0]["RelNhURI_tab"]
         except IndexError:
             pass
-        else:
-            self.parent_igsn = igsn
 
         # Publish date is ET
         self.publish_date = (datetime.now() + +timedelta(hours=8)).date().isoformat()
@@ -1105,6 +1124,12 @@ class SESARRecord(Record):
         dct = _xml_to_dict(etree.fromstring(content))["samples"][0]["sample"]
         for key, val in dct.items():
             setattr(self, key, val if val else None)
+
+        # Fix invalid material and classification
+        material = list(self.classification)[0] if self.classification else "Other"
+        if material not in {"Biology", "Rock", "Mineral"}:
+            self.material = "Other"
+            self.classification = {"Unknown": 0}
 
         # Convert collection dates to datetimes if necessary
         if self.collection_start_date and ":" not in self.collection_start_date:

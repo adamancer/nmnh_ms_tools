@@ -1,23 +1,43 @@
 """Defines methods for parsing, comparing, and representing names"""
 
-import re
+import csv
+import unicodedata
+from pathlib import Path
 
 from collections import namedtuple
-from nameparser import HumanName
+
+import regex as re
 
 from .core import Record, Records
-from ..utils.standardizers import Standardizer
-from ..utils.lists import oxford_comma
-from ..utils.strings import same_to_length
+from ..config import DATA_DIR
+from ..utils import Standardizer, mutable, oxford_comma, same_to_length
 
 
 SimpleName = namedtuple("SimpleName", ["last", "first", "middle"])
-PREFIXES = sorted(
+
+TITLES = {}
+with open(
+    Path(DATA_DIR) / "records" / "titles.csv", encoding="utf-8-sig", newline=""
+) as f:
+    for row in csv.DictReader(f, dialect="excel"):
+        TITLES[row["abbreviation"]] = row["title"]
+ALL_TITLES = sorted(list(TITLES) + list(TITLES.values()), key=len, reverse=True)
+ALL_TITLES = [s.rstrip(".") for s in ALL_TITLES]
+SURNAME_PREFIXES = sorted(
     ["da", "de", "de la", "den", "do", "du", "st", "van", "van der", "von"],
     key=len,
     reverse=True,
 )
-SUFFIXES = ["Jr", "Sr", "II", "III", "IV", "Esq"]
+SUFFIXES = {
+    "II": "the second",
+    "III": "the third",
+    "IV": "the fourth",
+    "Jr": "junior",
+}
+ALL_SUFFIXES = sorted(list(SUFFIXES) + list(SUFFIXES.values()), key=len, reverse=True)
+TITLE_PATTERN = "^(" + "|".join(ALL_TITLES) + r")\b"
+SURNAME_PATTERN = r"\b((" + "|".join(list(SURNAME_PREFIXES)) + r") )?[-\p{L}]+$"
+SUFFIX_PATTERN = r"\b(" + "|".join(ALL_SUFFIXES) + ")$"
 
 
 class Person(Record):
@@ -64,7 +84,6 @@ class Person(Record):
 
     def parse(self, data):
         """Parses data from various sources to populate class"""
-        self.reset()
         if isinstance(data, str):
             self._parse_name(data)
         elif "NamLast" in data:
@@ -72,7 +91,7 @@ class Person(Record):
         elif {"last", "organization"} & set(data):
             self._parse(data)
         else:
-            raise ValueError("Could not parse {}".format(data))
+            raise ValueError(f"Could not parse {repr(data)}")
 
         self.suffix = self.suffix.rstrip(".")
 
@@ -178,7 +197,6 @@ class Person(Record):
 
     def _parse_emu(self, rec):
         """Parses an EMu eparties record"""
-        self.verbatim = rec
         if rec.get("NamLast"):
             self.title = rec.get("NamTitle")
             self.first = rec.get("NamFirst")
@@ -191,8 +209,7 @@ class Person(Record):
     def _parse_name(self, name):
         """Parses a name using the nameparser module"""
 
-        self.verbatim = re.sub(r"\s+", " ", name)
-        name = name.strip()
+        name = clean_name(name)
 
         # Check if name appears to be an organization
         org_words = {
@@ -211,138 +228,80 @@ class Person(Record):
             self.organization = name
             return
 
-        # Check for multiple names
-        if re.search(r" (and|&) ", name, flags=re.I):
-            raise ValueError(f"String contains multiple names: {name}")
-
-        # Check if name is just initials
-        initials = "".join([c for c in name if c.isalpha()])
-        if initials.isupper() and len(initials) == 3:
-            self.first, self.middle, self.last = initials
-            return
-        if initials.isupper() and len(initials) == 2:
-            self.first, self.last = initials
-            return
-
-        # If name matches pattern for a compound name (von Trapp), use
-        # capitalization to decide whether the prefix should be interpreted
-        # as a first name or part of a last name.
-        pattern = r"^({}) [a-z]+$".format("|".join(PREFIXES))
-        if re.search(pattern, name, flags=re.I):
-            if name[0].isupper() and " " in name:
-                self.first, self.last = name.rsplit(" ", 1)
-            else:
-                self.last = name
-            return
-
-        # Check for inverted name (Cee, A. B.)
-        after_comma = name.rsplit(",", 1)[-1].strip(". ")
-        if "," in name and not after_comma in SUFFIXES:
-            parts = [s.strip() for s in name.rsplit(",", 1)[::-1]]
-            parts[-1] = parts[-1].replace(" ", "_")
-            name = " ".join(parts)
-
-        # Link compound names (von Trapp) with underscores
-        for prefix in PREFIXES:
-            # Skip if prefix appears to be a first name
-            if re.match(prefix + r"\b", name, flags=re.I) and name.count(" ") > 1:
-                continue
-            pattern = r"\b{} (?=[a-zA-Z]{{3,}})".format(prefix)
-            repl = r"{}_".format(prefix.replace(" ", "_"))
-            name = re.sub(pattern, repl, name, flags=re.I)
-
-        # HumanName gets confused by initials without spacing, so
-        # normalize names like AB Cee and A.B. Cee
-        name = re.sub(r"\b([A-Z]\.)(?! )", r"\1 ", name)
-        if not name.isupper():
-            name = re.sub(r"^([A-Z])([A-Z])\b", r"\1. \2.", name)
-
-        # HumanName will not accept certain words as first names (e.g., Bon,
-        # Do), so force it to by salting the first word
-        salt = "zzzzzzzz"
-        name = name.replace(" ", salt + " ", 1) if " " in name else name + salt
-
-        # Parse name using the HumanName class
-        name = HumanName(name)
-        for attr in self.attributes:
-            if attr != "organization":
-                setattr(self, attr, getattr(name, attr))
-
-        # Remove salt
-        self.title = self.title.replace(salt, "").strip()
-        self.first = self.first.replace(salt, "").strip()
-        self.middle = self.middle.replace(salt, "").strip()
-        self.last = self.last.replace(salt, "").strip()
-
-        # Fix misparsed suffix
-        if not self.last:
-            self.last = self.first
-            self.first = self.suffix
-            self.suffix = ""
-
-        # Fix misparsed trailing suffix
-        if self.middle.rstrip(".").endswith(tuple(SUFFIXES)):
-            try:
-                self.middle, self.suffix = self.middle.rsplit(" ", 1)
-            except ValueError:
-                self.suffix = self.middle
-
-        # Fix titles that nameparser struggles with
-        problem_words = ["Count", "Countess"]
-        for word in sorted(problem_words, key=len)[::-1]:
-            if self.verbatim.startswith(word):
-                # unparsed = unparsed.split(word)[1].strip()
-                self.title = word
-                break
-
-        # Fix mixed initial/full name in middle name by
-        middle_names = self.middle.split(" ")
-        if len(middle_names) > 1 and len(middle_names[0].rstrip(".")) == 1:
-            while len(middle_names[-1].rstrip(".")) > 1:
-                self.last = "{} {}".format(middle_names.pop(), self.last)
-            self.middle = " ".join(middle_names)
-
-        # Fix compound middle names
-        if "_" in self.middle:
-            self.middle = self.middle.replace("_", " ")
-            self.middle = self.middle[0].lower() + self.middle[1:]
-
-        # Fix compound last names
-        if "_" in self.last:
-            parts = self.last.split("_")
-            if parts[-1].upper() in SUFFIXES:
-                self.suffix = parts.pop(-1)
-            self.last = " ".join(parts)
-
-        # Fix capitalization in hyphenates
-        for attr in ["first", "middle", "last"]:
-            capped = getattr(self, attr).title()
-            # Keep compound name prefixes lower case
-            for prefix in PREFIXES:
-                if capped.lower().startswith(prefix + " "):
-                    capped = capped[: len(prefix)].lower() + capped[len(prefix) :]
+        # Reorder names with a single comma
+        name = " ".join(name.split(",", 1)[::-1])
+        # Check for title
+        match = re.search(TITLE_PATTERN, name, flags=re.I | re.U)
+        if match:
+            val = match.group()
+            name = name[len(val) :].strip(". ")
+            for item in TITLES.items():
+                if {val.lower(), val.lower() + "."} & {s.lower() for s in item}:
+                    self.title = item[0]
                     break
-            setattr(self, attr, "".join(capped))
+        # Check for compound titles
+        match = re.search("and " + TITLE_PATTERN[1:], name, flags=re.I | re.U)
+        if match:
+            val = match.group()
+            name = name[len(val) :].strip(". ")
+            val = val[4:]
+            for item in TITLES.items():
+                if {val.lower(), val.lower() + "."} & {s.lower() for s in item}:
+                    self.title += " and " + item[0]
+                    break
+        # Check for suffix
+        match = re.search(SUFFIX_PATTERN, name, flags=re.I)
+        if match:
+            val = match.group()
+            name = name[: -len(val)].strip(". ")
+            for item in SUFFIXES.items():
+                if val.lower() in [s.lower() for s in item]:
+                    self.suffix = item[0]
+                    break
+        # Check for last name, including compounds last names
+        match = re.search(SURNAME_PATTERN, name, flags=re.I)
+        if match:
+            self.last = match.group()
+            name = name[: -len(self.last)].strip(". ")
+        # Split into parts
+        parts = [s for s in re.split(r"[^-\p{L}]+", name, flags=re.I) if s]
+        # First name is first part
+        if parts:
+            self.first = parts.pop(0)
+        # Split first name that is likely to be initials
+        if (
+            not name.isupper()
+            and len(self.first) > 1
+            and self.first.isupper()
+            or name.isupper()
+            and len(self.first) == 2
+        ):
+            parts = list(self.first[1:]) + parts
+            self.first = self.first[0]
+        self.middle = " ".join(parts)
 
-        # Strip trailing periods
-        self.first = self.first.rstrip(".")
-        self.middle = self.middle.rstrip(".")
-        if "." in self.middle:
-            self.middle = self.middle.upper() + "."
-
-        # Fix last name is suffix
-        if self.last.rstrip(".") in SUFFIXES:
-            self.suffix = self.last
-            self.last = self.first
-            self.first = ""
+        # A short name in all caps without a first name is interpreted as initials
+        if not self.first and not self.middle and self.last.isupper():
+            if len(self.last) == 2:
+                self.first, self.last = list(self.last)
+            elif len(self.last) == 3:
+                self.first, self.middle, self.last = list(self.last)
 
         # Verify that the name isn't et al
         if self.first == "Et" and self.last == "Al":
-            raise ValueError("Name contains et al: {}".format(self.verbatim))
+            raise ValueError(f"Name contains et al: {self.verbatim}")
 
         # Verify that at least the last name has been set
-        if not self.last or "_" in str(self):
-            raise ValueError("Failed to parse name: {}".format(self.verbatim))
+        if not self.last:
+            raise ValueError(f"Failed to parse name: {repr(self.verbatim)}")
+
+        # Check for multiple names
+        if (
+            re.search(f"\band\b", self.first)
+            or re.search(f"\band\b", self.middle)
+            or re.search(f"\band\b", self.last)
+        ):
+            raise ValueError(f"String contains multiple names: {name}")
 
     def _sortable(self):
         """Returns a sortable version of the object"""
@@ -360,7 +319,7 @@ class People(Records):
         return combine_names(self)
 
 
-def parse_names(val, delims="&|;,"):
+def parse_names(val, delims="|;,"):
     """Parses names in the given object
 
     Parameters:
@@ -380,51 +339,50 @@ def parse_names(val, delims="&|;,"):
         if "et al" in val.lower():
             val = re.split(r"\bet al\b", val, flags=re.I)[0].rstrip("., ")
         val = re.split(r"\d", val, 1)[0].strip()
-        # Normalize periods then split
-        val = (
-            val.replace(". ", ".")
-            .replace(".", ". ")
-            .replace(" and ", " & ")
-            .strip(" ;,")
-        )
-        val = re.sub(r" and$", "", val)
-        # Remove unicode spaces
-        val = re.sub(r"\s+", " ", val)
-        # Remove commas that precede suffixes
-        pattern = r", ?({})".format("|".join(SUFFIXES))
-        val = re.sub(pattern, r" \1", val, flags=re.I)
+        val = clean_name(val)
 
-        # Try a simple split and parse
-        pattern = "[" + re.escape(delims) + "]"
-        return [Person(s) for s in [s.strip() for s in re.split(pattern, val)]]
-        # Figure out the delimiter
-        if is_name(val):
-            names = [val]
+        # Split the list of names on the first delimiter
+        for delim in delims:
+            if delim in val:
+                vals = re.split(f" *{re.escape(delim)} *", val.replace(" and ", delim))
+                break
         else:
-            for delim in delims:
-                if delim in val:
-                    val = re.sub(delim + r" & ", delim, val)
-                    names = [s.strip(" ,;") for s in val.split(delim)]
-                    break
-            else:
-                # raise ValueError(f"Cannot identify delimiter: {val}")
-                print(f"Cannot identify delimiter: {val}")
-    else:
-        names = val[:]
+            delim = None
+            vals = val.split(" and ")
 
-    # Convert each name to Person
-    people = []
-    for name in names:
-        if name.strip() and name.strip(".") not in SUFFIXES:
+        # Some publishers use commas to delimit both first name and individual names.
+        # This block works around this by replacing every other comma with a pipe, but
+        # will give a bad result for a list of last names.
+        if delim == ",":
+            return parse_names(re.sub("(.*?,.*?),", r"\1|", val.replace(" and ", ", ")))
+
+        # Catch bad title splits
+        names = []
+        for i, val in enumerate(vals):
             try:
-                people.append(Person(name))
+                names.append(Person(val))
             except ValueError:
-                pass
+                if re.match(TITLE_PATTERN, val):
+                    vals[i + 1] = f"{val} and {vals[i + 1]}"
 
-    # for name, person in zip(names, people):
-    #    print(name, '=>', repr(person))
+        return names
 
-    return people
+
+def clean_name(name):
+    """Standardizes name string to make it easier to parse"""
+    # Normalize unicode
+    name = unicodedata.normalize("NFC", name)
+    # Remove multiple spaces
+    name = re.sub(r"\s+", " ", name)
+    # Remove all periods
+    name = re.sub(r"\. *", " ", name).strip()
+    # Replace ampersand with "and"
+    name = re.sub(" *& *", " and ", name)
+    # Remove oxford comma
+    name = re.sub(", and ", " and ", name)
+    # Remove commas before suffixes
+    name = re.sub(", *(" + "|".join(ALL_SUFFIXES) + ")", r" \1", name, flags=re.I)
+    return name
 
 
 def combine_names(
@@ -445,7 +403,7 @@ def combine_names(
         names = re.sub(
             r" +", " ", oxford_comma(names[:max_names], delim=delim, conj="")
         )
-        return "{} et al.".format(names)
+        return f"{names} et al."
     return re.sub(r" +", " ", oxford_comma(names, delim=delim, conj=conj))
 
 
@@ -453,8 +411,8 @@ def combine_authors(*args, **kwargs):
     """Combines list of authors into a string suitable for a reference"""
     kwargs.setdefault("mask", "{last}, {first} {middle}")
     kwargs.setdefault("initials", True)
-    authors = combine_names(*args, **kwargs)
-    return authors
+    kwargs.setdefault("delim", ", ")
+    return combine_names(*args, **kwargs)
 
 
 def is_name(val):

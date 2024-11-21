@@ -36,7 +36,7 @@ class MatchOffshore(MatchPipe):
         # Match all options and let evaluator sort things out
         for refsite in self.georeference_feature(name):
             refsite.field = self.field
-            site = self.create_site(
+            site = self.build_site(
                 str(parsed),
                 location_id=refsite.location_id + "_OFF",
                 site_kind="offshore",
@@ -71,7 +71,7 @@ class MatchOffshore(MatchPipe):
         for i in range(len(fields)):
             if i:
                 fields.pop()
-            refsite = self.site.clone(fields)
+            refsite = self.site.copy(fields)
             matches = self.match_site(feature, refsite, pipes, **kwargs)
             if matches:
                 return matches

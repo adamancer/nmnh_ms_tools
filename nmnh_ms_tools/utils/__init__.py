@@ -3,7 +3,15 @@
 from .. import _ImportClock
 
 with _ImportClock("utils"):
-    from .classes import repr_class, str_class
+    from .classes import (
+        custom_copy,
+        custom_eq,
+        get_attrs,
+        mutable,
+        repr_class,
+        str_class,
+        set_immutable,
+    )
     from .clock import Clocker, clock, clock_all_methods, clock_snippet, report
     from .coords import (
         Coordinate,
@@ -34,37 +42,25 @@ with _ImportClock("utils"):
     )
     from .files import (
         HashCheck,
-        copy_if,
         fast_hash,
         hash_file,
-        hash_file_if_exists,
         hash_image_data,
         hasher,
-        get_mtime,
         is_different,
         is_newer,
-        is_older,
-        load_dict,
         skip_hashed,
     )
     from .geo import (
-        am_longitudes,
         azimuth_uncertainty,
-        bounding_box,
         continuous,
         crosses_180,
         draw_circle,
         draw_polygon,
-        encircle,
-        enhull,
-        epsg_id,
-        fix_shape,
         get_azimuth,
         get_dist_km,
-        normalize_shape,
         pm_longitudes,
-        similar,
         slope,
+        sort_geoms,
         subhorizontal,
         subvertical,
         translate,
@@ -94,14 +90,20 @@ with _ImportClock("utils"):
         write_emu_search,
     )
     from .measurements import parse_measurement, parse_measurements
-    from .numeric import as_numeric, base_to_int, int_to_base, frange, num_dec_places
+    from .numeric import (
+        as_numeric,
+        base_to_int,
+        int_to_base,
+        frange,
+        num_dec_places,
+        similar,
+    )
     from .prefixed_num import PrefixedNum
     from .preps import Preparation
     from .standardizers import (
         LocStandardizer,
         Standardizer,
         std_names,
-        std_identifier,
     )
     from .strings import (
         add_article,

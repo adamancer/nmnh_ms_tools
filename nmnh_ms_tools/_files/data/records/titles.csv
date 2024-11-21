@@ -1,0 +1,81 @@
+﻿title,abbreviation,kind
+Baronet,Baronet,Gentry
+Dame,Dame,Gentry
+Sir,Sir,Gentry
+Miss,Miss,Honorific
+Missus,Mrs.,Honorific
+Mister,Mr.,Honorific
+Ms.,Ms.,Honorific
+Mx.,Mx.,Honorific
+Admiral,Adm.,Military
+Airman,Airman,Military
+Airman Basic,Airman,Military
+Airman First Class,Airman 1st Class,Military
+Brigadier General,Brig. Gen.,Military
+Captain,Capt.,Military
+Chief Master Sergeant,Chief Master Sgt.,Military
+Chief Master Sergeant of the Air Force,Chief Master Sgt. Of the Air Force,Military
+Chief Petty Officer,Chief Petty Officer,Military
+Chief Warrant Officer 2,Chief Warrant Officer 2,Military
+Chief Warrant Officer 3,Chief Warrant Officer 3,Military
+Chief Warrant Officer 4,Chief Warrant Officer 4,Military
+Chief Warrant Officer 5,Chief Warrant Officer 5,Military
+Colonel,Col.,Military
+Command Chief Master Sergeant,Command Chief Master Sgt.,Military
+Command Sergeant Major,Command Sgt. Maj.,Military
+Commander,Cmdr.,Military
+Corporal,Cpl.,Military
+Ensign,Ensign,Military
+First Lieutenant,1st Lt.,Military
+First Sergeant,1st Sgt.,Military
+General,Gen.,Military
+Gunnery Sergeant,Gunnery Sgt.,Military
+Lance Corporal,Lance Cpl.,Military
+Lieutenant,Lt.,Military
+Lieutenant Colonel,Lt. Col.,Military
+Lieutenant Commander,Lt. Cmdr.,Military
+Lieutenant General,Lt. Gen.,Military
+Lieutenant Junior Grade,Lt. j.g.,Military
+Major,Maj.,Military
+Major General,Maj. Gen.,Military
+Master Chief Petty Officer,Master Chief Petty Officer,Military
+Master Chief Petty Officer of the Coast Guard,Master Chief Petty Officer of the Coast Guard,Military
+Master Chief Petty Officer of the Navy,Master Chief Petty Officer of the Navy,Military
+Master Gunnery Sergeant,Master Gunnery Sgt.,Military
+Master Sergeant,Master Sgt.,Military
+Petty Officer First Class,Petty Officer 1st Class,Military
+Petty Officer Second Class,Petty Officer 2nd Class,Military
+Petty Officer Third Class,Petty Officer 3rd Class,Military
+Private,Pvt.,Military
+Private First Class,Pfc.,Military
+Read Admiral,Rear Adm.,Military
+Seaman,Seaman,Military
+Seaman Apprentice,Seaman Apprentice,Military
+Seaman Recruit,Seaman Recruit,Military
+Second Lieutenant,2nd Lt.,Military
+Senior Airman,Senior Airman,Military
+Senior Chief Petty Officer,Senior Chief Petty Officer,Military
+Senior Master Sergeant,Senior Master Sgt.,Military
+Sergeant,Sgt.,Military
+Sergeant First Class,Sgt. 1st Class,Military
+Sergeant Major,Sgt. Maj.,Military
+Sergeant Major of the Army,Sgt. Maj. of the Army,Military
+Specialist,Spc.,Military
+Staff Sergeant,Staff Sgt.,Military
+Technical Sergeant,Tech. Sgt.,Military
+Vice Admiral,Vice Adm.,Military
+Warrant Officer,Warrant Officer,Military
+Baron,Baron,Peerage
+Baroness,Baroness,Peerage
+Count,Count,Peerage
+Countess,Countess,Peerage
+Duchess,Duchess,Peerage
+Duke,Duke,Peerage
+Earl,Earl,Peerage
+Lady,Lady,Peerage
+Lord,Lord,Peerage
+Marchioness,Marchioness,Peerage
+Marquess,Marquess,Peerage
+Marquis,Marquis,Peerage
+Viscount,Viscount,Peerage
+Viscountess,Viscountess,Peerage

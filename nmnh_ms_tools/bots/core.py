@@ -5,6 +5,7 @@ import logging
 import pprint as pp
 import random
 import time
+import warnings
 from contextlib import contextmanager
 
 import requests
@@ -33,6 +34,8 @@ class Bot:
         start_param=None,
         limit_param=None,
         paged=False,
+        num_retries=7,
+        **kwargs,
     ):
         self.wait = wait
         if email:
@@ -42,6 +45,8 @@ class Bot:
         self.start_param = start_param
         self.limit_param = limit_param  # either a key or func(resp)
         self.paged = paged
+        self.num_retries = num_retries
+        self.kwargs = kwargs
         self.session = requests.Session()
         self._cached_session = None
 
@@ -99,7 +104,14 @@ class Bot:
 
     def head(self, *args, **kwargs):
         """Makes HEAD request with retry"""
-        return self._retry("head", *args, **kwargs)
+        # HEAD requests are not resource intensive but don't seem to be cacheable,
+        # so reduce wait to a fraction of a second if
+        wait = self.wait
+        if wait > 0.1:
+            self.wait = 0.1
+        resp = self._retry("head", *args, **kwargs)
+        self.wait = wait
+        return resp
 
     def validate(self, resp):
         """Placeholder function to validate resp"""
@@ -114,7 +126,10 @@ class Bot:
                     f.write(chunk)
 
     def handle_error(self, resp):
-        raise ValueError(f"Could not parse response from {resp.url}: {resp.text}")
+        msg = f"Could not resolve {resp.url} (status_code={resp.status_code})"
+        if isinstance(self.session, requests_cache.CachedSession):
+            msg = msg.rstrip(")") + f", from_cache={resp.from_cache})"
+        warnings.warn(msg)
 
     def install_cache(self, cache_name="http_cache"):
         """Activates cache located at path"""
@@ -122,7 +137,7 @@ class Bot:
             not isinstance(self.session, requests_cache.CachedSession)
             or self.session.cache.cache_name != cache_name
         ):
-            self.session = requests_cache.CachedSession(cache_name)
+            self.session = requests_cache.CachedSession(cache_name, **self.kwargs)
 
     def uninstall_cache(self):
         """Deactives cache"""
@@ -162,6 +177,7 @@ class Bot:
 
     def _retry(self, method, *args, **kwargs):
         """Routes requests to use single or paged"""
+        kwargs.setdefault("allow_redirects", True)
         if CONFIG["bots"]["cache_name"] and not self.is_cached():
             self.install_cache(CONFIG["bots"]["cache_name"])
         func = getattr(self.session, method)
@@ -187,7 +203,7 @@ class Bot:
         if not kwargs["headers"]["User-Agent"]:
             raise ValueError("User agent is required")
         # Make the request, repeating it if a resolvable error is encountered
-        for i in range(7):
+        for i in range(self.num_retries):
             logger.debug(f"Making request: {args}, {kwargs}")
             try:
                 resp = func(*args, **kwargs)

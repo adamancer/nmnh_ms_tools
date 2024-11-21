@@ -62,6 +62,7 @@ class xDDBot(Bot):
         kwargs.update({"lastname": person.last})
         coauthors = []
         for article in self.get_articles(**kwargs):
+            print(article)
             authors = [Person(a["name"]) for a in article.get("author", [])]
             if any([a.similar_to(person) for a in authors]):
                 coauthors.extend(authors)

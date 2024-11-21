@@ -3,6 +3,8 @@ import re
 
 from unidecode import unidecode
 
+from ...utils import custom_copy
+
 logger = logging.getLogger(__name__)
 
 
@@ -131,14 +133,7 @@ class SpecNum:
 
     def copy(self):
         """Copies the current SpecNum object"""
-        return self.__class__(
-            code=self.code,
-            kind=self.kind,
-            prefix=self.prefix,
-            number=self.number,
-            suffix=self.suffix,
-            delim=self.delim,
-        )
+        return custom_copy(self)
 
     def modcopy(self, **kwargs):
         return self.__class__(
@@ -478,20 +473,22 @@ def std_spec_num(val, strip_leading_zeroes=True, drop_zero_suffixes=False):
     return "".join(vals).strip("-")
 
 
-def sortable_spec_num(val):
+def sortable_spec_num(val, length=16):
     """Returns a sortable version of the specimen number
 
     Parameters
     ----------
     val : str
         a specimen number
+    length : int
+        number of digits to zfill numbers to
 
     Returns
     -------
     str
         sortable version of the standardized specimen number
     """
-    return "-".join((p.zfill(64) for p in std_spec_num(val).split("-")))
+    return re.sub(r"(\d+)", lambda m: m.group().zfill(length), std_spec_num(val))
 
 
 def is_range(start, end=None, max_diff=100, **kwargs):

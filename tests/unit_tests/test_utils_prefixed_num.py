@@ -46,7 +46,7 @@ def test_bool():
 
 def test_eq():
     pnum1 = PrefixedNum("R1234")
-    pnum2 = "R1234"
+    pnum2 = PrefixedNum("R1233") + 1
     assert pnum1 == pnum2 and pnum1 is not pnum2
 
 
@@ -84,11 +84,11 @@ def test_invalid_number():
 
 def test_change_prefix():
     pnum = PrefixedNum("R1234")
-    with pytest.raises(AttributeError, match="Cannot change prefix once set"):
+    with pytest.raises(AttributeError, match="Cannot modify existing attribute"):
         pnum.prefix = "A"
 
 
 def test_change_number():
     pnum = PrefixedNum("R1234")
-    with pytest.raises(AttributeError, match="Cannot change number once set"):
+    with pytest.raises(AttributeError, match="Cannot modify existing attribute"):
         pnum.number += 1

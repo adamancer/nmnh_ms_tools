@@ -35,7 +35,7 @@ class MatchDirection(MatchPipe):
                 dist = None
             kwargs = {"rel_err_distance": precision}
             geom = refsite.smart_translate(parsed.bearing, dist, **kwargs)
-            site = self.create_site(
+            site = self.build_site(
                 str(parsed),
                 location_id=refsite.location_id + "_DIR",
                 site_kind="direction",
@@ -61,7 +61,7 @@ class MatchDirection(MatchPipe):
         if str(feature).lower().startswith(("junction of", "off of")):
             return []
         if str(feature).lower().startswith("border of"):
-            pipes = MatchBorder(self.pipes)
+            pipes = [MatchBorder(self.pipes)]
             kwargs = {}
         else:
             pipes = self.pipes
@@ -70,7 +70,7 @@ class MatchDirection(MatchPipe):
         for i in range(len(fields)):
             if i:
                 fields.pop()
-            refsite = self.site.clone(fields[:])
+            refsite = self.site.copy(fields[:])
             matches = self.match_site(feature, refsite, pipes, **kwargs)
             if matches:
                 # Exclude rivers from directions if other locations found

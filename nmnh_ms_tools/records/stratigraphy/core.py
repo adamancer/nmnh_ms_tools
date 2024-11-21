@@ -2,18 +2,20 @@ import numpy as np
 from shapely.geometry import LineString, Point
 
 from ..core import Record
+from ...utils import mutable
 
 
 class StratRecord(Record):
     def __init__(self, *args, **kwargs):
-        # Set lists of original class attributes and reported properties
-        self._class_attrs = set(dir(self))
-        self._properties = ["min_ma", "max_ma"]
+        with mutable(self):
+            # Set lists of original class attributes and reported properties
+            self._class_attrs = set(dir(self))
+            self._properties = ["min_ma", "max_ma"]
 
-        # Explicitly define defaults for all reported attributes
-        self._min_ma = np.nan
-        self._max_ma = np.nan
-        self.age_geom = None
+            # Explicitly define defaults for all reported attributes
+            self._min_ma = np.nan
+            self._max_ma = np.nan
+            self.age_geom = None
 
         # Initialize instance
         super().__init__(*args, **kwargs)
@@ -36,7 +38,7 @@ class StratRecord(Record):
         self._max_ma = val
         self._set_age_geom()
 
-    def almost_equals(other, decimal=1):
+    def almost_equals(self, other, decimal=1):
         return self._shapely_op(other, "almost_equals", decimal=decimal)
 
     def contains(self, other):

@@ -118,7 +118,9 @@ def split_strat(val, class_=None):
     val = std_modifiers(val)
 
     # Test if given string is valid for current class
-    if class_ is not None and to_attribute(val) in class_.keywords:
+    if class_ is not None and class_._keywords is None:
+        class_().keywords
+    if class_ is not None and to_attribute(val) in class_._keywords:
         return [val]
 
     # Extract parentheticals

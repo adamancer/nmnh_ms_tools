@@ -58,7 +58,7 @@ def dictify(obj, cols=None, recurse=True):
     # Determine columns for SQLAlchemy objects
     if not cols:
         try:
-            cols = list(obj._mapping)
+            cols = [c.name for c in obj.__table__.columns]
         except AttributeError:
             raise TypeError(f"Object cannot be converted to dict: {repr(obj)}")
     # Convert children to dictionaries as well

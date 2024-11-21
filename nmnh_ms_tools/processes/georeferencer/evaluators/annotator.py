@@ -10,7 +10,7 @@ from ....config import CONFIG
 from ....databases.georef_job import Session, Localities, Uncertainties
 from ....tools.geographic_operations.kml import Kml
 from ....utils.standardizers import LocStandardizer
-from ....utils import oxford_comma
+from ....utils import mutable, oxford_comma
 
 
 logger = logging.getLogger(__name__)
@@ -110,25 +110,24 @@ class MatchAnnotator(MatchEvaluator):
         selected = []
         for name, group in groups.items():
             combined = group[0].combine(*group[1:])
-            combined.verbatim_latitude = None
-            combined.verbatim_longitude = None
-            for attr, code in (
-                ("county", "admin_code_2"),
-                ("state_province", "admin_code_1"),
-                ("country", "country_code"),
-            ):
-                if not group[0].filter.get(code):
-                    setattr(combined, attr, None)
-            combined.site_names = [name.split(":", 1)[1]]
-            # Inherit certain attributes from selected site
-            combined.related_sites = group[0].related_sites
-            combined.url_mask = group[0].url_mask
-            combined.geometry = self.geometry
-            # if (combined.geometry
-            #    and not re.search(r'^\d+$', combined.location_id)):
-            #        combined.radius_km = group[0].radius_km
-            if len(group) > 1:
-                combined.url_mask = "multiple matching localities"
+            with mutable(combined):
+                for attr, code in (
+                    ("county", "admin_code_2"),
+                    ("state_province", "admin_code_1"),
+                    ("country", "country_code"),
+                ):
+                    if not group[0].filter.get(code):
+                        setattr(combined, attr, None)
+                combined.site_names = [name.split(":", 1)[1]]
+                # Inherit certain attributes from selected site
+                combined.related_sites = group[0].related_sites
+                combined.url_mask = group[0].url_mask
+                combined.geometry = self.geometry
+                # if (combined.geometry
+                #    and not re.search(r'^\d+$', combined.location_id)):
+                #        combined.radius_km = group[0].radius_km
+                if len(group) > 1:
+                    combined.url_mask = "multiple matching localities"
             selected.append(self.name(combined))
         constrained_to = self.interpreted_as("constrained")
         if constrained_to:

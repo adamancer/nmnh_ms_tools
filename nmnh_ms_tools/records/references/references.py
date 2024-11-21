@@ -163,9 +163,9 @@ class Reference(Record):
         """Parses data from various sources to populate class"""
         self.reset()
         self.verbatim = data
-        is_doi = isinstance(data, str) and data.startswith("10.")
-        parse_doi = self.resolve_parsed_doi and not is_doi
-        if is_doi:
+        is_doi_ = is_doi(data)
+        parse_doi = self.resolve_parsed_doi and not is_doi_
+        if is_doi_:
             self._parse_doi(data)
         elif isinstance(data, str):
             self._parse_string(data)
@@ -312,10 +312,9 @@ class Reference(Record):
         if doi is None:
             doi = self.doi
         if doi:
-            url = "https://doi.org/{}".format(doi)
             headers = {"Accept": "application/json"}
             try:
-                verbatim = self.bot.get(url, headers=headers).json()
+                verbatim = self.bot.get(std_doi(doi), headers=headers).json()
                 parsed = self._parse_crossref(verbatim)
                 self.verbatim = verbatim
                 return parsed
@@ -351,6 +350,86 @@ class Reference(Record):
         )
 
     def _to_emu(self):
+
+        try:
+            rec_type = self._btm.emu_record_type(self.entry_type)
+            source_type = self._btm.emu_source_type(self.entry_type)
+            prefix = self._btm.emu_record_type(self.entry_type, True)
+            parent = self._btm.emu_source_type(self.entry_type, True)
+        except KeyError:
+            raise ValueError(
+                f"Could not map entry_type {repr(self.entry_type)} to EMu ({repr(self.verbatim)})"
+            )
+
+        try:
+            key = f"[{rec_type}] {self}"
+            irn = self.__class__.irns[key]
+            if irn:
+                return {"irn": int(irn)}
+        except KeyError:
+            self.__class__.irns[key] = None
+
+        # Prepare list of authors
+        authors = []
+        for author in self.authors:
+            author = author.to_emu()
+            if "irn" not in author:
+                # New author names are unlisted to avoid cluttering parties
+                author["SecRecordStatus"] = "Unlisted"
+            authors.append(author)
+        # Populate a bibliography record
+        rec = {
+            "RefPublicationType": rec_type,
+            "RefAuthorsRef_tab": authors,
+            "RefAuthorsRole_tab": ["Author" for _ in self.authors],
+            "RefTitle": self.title,
+            "{}PublicationDates": self.year,
+            "RefVolume": self.volume,
+            "RefIssue": self.number,
+            "RefPages": self.pages,
+        }
+        if isinstance(self.verbatim, str):
+            rec["NotNotes"] = self.verbatim
+
+        if parent and self.publication:
+            key = f"[{source_type}] {self.publication}"
+            try:
+                irn = self.__class__.irns[key]
+                if irn:
+                    rec["{}ParentRef"] = {"irn": irn}
+            except KeyError:
+                self.__class__.irns[key] = None
+                rec["{}ParentRef"] = {
+                    "BibRecordType": source_type,
+                    "{}Title".format(parent): self.publication,
+                }
+
+        # Adjust fields based on publication type
+        if prefix == "Oth":
+            del rec["{}PublicationDates"]
+            del rec["{}Volume"]
+            del rec["{}Issue"]
+        elif prefix == "The":
+            rec["TheAuthorRef"] = rec["{}AuthorsRef_tab"][0]
+            rec["TheThesisType"] = self._btm.emu_thesis_type(self.entry_type)
+            rec["ThePublicationDate"] = rec["{}PublicationDate"]
+            rec["TheOrganisation"] = {
+                "NamPartyType": "Organization",
+                "NamOrganisation": self.school,
+            }
+            del rec["{}AuthorsRef_tab"]
+            del rec["{}PublicationDate"]
+        # Add GUIDs
+        if self.doi:
+            rec["AdmGUIDIsPreferred_tab"] = ["Yes"]
+            rec["AdmGUIDType_tab"] = ["DOI"]
+            rec["AdmGUIDValue_tab"] = [self.doi]
+            rec["NotNotes"] = self.resolve_doi()
+        # Assign prefix and remove empty keys
+        rec = {k.format(prefix): v for k, v in rec.items() if v}
+        return rec
+
+    def _to_emu_6(self):
         """Formats record for EMu ebibliography module"""
 
         try:
@@ -526,7 +605,75 @@ class Reference(Record):
         """Retrieves and parses data based on DOI"""
         return self.resolve_doi(doi)
 
-    def _parse_emu(self, rec):
+    def parse_emu(self, rec):
+        """Parses an EMu ebibliography record"""
+        self.kind = rec.get("BibRecordType")
+        if not self.kind:
+            raise ValueError("BibRecordType required")
+        # Give the specific thesis type
+        if self.kind == "Thesis":
+            entry_type = self._btm.parse_thesis(rec.get("TheThesisType"))
+            thesis_type = self._btm.emu_thesis_type(entry_type)
+            self.kind = "{} ({})".format(self.kind, thesis_type)
+        prefix = self._btm.emu_record_type(self.entry_type, True)
+        parent = self._btm.emu_source_type(self.entry_type, True)
+        # Get basic metadata
+        self.authors = []
+        for author in rec.get("RefAuthorsRef_tab", []):
+            for key in ["NamFirst", "NamMiddle", "NamLast"]:
+                author.setdefault(key, "")
+            name = "{NamFirst} {NamMiddle} {NamLast}".format(**author).strip()
+            try:
+                self.authors.append(Person(name))
+            except ValueError as e:
+                if name:
+                    logger.error(f"Could not parse '{name}'")
+        self.title = rec.get("RefTitle")
+        # Parse publishing year from publication date
+        pub_date = rec.get("{}PublicationDates".format(prefix))
+        if not pub_date:
+            pub_date = str(rec.get("{}PublicationDate".format(prefix)))
+        self.year = self._parse_year(pub_date)
+        # Get publication metadata
+        try:
+            pub = rec.get("RefParentRef.RefTitle".format(prefix, parent))
+            # Fall back to summary data if source not found
+            if not pub:
+                summary = rec.get("{}ParentRef.SummaryData".format(prefix), "")
+                pub = summary.split("]", 1)[-1].strip(". ")
+            self.publication = pub
+            self.volume = rec.get("{}Volume".format(prefix))
+            self.number = rec.get("{}Issue".format(prefix))
+        except KeyError:
+            pass
+        # Get pages. Articles in EMu may store pages in either ArtPages or
+        # ArtIssuePages, the other publication types have only one field.
+        pages = []
+        for mask in ("{}Pages", "{}IssuePages"):
+            key = mask.format(prefix)
+            try:
+                pages.append(rec.get(key).replace("--", "-"))
+            except (AttributeError, KeyError):
+                pass
+        pages = list(set([p for p in pages if p]))
+        # Keep the range if both a range and a count found
+        if len(pages) > 1:
+            hyphenated = [p for p in pages if "-" in p]
+            if not hyphenated:
+                raise ValueError(f"Multiple page counts found: {pages}")
+            pages = hyphenated
+        self.pages = pages[0] if pages else ""
+        # Get the DOI
+        try:
+            self.doi = rec.grid("AdmGUIDValue_tab").query(
+                "AdmGUIDValue_tab", {"AdmGUIDType_tab": "DOI"}
+            )[0]
+        except IndexError:
+            self.doi = None
+        if self.doi:
+            self.url = "https://doi.org/{}".format(self.doi)
+
+    def _parse_emu_6(self, rec):
         """Parses an EMu ebibliography record"""
         self.kind = rec.get("BibRecordType")
         if not self.kind:
@@ -625,9 +772,7 @@ class Reference(Record):
             if data.get("url"):
                 self.url = data["url"]
             else:
-                self.url = (
-                    f'https://xdd.org/api/articles?docid={data["_gddid"]}'
-                )
+                self.url = f'https://xdd.org/api/articles?docid={data["_gddid"]}'
         else:
             self.url = "https://doi.org/{}".format(self.doi)
         self.publisher = data.get("publisher", "")
@@ -841,3 +986,20 @@ def get_author_and_year(ref):
     except:
         raise
     raise ValueError(f"Could not extract author/year from {ref}")
+
+
+def std_doi(val, as_url=True):
+    """Formats a DOI as a URL or string"""
+    if not isinstance(val, str):
+        raise TypeError(f"DOI must be a string: {repr(val)}")
+    if not "10." in val:
+        raise ValueError(f"Value does not appear to be a DOI: {val}")
+    val = "10." + val.split("10.", 1)[1]
+    return f"https://doi.org/{val}" if as_url else val
+
+
+def is_doi(val):
+    """Tests if a value appears to be a DOI"""
+    if not isinstance(val, str):
+        return False
+    return std_doi(val, as_url=False).startswith("10.")

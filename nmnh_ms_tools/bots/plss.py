@@ -131,9 +131,10 @@ class PLSSBot(Bot):
                     if feature["attributes"]["FRSTDIVNO"] == query["sec"]:
                         for coords in feature["geometry"]["rings"]:
                             # Reverse order of coordinates and convert to box
-                            # bbox = bounding_box([c[::-1] for c in coords])
                             polygon = Polygon(coords)
-                            return GeoMetry(polygon, crs=response.wkid()).envelope
+                            return GeoMetry(
+                                polygon, crs=response.wkid()
+                            ).envelope.to_crs(4326)
                 except KeyError:
                     pass
         return None

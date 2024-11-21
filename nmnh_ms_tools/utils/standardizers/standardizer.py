@@ -3,6 +3,7 @@
 import logging
 import re
 
+import pandas as pd
 from unidecode import unidecode
 
 
@@ -114,7 +115,7 @@ class Standardizer:
                 return self.hints["std"][str(val)]
             except KeyError:
                 pass
-        msg = 'Could not standardize "{}"'.format(val)
+        msg = f"Could not standardize {repr(val)}"
         st_val = self._std(val, pre=pre, post=post, **kwargs)
         try:
             st_val = self._std(val, pre=pre, post=post, **kwargs)
@@ -253,7 +254,7 @@ class Standardizer:
                 return val
             except ValueError:
                 pass
-        if not val:
+        if not val or pd.isna(val):
             return val
         if not isinstance(val, str) or val.isnumeric():
             raise ValueError("Could not standardize '{}'".format(val))
@@ -273,7 +274,8 @@ class Standardizer:
             open_paren = "([{"
             close_paren = ")]}"
             while (
-                val[0] in open_paren
+                val
+                and val[0] in open_paren
                 and val[-1] == close_paren[open_paren.index(val[0])]
             ):
                 val = val[1:-1]
@@ -339,29 +341,3 @@ def std_names(names, std_func):
         except ValueError as e:
             logger.warning(str(e))
     return set(st_names)
-
-
-def std_identifier(val):
-    """Standardizes an identifier like a catalog or field number"""
-    if not val and val not in (0, False):
-        return ""
-
-    # Split into chunks of letters or numbers
-    parts = [p for p in re.split(r"([A-Za-z]+|[0-9]+)", val) if p]
-
-    # Capture trailing non-alphanumeric suffix
-    prefix = parts.pop(0) if not parts[0].isalnum() else ""
-    suffix = parts.pop(-1) if not parts[-1].isalnum() else ""
-
-    # Strip leading zeroes from parts
-    cleaned = []
-    if prefix:
-        cleaned.append(prefix)
-    for part in parts:
-        if part.isalnum():
-            part = part.lstrip("0")
-            cleaned.append(part)
-    if suffix:
-        cleaned.append(suffix)
-
-    return "|".join(cleaned).casefold()

@@ -37,16 +37,17 @@ class OceanQuery:
 
     def query(self, geom, ocean=None):
         """Identifies tiles matching a geometry"""
-        if geom.crosses_180():
-            tiles = []
-            for geom_ in geom.subshapes.geoms:
-                tiles.extend(self._tree.query(geom_))
-            return tiles
-        # Filiter results by ocean if given
-        tiles = self._tree.query(geom)
+        if geom.crosses_dateline():
+            geom = geom.split_at_dateline()
+        # Get tiles as 1D array
+        tiles = []
+        for idx in self._tree.query(geom.geom):
+            tiles_ = self._tree.geometries.take(idx)
+            tiles.extend(tiles_)
+        # Filter results by ocean if given
         if ocean:
             ocean = self.std_ocean(ocean)
-            filtered = [t for t in tiles if ocean in self.oceans.get(t.name, "")]
+            filtered = [t for t in tiles if ocean in self.oceans.get(t.wkt, "")]
             if filtered:
                 return filtered
         return tiles
@@ -58,16 +59,16 @@ class OceanQuery:
     def build_tree(self, interval=15):
         """Retrieves and indexes ocean tiles"""
         session = Session()
-        query = session.query(OceanTiles)
+        query = session.query(OceanTiles).order_by(OceanTiles.id)
         if not any(query):
             self.generate_tiles(interval=interval)
-            session.query(OceanTiles)
+            session.query(OceanTiles).order_by(OceanTiles.id)
         tiles = []
         for row in query:
             geom = wkb.loads(row.geometry)
             tiles.append(geom)
             if row.ocean:
-                self.oceans[row.id] = row.ocean
+                self.oceans[geom.wkt] = row.ocean
         session.close()
         return STRtree(tiles)
 

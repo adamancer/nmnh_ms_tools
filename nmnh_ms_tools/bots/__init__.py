@@ -5,11 +5,11 @@ from .. import _ImportClock
 with _ImportClock("bots"):
     from .core import Bot, JSONResponse
     from .adamancer import AdamancerBot
-    from .xddbot import xDDBot
     from .geogallery import GeoGalleryBot
     from .geonames import GeoNamesBot, FEATURE_TO_CODES
     from .gnrd import GNRDBot
     from .itis import ITISBot
     from .macrostrat import MacrostratBot
-    from .metbullbot import MetBullBot
+    from .metbull import MetBullBot
     from .plss import PLSSBot
+    from .xdd import xDDBot

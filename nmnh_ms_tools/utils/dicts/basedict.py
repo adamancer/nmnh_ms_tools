@@ -5,19 +5,34 @@ class BaseDict(dict):
     """Routes dict operations through class-specific item methods"""
 
     def __init__(self, *args, **kwargs):
+        # Some subclasses will not want to coerce child dictionaries
         if not hasattr(self, "_coerce_dicts_to"):
             self._coerce_dicts_to = None
         self._keymap = {}
         self.update(*args, **kwargs)
+
+    def __setstate__(self, state):
+        self._keymap = state["_keymap"]
+        self._coerce_dicts_to = state["_coerce_dicts_to"]
+        self.update(self._deferred)
+        del self._deferred
 
     def __getitem__(self, key):
         return super().__getitem__(self.format_key(key))
 
     def __setitem__(self, key, val):
         """Coerces dictionaries when key is set"""
-        formatted = self.format_key(key)
-        self._keymap.setdefault(formatted, key)
-        super().__setitem__(formatted, self._coerce_dicts(val))
+        try:
+            formatted = self.format_key(key)
+            self._keymap.setdefault(formatted, key)
+            super().__setitem__(formatted, self._coerce_dicts(val))
+        except AttributeError:
+            # Defer set item when loading with pickle, which does not set the
+            # required attributes until after this method is called
+            try:
+                self._deferred[key] = val
+            except AttributeError:
+                self._deferred = {key: val}
 
     def __delitem__(self, key):
         super().__delitem__(self.format_key(key))

@@ -104,8 +104,9 @@ class GeoNamesFeatures:
             self._load_continents()
             self._load_countries()
             return getattr(self, attr)
-        mask = "'{}' object has no attribute '{}'"
-        raise AttributeError(mask.format(self.__class__.__name__, attr))
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute {repr(attr)}"
+        )
 
     @property
     def session(self):

@@ -210,6 +210,7 @@ def split_localities(vals, **kwargs):
     return vals
 
 
+@clock
 @functools.lru_cache()
 def parse_localities(val, parsers=None, split_phrases=True):
     """Parses individual localities from a complex string"""

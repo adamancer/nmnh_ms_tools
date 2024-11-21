@@ -14,7 +14,12 @@ from ..utils import (
     as_list,
     as_str,
     coerce,
+    custom_copy,
+    custom_eq,
+    get_attrs,
     get_common_items,
+    mutable,
+    set_immutable,
     to_attribute,
     to_dwc_camel,
 )
@@ -63,26 +68,34 @@ class Record:
         self.defaults = {a: getattr(self, a) for a in attrs}
         self.attributes = attrs + self.properties
         self.valid_attrs = set(dir(self)) - set(self._class_attrs)
-        # Reset values for this instance
-        self.reset()
-        self.verbatim = data
+        # Set default values for this instance
+        with mutable(self):
+            self.reset()
         self.irn = None
         # Define attribution parameters
         self.attribute_to = None
         self.url_mask = None
         self.url = None
         self.sources = []
-        # Define indexing params
+        # Define indexing and cache params
+        self.from_cache = False
         self._indexed = None
         self._state = {}
+        try:
+            self._writable = ["from_cache"]
+        except AttributeError as exc:
+            if not "Cannot modify existing" in str(exc):
+                raise
 
         if not data:
             data = kwargs
-        if data:
-            # Parse data using parse method defined in the subclass
-            if isinstance(data, self.__class__):
-                data = data.to_dict()
-            self.parse(data)
+        with mutable(self):
+            self.verbatim = data
+            if data:
+                # Parse data using parse method defined in the subclass
+                if isinstance(data, self.__class__):
+                    data = data.to_dict()
+                self.parse(data)
 
     def __str__(self):
         rows = [("class", self.__class__.__name__)]
@@ -99,7 +112,7 @@ class Record:
         return "-" * 70 + "\n" + val
 
     def __repr__(self):
-        attrs = ["{}={}".format(a, getattr(self, a)) for a in self.attributes]
+        attrs = ["{}={}".format(a, repr(getattr(self, a))) for a in self.attributes]
         return "{}({})".format(self.__class__.__name__, ", ".join(attrs))
 
     def __setattr__(self, attr, val):
@@ -108,10 +121,10 @@ class Record:
             val = coerce(val, default)
         except (AttributeError, KeyError):
             pass
-        try:
-            super().__setattr__(attr, val)
-        except AttributeError as e:
-            raise AttributeError("{}: {} = {}".format(e, attr, val))
+        # Hardcode Record so that subclasses that also call set_immutable (for
+        # example, to include a class-specific list of overwritable fields) do
+        # not get stuck in a recursion.
+        set_immutable(self, attr, val, cls=Record)
 
     def __eq__(self, other):
         return self.same_as(other, strict=True)
@@ -187,36 +200,48 @@ class Record:
     def url(self, url):
         self._url = url
 
+    def copy(self, attrs=None):
+        obj = custom_copy(self)
+        if attrs:
+            with mutable(obj):
+                empty = self.__class__()
+                for attr in get_attrs(self) - set(attrs):
+                    setattr(obj, attr, getattr(empty, attr))
+        return obj
+
     def parse(self, data):
         """Placeholder function for routing parsing from different sources"""
         raise NotImplementedError
 
-    def attune(self, other):
+    def coerce(self, other):
         if not isinstance(other, self.__class__):
             return self.__class__(other)
         return other
 
-    def update(self, data, append_to=None, delim="; "):
+    def update(self, data, append_to=None, delim="; ", inplace=False):
         """Updates site with the given data"""
         if not isinstance(data, dict):
             data = data.to_dict()
-        append_to = {} if append_to is None else set(append_to)
-        for key, val in data.items():
-            # Verify that key is valid
-            if key.rstrip("+") not in self.valid_attrs:
-                warnings.warn("Unrecognized key: {}".format(key))
-            if key in append_to or key.endswith("+"):
-                key = key.rstrip("+")
-                existing = getattr(self, key) if hasattr(self, key) else ""
-                if isinstance(existing, list):
-                    val = existing + as_list(val)
-                elif isinstance(existing, str):
-                    val = as_str(val, "; ")
-                    val = (existing + delim + val).strip(delim)
-                else:
-                    mask = "Invalid data type for append: {}"
-                    raise TypeError(mask.format(type(existing)))
-            setattr(self, key.rstrip("+"), val)
+        obj = self.copy()
+        with mutable(obj):
+            append_to = {} if append_to is None else set(append_to)
+            for key, val in data.items():
+                # Verify that key is valid
+                if key.rstrip("+") not in obj.valid_attrs:
+                    warnings.warn("Unrecognized key: {}".format(key))
+                if key in append_to or key.endswith("+"):
+                    key = key.rstrip("+")
+                    existing = getattr(obj, key) if hasattr(obj, key) else ""
+                    if isinstance(existing, list):
+                        val = existing + as_list(val)
+                    elif isinstance(existing, str):
+                        val = as_str(val, "; ")
+                        val = (existing + delim + val).strip(delim)
+                    else:
+                        mask = "Invalid data type for append: {}"
+                        raise TypeError(mask.format(type(existing)))
+                setattr(obj, key.rstrip("+"), val)
+        return obj
 
     def combine(self, *others):
         """Returns common elements shared between list of records"""
@@ -230,14 +255,11 @@ class Record:
                 default = type(default)()
             setattr(self, attr, default)
 
-    def same_as(self, other, strict=True):
+    def same_as(self, other, strict=True, ignore=None):
         """Tests if object is the same as another object"""
-        if not isinstance(other, self.__class__):
-            return False
-        for attr in self.attributes:
-            if getattr(self, attr) != getattr(other, attr):
-                return False
-        return True
+        if ignore is None:
+            ignore = self._writable
+        return custom_eq(self, other, ignore=ignore)
 
     def similar_to(self, other):
         """Tests if object is similar to another object"""
@@ -264,24 +286,23 @@ class Record:
         pattern = r"\b{}\b".format(self.std(keyword))
         return bool(re.search(pattern, self.indexed))
 
-    def clone(self, attributes=None):
-        """Clones the current record"""
-        return self.__class__(self.to_dict(attributes=attributes))
-
     def changed(self, name):
         """Tests if record has been modified"""
-        jsonstr = json.dumps(self.to_dict(), sort_keys=True, cls=_BFEncoder).lower()
+        jsonstr = json.dumps(self.to_dict(), sort_keys=True, cls=RecordEncoder).lower()
         md5 = hashlib.md5(jsonstr.encode("utf-8")).hexdigest()
         if md5 != self._state.get(name):
             self._state[name] = md5
             return True
         return False
 
-    def to_dict(self, attributes=None):
+    def to_dict(self, attributes=None, drop_empty=False):
         """Converts record to a dict"""
         if attributes is None:
             attributes = self.attributes
-        return {a: getattr(self, a) for a in attributes}
+        dct = {a: getattr(self, a) for a in attributes}
+        if drop_empty:
+            dct = {k: v for k, v in dct.items() if v and str(v) != "nan"}
+        return dct
 
     def to_csv(self, attributes=None):
         """Converts record to a CSV"""
@@ -379,9 +400,6 @@ class Records(list):
     def count(self, val):
         return super().count(self._coerce(val))
 
-    def copy(self):
-        return self.__class__(super.copy())
-
     def unique(self, sort_values=True):
         unique = [v for i, v in enumerate(self) if v not in self[:i]]
         if sort_values:
@@ -394,10 +412,14 @@ class Records(list):
         return self.item_class(val)
 
 
-class _BFEncoder(json.JSONEncoder):
+class RecordEncoder(json.JSONEncoder):
+    """Encodes record classes"""
 
     def default(self, obj):
         try:
             return json.JSONEncoder.default(self, obj)
         except TypeError:
-            return str(obj)
+            try:
+                return obj.to_json()
+            except AttributeError:
+                return str(obj)

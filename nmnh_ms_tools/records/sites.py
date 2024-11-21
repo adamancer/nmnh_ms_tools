@@ -2,13 +2,14 @@
 
 import json
 import logging
-import os
 import re
 from itertools import product
+from warnings import warn
 
 import geopandas as gpd
 import pandas as pd
-from sqlalchemy.exc import UnboundExecutionError
+from sqlalchemy.exc import OperationalError, UnboundExecutionError
+from xmu import EMuRecord
 
 from .core import Record
 from ..bots.geonames import CODES_MARINE, GeoNamesBot
@@ -28,12 +29,13 @@ from ..tools.geographic_operations.kml import write_kml
 from ..utils import (
     as_list,
     as_str,
-    clock,
     combine,
     dedupe,
     dictify,
     get_first,
     get_ocean_name,
+    mutable,
+    set_immutable,
     to_attribute,
 )
 from ..utils.standardizers import LocStandardizer
@@ -267,12 +269,6 @@ class Site(Record):
         "bay_sound",
         "locality",
         "verbatim_locality",
-        "geodetic_datum",
-        "decimal_latitude",
-        "decimal_longitude",
-        "verbatim_latitude",
-        "verbatim_longitude",
-        "footprint_wkt",
         "georeference_protocol",
         "georeference_sources",
         "georeference_remarks",
@@ -290,11 +286,11 @@ class Site(Record):
         "admin_code_2",
     ]
 
-    @clock
     def __init__(self, *args, **kwargs):
         # Set lists of original class attributes and reported properties
         self._class_attrs = set(dir(self))
-        self._properties = ["site_kind"]
+        self._properties = ["site_kind", "geometry"]
+        self._writable = ["field", "filter", "from_cache", "interpreted"]
         # Explicitly define defaults for all reported attributes
         self.location_id = ""
         self.continent = ""
@@ -316,12 +312,6 @@ class Site(Record):
         self.bay_sound = ""
         self.locality = ""
         self.verbatim_locality = ""
-        self.geodetic_datum = ""
-        self.decimal_latitude = ""
-        self.decimal_longitude = ""
-        self.verbatim_latitude = ""
-        self.verbatim_longitude = ""
-        self.footprint_wkt = ""
         self.georeference_protocol = ""
         self.georeference_sources = ""
         self.georeference_remarks = ""
@@ -340,54 +330,44 @@ class Site(Record):
         self.admin_code_1 = []
         self.admin_div_2 = []
         self.admin_code_2 = []
-        self.related_sites = []
         self.other_ids = {}
-        self.interpreted = {}
+        # Define hidden attributes derived from geometry
+        # self._verbatim_latitude = ""
+        # self._verbatim_longitude = ""
         # Define additional attributes required for parse
         self._geometry = None
         self._site_kind = ""
         self._features = {}
         self.from_gazetteer = False
         # Generate instance
-        super().__init__(*args, **kwargs)
-        # Match attributes
+        try:
+            super().__init__(*args, **kwargs)
+        except Exception as exc:
+            raise ValueError(
+                f"Could not create a site from {args}, {kwargs}: {exc}"
+            ) from exc
+        # Mutable attributes
         self.field = None
         self.filter = {}
+        self.interpreted = {}
+        self.related_sites = []
 
     def __getattr__(self, attr):
         """Looks for unrecognized attributes in geometry (fallback)"""
-        # Checking attributes needed to populate geometry causes a recursion
-        # error, so ignore them
-        if attr not in {
-            "_geometry",
-            "geometry",
-            "decimal_latitude",
-            "decimal_longitude",
-            "verbatim_latitude",
-            "verbatim_longitude",
-        }:
-            try:
+        try:
+            if attr not in {"_geometry", "geometry"}:
                 return getattr(self.geometry, attr)
-            except AttributeError:
-                pass
-        mask = "'{}' object has no attribute '{}'"
-        raise AttributeError(mask.format(self.__class__.__name__, attr))
+        except AttributeError as exc:
+            if "has no attribute" not in str(exc):
+                raise
+        raise AttributeError(
+            f"'{self.__class__.__name__}' object has no attribute '{attr}'"
+        )
 
     def __getstate__(self):
         state = self.__dict__.copy()
         state["_geometry"] = None
         return state
-
-    def __setattr__(self, attr, val):
-        """Ensures that admin codes are updated when names change"""
-        if attr == "radius_km":
-            self.geometry.radius_km = val
-        elif attr in {"country", "state_province", "county"}:
-            if hasattr(self, attr) and val != getattr(self, attr):
-                self.admin_polygons = {}
-            super().__setattr__(attr, val)
-        else:
-            super().__setattr__(attr, val)
 
     @property
     def name(self):
@@ -399,44 +379,31 @@ class Site(Record):
     @property
     def geometry(self):
         """Returns the geometry for this site, instantiating it if needed"""
-        if self._geometry is None and self.has_coords():
-
-            if self.footprint_wkt:
-                self.geometry = self._build_geometry(self.footprint_wkt)
-                return self._geometry
-
-            for lat, lng in (
-                (self.decimal_latitude, self.decimal_longitude),
-                (self.verbatim_latitude, self.verbatim_longitude),
-            ):
-                if lat and lng:
-                    self.geometry = self._build_geometry((lat, lng))
-                    return self._geometry
-
-            mask = "Invalid coordinates: {} ({})"
-            raise ValueError(mask.format(missed, kwargs))
-
         return self._geometry
 
     @geometry.setter
     def geometry(self, geom):
-        self._geometry = geom
-        # Call radius to test that it exists and is valid
-        self.radius_km
+        if geom is not None:
+            self._geometry = geom
+            self.radius_km
 
     @property
     def radius_km(self):
         """Returns the uncertainty radius for this site"""
-        if self.geometry.radius_km is None or self.geometry.radius_km < 1:
-            try:
-                self.radius_km = GEOCONFIG.get_feature_radius(self.site_kind)
-            except (KeyError, TypeError):
-                return 1  # force the minimum radius for a site to 1 km
-        return self.geometry.radius_km
+        try:
+            return self.geometry.radius_km
+        except AttributeError:
+            return 0
 
     @radius_km.setter
     def radius_km(self, val):
-        self.geometry.radius_km = val
+        if val is None or val < 1:
+            try:
+                val = GEOCONFIG.get_feature_radius(self.site_kind)
+            except (KeyError, TypeError):
+                return 1  # force the minimum radius for a site to 1 km
+        with mutable(self.geometry):
+            self.geometry.radius_km = val
 
     @property
     def site_kind(self):
@@ -445,21 +412,28 @@ class Site(Record):
 
     @site_kind.setter
     def site_kind(self, val):
-        self._site_kind = val
+        # Must be a string for some comparisons when georeferencing
+        self._site_kind = val if val else ""
         try:
             self.site_class = GEOCONFIG.get_feature_class(val)
         except KeyError:
             pass
 
-    def has_coords(self):
-        """Tests if shape has coordinates"""
-        return (
-            self.decimal_latitude
-            and self.decimal_longitude
-            or self.verbatim_latitude
-            and self.verbatim_longitude
-            or self.footprint_wkt
-        )
+    @property
+    def decimal_latitude(self):
+        return self.geometry.lat
+
+    @property
+    def decimal_longitude(self):
+        return self.geometry.lon
+
+    @property
+    def footprint_wkt(self):
+        return self.geometry.wkt()
+
+    @property
+    def geodetic_datum(self):
+        return self.geometry.crs
 
     def summarize(self, mask=None):
         """Summarizes the content of a record"""
@@ -478,6 +452,8 @@ class Site(Record):
             self._parse_natural_earth(data)
         elif isinstance(data, int):
             self._parse_geoname_id(data)
+        elif isinstance(data, str) and data.isnumeric():
+            self._parse_geoname_id(int(data))
         elif "irn" in data or any([re.match(r"(Loc|Col)[A-Z]", k) for k in data]):
             self._parse_emu(data)
         elif isinstance(data, list) and "geonameId" in data[0]:
@@ -486,7 +462,7 @@ class Site(Record):
             self._parse_geonames(data)
         elif "recordNumber" in data or "record_number" in data:
             self._parse_dwc(data)
-        else:
+        elif data:
             self._parse(data)
 
         # Map marine features to proper fields
@@ -500,6 +476,10 @@ class Site(Record):
         if not self.from_gazetteer:
             self.cleanup()
 
+        # Check the geometry
+        if self.geometry and not self.geometry.is_valid:
+            raise ValueError(f"GeoMetry invalid: {self.geometry}")
+
     def parse_locality(self, val):
         """Parses a locality string"""
         # If attribute given, convert to value
@@ -507,6 +487,9 @@ class Site(Record):
             val = getattr(self, val)
         except AttributeError:
             pass
+        except TypeError:
+            if val:
+                raise
         # Skip parse if no value
         if not val:
             return [], None
@@ -609,9 +592,10 @@ class Site(Record):
         except KeyError:
             pass
         else:
-            for key, val in result.items():
-                setattr(self, key, val if isinstance(val, str) else val.copy())
-            self.interpreted = interpreted.copy()
+            with mutable(self):
+                for key, val in result.items():
+                    setattr(self, key, val if isinstance(val, str) else val.copy())
+                self.interpreted = interpreted.copy()
             return gdf
 
         attrs = {
@@ -666,8 +650,9 @@ class Site(Record):
             result = combine(*results)
             result["admin_div_1"] = result.get("state_province", [])
             result["admin_div_2"] = result.get("county", [])
-            for key, val in result.items():
-                setattr(self, key, val)
+            with mutable(self):
+                for key, val in result.items():
+                    setattr(self, key, val)
 
             # Map each geonames_id to the corresponding admin field (country, state_province, etc.)
             for (field, val), rows in matches.items():
@@ -677,7 +662,8 @@ class Site(Record):
                     val_to_id[(field, val)] = gn_id
 
         # Map continent and add to ID lookups
-        self.map_continent()
+        with mutable(self):
+            self.map_continent()
         if self.continent:
             continent_id = str(
                 GeoNamesFeatures().search_json(self.continent, fcode="CONT")[0][
@@ -771,57 +757,31 @@ class Site(Record):
         other = {n for n in [nrm(s, std_func) for s in other] if n}
         return bool(names.intersection(other))
 
-    def subsection(self, direction, name=None):
+    def subsection(self, direction, name=None, inplace=False):
         """Calcualtes the subsection specified by the direction"""
         subsection = self.geometry.subsection(direction)
-        # Return original instance if geometry unchanged
+        # Return exact copy if geometry unchanged
+        site = self.copy() if not inplace else self
         if subsection == self.geometry:
-            return self
+            return site
         # Add original outline to related sites
-        site = self.clone()
-        site.geometry = self.geometry
-        self.related_sites.append(site)
-        self.geometry = subsection
-        # Note the subsectioning and update identifiers
-        self.location_id += "_" + direction.upper()
-        if name is None:
-            name = "{} {}".format(direction, self.name)
-        self.site_names = [name]
-        self.filter["name"] = name
-        return self
-
-    def clone(self, attributes=None):
-        """Clones the current site"""
-        if attributes:
-            attributes = attributes[:]
-            # Include admin codes if admin fields
-            attrmap = {
-                "country": "country_code",
-                "state_province": "admin_code_1",
-                "county": "admin_code_2",
-            }
-            for attr in attributes:
-                try:
-                    attributes.append(attrmap[attr])
-                except KeyError:
-                    pass
-            attributes = set(attributes)
-        clone = super().clone(attributes=attributes)
-        clone.verbatim = self.verbatim
-        if attributes is None or set(attributes) == set(self.attributes):
-            try:
-                clone.geometry = self.geometry.copy()
-            except AttributeError:
-                pass
-            clone.filter = self.filter.copy()
-            clone.url_mask = self.url_mask
-        return clone
+        with mutable(site):
+            site.related_sites.append(self)
+            site.geometry = subsection
+            # Note the subsectioning and update identifiers
+            site.location_id += "_" + direction.upper()
+            if name is None:
+                name = "{} {}".format(direction, self.name)
+            site.site_names = [name]
+            site.filter["name"] = name
+        return site
 
     def has_valid_coordinates(self):
         """Checks coordinates against admin divisions
 
         Out-of-range latitudes and longitudes are handled by GeoMetry
         """
+        buffer_km = 10
         if self.is_marine():
             # Verify the ocean name and expand the admin polygons by 50%
             try:
@@ -832,15 +792,17 @@ class Site(Record):
             except (AssertionError, AttributeError):
                 logger.debug(f'Ocean mismatch: "{ocean}" != "{other}"')
                 return False
+            else:
+                buffer_km = 200
         # Otherwise verify that the polygons intersect the given coordinates
-        gdf = self.get_admin_polygons()
-        if not self.verbatim_latitude or not self.verbatim_longitude:
+        gdf = self.map_admin()
+        if not self.geometry:
             logger.debug(f"Coordinates not specified: {self}")
             return False
         if not gdf.empty:
             row = gdf.iloc[-1]
             geom = GeoMetry(gdf.geometry.iloc[-1:].reset_index(drop=True), gdf.crs)
-            if not self.intersects(geom):
+            if not self.intersects(geom.buffer(buffer_km)):
                 mask = "Coordinates fall outside {}: {}"
                 logger.debug(mask.format(row["field"], self.location_id))
                 return False
@@ -858,7 +820,7 @@ class Site(Record):
             try:
                 fcl = GEOCONFIG.get_feature_class(self.site_kind)
                 if fcl not in {"A", "H", "U"}:
-                    gdf = self.get_admin_polygons()
+                    gdf = self.map_admin()
                     if not gdf.empty:
                         row = gdf.geometry.iloc[-1:].reset_index(drop=True)
                         geom = GeoMetry(row.geometry, gdf.crs)
@@ -884,15 +846,32 @@ class Site(Record):
 
         return self
 
-    def get_admin_polygons(self, results=None):
-        """Gets polygons for admin divisions"""
-        return self.map_admin()
-
     def map_marine_features(self):
         """Maps marine features to specific field"""
         func_name = "map_marine_features"
         if not self.changed(func_name):
             return
+
+        # Look for known ocean and sea names anywhere in the record
+        if not self.ocean and not self.sea_gulf:
+            rec_str = str(self)
+            for pat in [
+                r"\b(?:(?:north|south) )?(?:atlantic|pacific)(?: ocean)?\b",
+                r"\b(?:antarctic|arctic|indian|southern)(?: ocean)\b",
+            ] + [r"\b" + s + r"\b" for s in SEAS]:
+                matches = re.findall(pat, rec_str, flags=re.I)
+                oceans = [m for m in matches if "ocean" in m.lower()]
+                if oceans:
+                    self.ocean = " | ".join(oceans)
+                seas = [m for m in matches if "sea" in m.lower()]
+                if seas:
+                    self.sea_gulf = " | ".join(seas)
+
+        # Parse locality is very expensive, so only run it if an ocean/sea is found
+        if not self.ocean and not self.sea_gulf:
+            self.changed(func_name)
+            return
+
         # Map marine features from general purpose fields
         specific = {
             "bay": "bay_sound",
@@ -901,7 +880,7 @@ class Site(Record):
             "sea": "sea_gulf",
             "sound": "bay_sound",
         }
-        # vals = {k: as_list(getattr(self, k)) for k in set(specific.values())}
+
         update = {}
         for attr in ("water_body", "locality"):
             orig = as_list(getattr(self, attr))
@@ -947,22 +926,22 @@ class Site(Record):
                 parsed, _ = self.parse_locality(self.sea_gulf)
                 if len(parsed) == 1:
                     logger.warning("Unknown sea: {}".format(self.sea_gulf))
-                    # for variant in parsed[0].variants():
-                    #    try:
-                    #        self.ocean = SEAS[variant.lower()]
-                    #        break
-                    #    except KeyError:
-                    #        pass
-                    # else:
-                    #    logger.warning("Unknown sea: {}".format(self.sea_gulf))
         self.changed(func_name)
 
     def is_marine(self):
         """Evaulates whether collection site appears to be marine"""
-        if not self.ocean:
-            self.map_marine_features()
-        is_marine = bool(self.ocean or self.sea_gulf) and not self.island
-        if is_marine:
+        pat = r"\b(atlantic|pacific|indian|arctic|southern|ocean|sea|bay|gulf|off|offshore)\b"
+        likely_marine = (
+            (
+                re.search(pat, str(self), flags=re.I)
+                or self.ocean
+                or self.sea_gulf
+                or self.bay_sound
+            )
+        ) and not self.island
+        if likely_marine:
+            if not self.ocean:
+                self.map_marine_features()
             # Exclude sites with terrestrial features
             for feature in self.parse_locality(self.locality)[0]:
                 try:
@@ -1034,7 +1013,7 @@ class Site(Record):
                 return False
         # A small-ish country or state is good enough
         is_marine = self.ocean or self.sea_gulf
-        gdf = self.get_admin_polygons()
+        gdf = self.map_admin()
         if not gdf.empty:
             geom = GeoMetry(gdf.geometry.iloc[-1:].reset_index(drop=True), gdf.crs)
             if geom.radius_km <= (1000 if is_marine else 500):
@@ -1047,10 +1026,10 @@ class Site(Record):
         Site.cache = LocalityCache(path)
 
     def _build_geometry(self, geom, **kwargs):
-        if not hasattr(geom, "crs") or not geom.crs:
-            kwargs.setdefault(
-                "crs", self.geodetic_datum if self.geodetic_datum else "epsg:4326"
-            )
+        # if not hasattr(geom, "crs") or not geom.crs:
+        #    kwargs.setdefault(
+        #        "crs", self.geodetic_datum if self.geodetic_datum else "epsg:4326"
+        #    )
         if not hasattr(geom, "radius_km") or not geom.radius_km:
             try:
                 kwargs.setdefault(
@@ -1069,6 +1048,8 @@ class Site(Record):
 
     def _parse_emu(self, data):
         """Constructs a site from an EMu Collections Event record"""
+        if not isinstance(data, EMuRecord):
+            data = EMuRecord(data, module="ecollectionevents")
         self.location_id = data.get("irn")
         # Map to DwC field names
         self.continent = data.get("LocContinent")
@@ -1080,27 +1061,12 @@ class Site(Record):
         self.island_group = data.get("LocIslandGrouping")
         self.locality = data.get("LocPreciseLocation")
         # Map coordinates
-        for latkey, lngkey in [
-            ("LatLatitudeVerbatim_nesttab", "LatLongitudeVerbatim_nesttab"),
-            ("LatLatitude_nesttab", "LatLongitude_nesttab"),
-            ("LatLatitudeDecimal_nesttab", "LatLongitudeDecimal_nesttab"),
-            ("LatCentroidLatitude0", "LatCentroidLongitude0"),
-            ("LatCentroidLatitudeDec_tab", "LatCentroidLongitudeDec_tab"),
-        ]:
-            try:
-                lats = as_list(data.get(latkey)[0])
-                lngs = as_list(data.get(lngkey)[0])
-            except (IndexError, TypeError):
-                pass
-            else:
-                self.verbatim_latitude = lats
-                self.verbatim_longitude = lngs
-                if lats and len(lats) == len(lngs):
-                    self.geometry = self._build_geometry(list(zip(lats, lngs)))
-                    self.georeference_sources = data.get("LatDetSource_tab")
-                    self.georeference_remarks = data.get("LatGeoreferencingNotes0")
-                    # FIXME: Parse radius
-                    break
+        grid = data.grid("LatLatitudeDecimal_nesttab").pad()
+        if grid:
+            row = grid.filter(where={"LatPreferred_tab": "Yes"})
+            if not row:
+                row = grid[0]
+            self.geometry = self._build_geometry(row)
         # Map PLSS
         labels = [s.lower() for s in data.get("MapOtherKind_tab", [])]
         if "section" in labels and "township range" in labels:
@@ -1172,23 +1138,38 @@ class Site(Record):
         if not en_names:
             en_names = [data.get("name")]
         self.site_names = en_names
-
         # Check for a more specific geometry
+        geom = None
+        source_ = None
         try:
-            geom, source = get_alt_geometry(self.location_id)
+            geom, source_ = get_alt_geometry(self.location_id)
         except UnboundExecutionError:
-            geom = None
-        if geom:
+            warn("geohelper database not initiated")
+        except OperationalError:
+            warn("alternative_polygons table does not exist")
+        finally:
+            # Store the geometry in bbox so it is available if converted to dict
+            if geom:
+                source = source_
+            # Custom geometries may provide only a bounding box
+            else:
+                geom = data.get("bbox")
+                source = self.site_source
+        if geom and (isinstance(geom, (str, dict)) or geom.geom_type != "Point"):
             self.geometry = self._build_geometry(geom, crs=4326)
             self.sources.append(source)
         else:
-            # Map geometry from lat-lng or bbox
+            # Geometries from GeoNames use lat/lng to define the center, than the
+            # bounding box to determine the error radius. This is intended to
+            # align the geometry with human georeferences, which commonly use the
+            # center, not the bounding box, while capturing an accurate error radius.
+            point = self._build_geometry((data["lat"], data["lng"]), crs=4326)
             try:
-                self.geometry = self._build_geometry(data["bbox"], crs=4326)
+                bbox = self._build_geometry(data["bbox"], crs=4326)
             except KeyError:
-                self.geometry = self._build_geometry(
-                    (data["lat"], data["lng"]), crs=4326
-                )
+                self.geometry = point
+            else:
+                self.geometry = point.encompass(bbox)
 
         # Map explicitly defined URL to url_mask
         if data.get("url"):
@@ -1198,6 +1179,9 @@ class Site(Record):
         # url mask if the location_id is numeric
         elif self.location_id.isnumeric():
             self.url_mask = "http://geonames.org/{location_id}"
+
+        # Sort sources
+        self.sources = sorted(set(self.sources))
 
         # Clear invalid county names (e.g., US.WA.000)
         pattern = re.compile(r"^[A-Z]{2}(\.[A-Z\d]+){1,2}$")
@@ -1291,7 +1275,14 @@ class Site(Record):
 
     def _parse(self, rec):
         """Parses pre-formatted data into a record object"""
-        radius_km = rec.pop("radius_km", None)
+
+        # Extract geometry
+        geom = rec.pop("geometry", None)
+        lat = rec.pop("latitude", None)
+        lon = rec.pop("longitude", None)
+        crs = rec.pop("crs", None)
+        radius_km = rec.pop("radius_km", 0)
+
         for key, val in rec.items():
             if key not in self.attributes:
                 try:
@@ -1300,8 +1291,12 @@ class Site(Record):
                     raise KeyError("Illegal key: {}".format(key))
             setattr(self, key, val)
 
-        if radius_km:
-            self.radius_km = float(radius_km)
+        if geom:
+            self.geometry = GeoMetry(geom, crs=crs)
+        elif lat and lon:
+            self.geometry = GeoMetry((lat, lon), crs=crs, radius_km=radius_km)
+        elif lat or lon or crs or radius_km:
+            raise ValueError("Only partial geometry info provided")
 
         return self
 

@@ -5,6 +5,8 @@ import os
 
 from lxml import etree
 
+from ...utils import mutable
+
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,9 @@ class Kml:
         # Linear features are always rivers
         # if site.geom_type == "LineString":
         #    style = "river"
+        site = site.copy()
+        with mutable(site):
+            site.geometry = site.geometry.to_crs(4326)
         self.add_placemark(site, style, name=name, desc=desc)
         try:
             for rel in site.related_sites:

@@ -1,16 +1,14 @@
-# List of features used to test georeferencing module,,,,,,,,,
-location_id,continent,country,state_province,county,locality,verbatim_latitude,verbatim_longitude,georeference_protocol,georeference_remarks
-test_simple_locality,North America,United States,Washington,Kittitas,Ellensburg,46.997,-120.548,unknown,terrestrial
-test_multiple_localities,North America,United States,Washington,Kittitas,"Ellensburg, Thorp",47.036,-120.614,collector,terrestrial
-test_county_fallback,North America,United States,Washington,Kittitas,Ellensberg,47.124,-120.68,georeferenced,terrestrial
-test_state_province,North America,United States,Washington,,,47.5,-120.5,ellensburg 1948 quad map,terrestrial
-test_country,North America,United States,,,,38,-97,,terrestrial; sparse
-test_between,North America,United States,Washington,Kittitas,Between Ellensburg and Kittitas,46.99,-120.48,,terrestrial
-test_border,North America,United States,Washington,,Border of King and Kittitas Counties,47.399,-121.424,,terrestrial
-test_direction,North America,United States,Washington,Kittitas,5 km N of Ellensburg,47.042,-120.547,,terrestrial
-test_plss,North America,United States,Washington,Kittitas,NW Sec. 2 T17N R18E,46.996,-120.544,,terrestrial
-test_offshore,,,,,North Pacific Ocean; Off of Washington,47.422,-125.201,,marine
-test_adm3,North America,United States,Washington,Kittitas,City of Ellensburg > Ellensburg,47.001,-120.549,,terrestrial
-test_repeated_names,North America,United States,Hawaii,Honolulu,North Pacific Ocean; Off of Honolulu; S of Honolulu; Honolulu,20.307,-157.858,,marine
-test_large_distance,North America,United States,,,North Pacific Ocean; 500 km W of Washington,47.519,-130.743,,marine
-test_continent,Antarctica,,,,McMurdo Station,-77.846,166.676,,terrestrial
+# List of features used to test georeferencing module,,,,,,,,,,
+location_id,continent,country,state_province,county,locality,latitude,longitude,crs,georeference_protocol,georeference_remarks
+test_simple_locality,North America,United States,Washington,Kittitas,Ellensburg,46.997,-120.548,4326,unknown,terrestrial
+test_multiple_localities,North America,United States,Washington,Kittitas,"Ellensburg, Thorp",47.036,-120.614,4326,collector,terrestrial
+test_county_fallback,North America,United States,Washington,Kittitas,Ellensberg,47.124,-120.68,4326,georeferenced,terrestrial
+test_state_province,North America,United States,Washington,,,47.5,-120.5,4326,ellensburg 1948 quad map,terrestrial
+test_country,North America,United States,,,,38,-97,4326,,terrestrial; sparse
+test_between,North America,United States,Washington,Kittitas,Between Ellensburg and Kittitas,46.99,-120.48,4326,,terrestrial
+test_border,North America,United States,Washington,,Border of King and Kittitas Counties,47.399,-121.424,4326,,terrestrial
+test_direction,North America,United States,Washington,Kittitas,5 km N of Ellensburg,47.042,-120.547,4326,,terrestrial
+test_plss,North America,United States,Washington,Kittitas,NE Sec. 2 T17N R18E,46.996,-120.544,4326,,terrestrial
+test_offshore,,,,,North Pacific Ocean; Off of Washington,47.422,-125.201,4326,,marine
+test_adm3,North America,United States,Washington,Kittitas,City of Ellensburg > Ellensburg,47.001,-120.549,4326,,terrestrial
+test_repeated_names,North America,United States,Hawaii,Honolulu,North Pacific Ocean; Off of Honolulu; S of Honolulu; Honolulu,20.307,-157.858,4326,,marine

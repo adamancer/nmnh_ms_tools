@@ -6,7 +6,7 @@ import pytest
 
 from nmnh_ms_tools.databases.geonames import GeoNamesFeatures
 from nmnh_ms_tools.records import Site
-from nmnh_ms_tools.routines.georeferencer.evaluators import MatchEvaluator
+from nmnh_ms_tools.processes.georeferencer.evaluators import MatchEvaluator
 
 
 class Helpers:
@@ -46,7 +46,7 @@ def evaluator():
             "island": "Oahu",
         }
     )
-    ref_site.get_admin_polygons()
+    ref_site.map_admin()
     return MatchEvaluator(ref_site, None, [ref_site])
 
 
@@ -121,18 +121,8 @@ def test_constrain(evaluator, helpers):
     county = helpers.search_json("honolulu county")[0]
     constrained = evaluator.constrain(islands, county, "county")
     lng, lat = constrained.centroid.coords[0]
-    assert lat == pytest.approx(24.76, rel=1e-2)
-    assert lng == pytest.approx(-167.04, rel=1e-2)
-
-
-@pytest.mark.skip
-def test_extend_into_ocean(evaluator, helpers):
-    pass
-
-
-@pytest.mark.skip
-def test_disentangle_names(evaluator, helpers):
-    pass
+    assert lat == pytest.approx(23.83, rel=1e-2)
+    assert lng == pytest.approx(-165.31, rel=1e-2)
 
 
 def test_interpretation(evaluator, helpers):
@@ -152,7 +142,7 @@ def test_interpretation(evaluator, helpers):
 
     assert helpers.same_as(evaluator.active(), enc + sel)
     assert helpers.same_as(evaluator.inactive(), rej)
-    assert evaluator.ignored() == [s.name for s in rej]
+    assert evaluator.ignored() == [f"{s.field}:{s.name}" for s in rej]
     assert evaluator.uninterpreted() == []
 
     evaluator.uninterpret(status="selected")

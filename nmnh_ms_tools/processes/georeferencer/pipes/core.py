@@ -10,8 +10,7 @@ from ....tools.geographic_names.parsers import (
     FeatureParser,
     MultiFeatureParser,
 )
-from ....utils import as_list
-from ....utils.standardizers import LocStandardizer
+from ....utils import LocStandardizer, as_list, mutable
 
 
 logger = logging.getLogger(__name__)
@@ -89,11 +88,12 @@ class MatchPipe:
         # Construct a standardized version of the site to simplify comparisons
         self._site = site
         self.site.map_admin()
-        self.std_site = self.site.clone()
-        for attr in self.std_site.attributes:
-            setattr(self.std_site, attr, self.std(getattr(self.std_site, attr)))
-        for attr in ["country_code", "admin_code_1", "admin_code_2"]:
-            setattr(self.std_site, attr, self.std(getattr(self.std_site, attr)))
+        self.std_site = self.site.copy()
+        # NOTE: Copy should handle this
+        # for attr in self.std_site.attributes:
+        #    setattr(self.std_site, attr, self.std(getattr(self.std_site, attr)))
+        # for attr in ["country_code", "admin_code_1", "admin_code_2"]:
+        #    setattr(self.std_site, attr, self.std(getattr(self.std_site, attr)))
         return self
 
     def prepare(self, field):
@@ -242,17 +242,18 @@ class MatchPipe:
         """Parses verbatim locality into features"""
         return self.site.parse_locality(val)
 
-    def create_site(self, name, attributes=None, **kwargs):
+    def build_site(self, name, attributes=None, **kwargs):
         """Constructs a site summarizing a georeference"""
         if attributes is not None:
             attributes = ["country", "state_province", "county"]
-        site = self.site.clone(attributes)
-        site.site_names = [name]
-        for attr, val in kwargs.items():
-            setattr(site, attr, val)
-        site.filter["name"] = site.locality
+        site = self.site.copy(attributes)
+        with mutable(site):
+            site.site_names = [name]
+            for attr, val in kwargs.items():
+                setattr(site, attr, val)
         # The pipe used to match features for directions, etc. does not
         # include the field attribute, so add that here
+        site.filter["name"] = site.locality
         site.field = self.field
         return site
 

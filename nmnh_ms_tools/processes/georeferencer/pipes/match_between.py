@@ -55,7 +55,7 @@ class MatchBetween(MatchPipe):
                 sources = sorted(set(sources))
                 # Create site summarizing the match
                 geom = GeoMetry(encircled, radius_km=radius_km)
-                site = self.create_site(
+                site = self.build_site(
                     str(parsed),
                     location_id=location_id + "_BETWEEN",
                     site_kind="between",
@@ -91,7 +91,7 @@ class MatchBetween(MatchPipe):
         for i in range(len(fields)):
             if i:
                 fields.pop()
-            refsite = self.site.clone(fields)
+            refsite = self.site.copy(fields)
             matches = self.match_site(feature, refsite, self.pipes, **kwargs)
             if matches:
                 return matches

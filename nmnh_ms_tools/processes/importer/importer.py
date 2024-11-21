@@ -21,7 +21,7 @@ from xmu import (
 )
 
 from .actions import run_action, to_emu
-from .attachments import CollectionEvent, Location
+from .attachments import Attachment, CollectionEvent, Location
 from .validator import Validator
 from ...databases.gvp import GVPVolcanoes
 from ...processes.georeferencer import Georeferencer
@@ -194,9 +194,6 @@ class Source(BaseDict):
     defaults = {}
     missing = {}
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def pop(self, *args):
         if not args or len(args) > 2:
             raise ValueError(f"pop accepts 1-2 arguments (got {args})")
@@ -219,7 +216,7 @@ class Source(BaseDict):
         return str(key).casefold()
 
     def to_dict(self):
-        return {self.keymap[k]: v for k, v in self.items()}
+        return {self._keymap[k]: v for k, v in self.items()}
 
 
 class ImportRecord(EMuRecord):
@@ -279,7 +276,13 @@ class ImportRecord(EMuRecord):
 
     @property
     def cataloger(self):
-        return Person(self.job["fields"]["cataloging"]["cataloged_by"]["default"])
+        cataloger = self.job["fields"]["cataloging"]["cataloged_by"]["default"]
+        try:
+            return Person(cataloger)
+        except ValueError:
+            return Attachment(
+                cataloger, irns=self.job.get("irns", {}).get("eparties", {})
+            )
 
     @property
     def cataloged_date(self):
@@ -369,11 +372,21 @@ class ImportRecord(EMuRecord):
             if not self._source[key]:
                 del self._source[key]
 
+    def to_emu_record(self):
+        pass
+
     def pop(self, *args):
         return self._source.pop(*args)
 
     def unmapped(self):
         return sorted({k for k, v in self.source.items() if v})
+
+    def attach(self, src, dst):
+        """Maps a string"""
+        module = self.schema.get_field_info(self.module, dst)["RefTable"]
+        self[dst] = Attachment(
+            self.pop(src, src), irns=self.job.get("irns", {}).get(module, {})
+        ).to_emu()
 
     def map_age(self, src):
         keys = [
@@ -660,7 +673,7 @@ class ImportRecord(EMuRecord):
             for key, val in (related if related else {}).items():
                 self._set_path(key, val)
 
-    def map_prep(self, src, prep, remarks=None):
+    def map_prep(self, src, prep, remarks=None, remarks_only=False):
         remarks = self.pop(remarks, remarks)
         for key in as_list(src):
             try:
@@ -669,6 +682,7 @@ class ImportRecord(EMuRecord):
                 pass
             else:
                 if val:
+                    orig = val
                     val = val.lstrip("0")
                     if val and not val.isnumeric():
                         if remarks:
@@ -678,7 +692,7 @@ class ImportRecord(EMuRecord):
                         else:
                             remarks = val
                         val = None
-                    if val or remarks:
+                    if val or remarks and remarks_only:
                         self.setdefault("ZooPreparationCount_tab", []).append(val)
                         self.setdefault("ZooPreparation_tab", []).append(prep)
                         self.setdefault("ZooPreparationRemarks_tab", []).append(remarks)
@@ -938,7 +952,22 @@ class ImportRecord(EMuRecord):
             evt["VolSubfeature"] = fname
 
     def map_contingent(self, src, dst, contingent):
-        """Maps data related to the primary field"""
+        """Maps data related to the primary fiel
+
+        Parameters
+        ----------
+        src : str
+            name of source column
+        dst : str
+            name of the EMu field to map to
+        contingent : dict
+            mapping of EMu fields to columns or fixed values that must be mapped
+            if src is populated
+
+        Returns
+        -------
+        None
+        """
         vals = [s[0] for s in split(self.pop(src))]
 
         is_grid = is_tab(dst)
@@ -953,7 +982,9 @@ class ImportRecord(EMuRecord):
             # Align data to same row in grid
             if is_grid:
                 if not key in cols:
-                    raise ValueError("Tabular fields must be in the same grid")
+                    raise ValueError(
+                        f"Tabular fields must be in the same grid ({repr(key)} not in {cols})"
+                    )
                 self.setdefault(key, [])
                 while len(self[key]) < i + len(vals):
                     self[key].append(None)
@@ -1079,7 +1110,10 @@ class ImportRecord(EMuRecord):
 
         evt.setdefault("LatDatum_tab", []).append(crs)
 
+        if isinstance(src, list):
+            src = " | ".join(src)
         evt.setdefault("LatDetSource_tab", []).append(src)
+
         evt.setdefault("LatLatLongDetermination_tab", []).append(method)
 
         det_by = Person(det_by).to_emu() if det_by else None

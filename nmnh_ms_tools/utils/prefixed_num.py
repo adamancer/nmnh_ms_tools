@@ -3,6 +3,9 @@
 import re
 from functools import total_ordering
 
+from .classes import custom_copy, custom_eq, mutable, set_immutable
+from .strings import as_str
+
 
 @total_ordering
 class PrefixedNum:
@@ -21,16 +24,17 @@ class PrefixedNum:
         a numeric identifier
     """
 
-    def __init__(self, val):
-        self._prefix = None
-        self._number = None
-        val = str(val)
+    def __init__(self, val=None):
+        val = as_str(val)
         if re.search(r"^([A-z]+[- ]?)?\d+$", val):
             match = re.search(r"^[A-z]+[- ]?", val)
             self.prefix = match.group().rstrip("- ") if match else ""
             self.number = int(re.search(r"\d+$", val).group())
-        else:
+        elif val:
             raise ValueError(f"Invalid prefixed number: {val}")
+        else:
+            self.prefix = None
+            self.number = None
 
     def __bool__(self):
         return bool(self.number)
@@ -59,9 +63,7 @@ class PrefixedNum:
         return self - other
 
     def __eq__(self, other):
-        if not isinstance(other, self.__class__):
-            other = self.__class__(other)
-        return self.prefix == other.prefix and self.number == other.number
+        return custom_eq(self, other)
 
     def __lt__(self, other):
         if not isinstance(other, self.__class__):
@@ -70,26 +72,9 @@ class PrefixedNum:
             return self.number < other.number
         return self.prefix < other.prefix
 
-    @property
-    def prefix(self):
-        return self._prefix
-
-    @prefix.setter
-    def prefix(self, val):
-        if self._number is not None:
-            raise AttributeError("Cannot change prefix once set")
-        self._prefix = val
-
-    @property
-    def number(self):
-        return self._number
-
-    @number.setter
-    def number(self, val):
-        if self._number is not None:
-            raise AttributeError("Cannot change number once set")
-        self._number = val
+    def __setattr__(self, attr, val):
+        set_immutable(self, attr, val)
 
     def copy(self):
         """Creates a copy of the object"""
-        return self.__class__(f"{self.prefix}{self.number}")
+        return custom_copy(self)

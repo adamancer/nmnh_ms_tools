@@ -44,7 +44,7 @@ class MetadataField:
         for val in vals:
             if len(val) > self.length:
                 warnings.warn(
-                    f"Value too long: {self.fields} == {repr(val)} (max={self.length})"
+                    f"Value too long: {self.write_fields} == {repr(val)} (max={self.length})"
                 )
             if self.escape:
                 val = val.replace(",", "|,")
@@ -175,7 +175,7 @@ class MediaFile:
                 for group, vals in field.write(vals).items():
                     for field, val in vals:
                         if group is None:
-                            command.append(f"-{field}={val}")
+                            command.append(f"-{field}={str(val)}")
                         else:
                             structures.setdefault(group, {}).setdefault(
                                 field, []
@@ -187,6 +187,7 @@ class MediaFile:
             rows[group] = []
             for key, vals in items.items():
                 for i, val in enumerate(vals):
+                    val = str(val)
                     try:
                         rows[group][i].append(f"{key}={val}")
                     except IndexError:
@@ -204,13 +205,12 @@ class MediaFile:
                 except FileNotFoundError:
                     shutil.copy2(self.path, path)
 
-            command.extend(["-overwrite_original", path])
-
+            command.extend(["-overwrite_original", str(path)])
             result = subprocess.run(command, capture_output=True)
-            if result.stderr:
+            if result.returncode:
                 raise ValueError(f"Failed to embed metadata: {result}")
             return True
-        raise ValueError(f"Failed to embed metadata: {command}")
+        raise ValueError(f"Invalid command: {command}")
 
     def from_file(self):
         return self._clean_mapped(
@@ -297,18 +297,20 @@ class MediaFile:
 
         return mapped
 
-    def _get_std_name(self, dst=None):
+    def _get_std_name(self, dst=None, keys=("headline", "creator", "title")):
         if dst is None:
             dst = self._path.parent
         dst = Path(dst)
         if dst.is_dir():
-            parts = [
-                self.mapped["headline"],
-                self.mapped["creator"],
-                self.mapped["title"],
-            ]
+            parts = [self.mapped[k] for k in keys]
             stem = "_".join((to_attribute(p).replace("_", "-") for p in parts if p))
             dst = dst / f"{stem}{self._path.suffix}"
+
+            # Exiftool has a max path length of 246 characters in Windows. Adjust
+            # the filename if it's longer than 240 to account for duplicates.
+            while len(str(dst.resolve())) >= 240:
+                dst = dst.parent / (dst.stem.rsplit("_", 1)[0] + dst.suffix)
+
             for i in range(1, 10):
                 try:
                     open(dst)

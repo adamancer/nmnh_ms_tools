@@ -189,7 +189,7 @@ class MatchGeoNames(MatchPipe):
             try:
                 cached = []
                 for site in self.cache[key]:
-                    cloned = site.clone()
+                    cloned = site.copy()
                     cloned.sources = site.sources
                     cached.append(cloned)
                 logger.debug("Resolved from cache: {}".format(key))
@@ -288,6 +288,7 @@ class MatchGeoNames(MatchPipe):
                 logging.debug(mask.format(site.location_id, site.filter))
                 continue
             """
+
             filtered.append(site)
 
         # Prefer countries or states if no country code given
@@ -360,11 +361,11 @@ class MatchGeoNames(MatchPipe):
     def build_site(self, rec):
         """Builds a site from a record"""
         site = Site(rec)
-        site.sources = [site.site_source]
+        site.sources.append(site.site_source)
         return site
 
     def subsection(self, sites, direction, feature=None):
-        if direction:
+        if sites and direction:
             logger.debug(f"Subsectioning {len(sites)} features")
             name = "{1} {0}".format(*feature)
             return [s.subsection(direction, name) for s in sites]
@@ -441,6 +442,10 @@ class MatchGeoNames(MatchPipe):
     def get_json(self, geoname_id, **kwargs):
         """Retrieves the JSON record corresponding to the geoname_id"""
         if self.use_local:
+            # Some data is not included in the GeoNames dump but does appear in the
+            # webservice data. Default to filling that data in, although it does
+            # slow down the process a lot.
+            kwargs.setdefault("fill_record", True)
             return self.local.get_json(geoname_id, **kwargs)
         return self.bot.get_json(geoname_id)
 

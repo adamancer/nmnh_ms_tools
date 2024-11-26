@@ -7,8 +7,8 @@ import inflect
 from nltk.corpus import stopwords as nltk_stopwords
 from unidecode import unidecode
 
-from nmnh_ms_tools.config import DATA_DIR
-from nmnh_ms_tools.utils import AbbrDict
+from ....config import DATA_DIR
+from ....utils import AbbrDict
 
 
 def _load_stopwords(langs):
@@ -75,14 +75,14 @@ class BaseFormatter:
 
     stopwords = _load_stopwords(languages)
 
-    def __init__(self, reference):
-        self.reference = reference
+    def __init__(self, ref):
+        self.ref = ref
         self.default_langs = {"eng", "fre", "ger", "ita", "spa"}
 
     def iso_4_title(self, publication=None):
         """Formats title using a loose interpreation of the ISO 4 standard"""
         if publication is None:
-            publication = self.reference.title
+            publication = self.ref.title
 
         # Split into words and remove diacritcs
         words = []

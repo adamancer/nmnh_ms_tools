@@ -3,6 +3,7 @@
 import re
 
 from .core import BaseFormatter
+from ....records.people import combine_names
 
 
 class CSEFormatter(BaseFormatter):
@@ -15,11 +16,11 @@ class CSEFormatter(BaseFormatter):
             "phdthesis": "{authors}. {year}. {title} [thesis]. {publisher}. {pages} p.",
         }
         try:
-            mask = masks[self.reference.entry_type]
+            mask = masks[self.ref.entry_type]
         except KeyError:
             mask = masks["article"]
 
-        ref = self.reference.to_dict()
+        ref = self.ref.to_dict()
         ref["authors"] = self._format_authors()
         ref["title"] = ref["title"].rstrip(".")
         ref["publication"] = self._format_publication()
@@ -34,6 +35,7 @@ class CSEFormatter(BaseFormatter):
 
         # Explicitly set null values to an empty string
         ref = {k: v if v else "" for k, v in ref.items()}
+        ref["year"] = self.ref.year
 
         # Clean up string
         formatted = mask.format(**ref)
@@ -58,16 +60,29 @@ class CSEFormatter(BaseFormatter):
 
         return formatted
 
-    def _format_publication(self):
-        publication = self.reference.publication
+    def _format_publication(self) -> str:
+        """Formats the publication name, abbreviating it if necessary"""
+        try:
+            pub = self.ref.publication
+        except AttributeError:
+            pub = {
+                "article": self.ref.journal,
+                "incollection": self.ref.booktitle,
+            }.get(self.ref.entry_type)
         # Abbreviate journal titles according to the ISO 4 standard
-        if self.reference.entry_type == "article":
-            return self.iso_4_title(publication).replace(".", "")
-        return publication
+        if self.ref.entry_type == "article":
+            return self.iso_4_title(pub).replace(".", "")
+        return pub
 
-    def _format_authors(self):
-        author_string = self.reference.author_string(
-            max_names=10, delim=", ", conj="", mask="{last} {first} {middle}"
+    def _format_authors(self) -> str:
+        """Formats the author string"""
+        try:
+            author = self.ref.author
+        except AttributeError:
+            author = self.ref.authors
+
+        author_string = combine_names(
+            author, max_names=10, delim=", ", conj="", mask="{last} {first} {middle}"
         )
         author_string = author_string.replace(". et al", ", et al")
         return re.sub(r"\. *", "", author_string)

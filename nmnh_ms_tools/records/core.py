@@ -63,7 +63,7 @@ class Record:
     def __init__(self, data=None, **kwargs):
         # Generate defaults and attributes
         if not self.terms:
-            raise ValueError("Required class attribute terms not defined")
+            raise ValueError("Required class attribute 'terms' not defined")
         attrs = [a for a in self.terms if a in dir(self)]
         self.defaults = {a: getattr(self, a) for a in attrs}
         self.attributes = attrs + self.properties
@@ -74,9 +74,14 @@ class Record:
         self.irn = None
         # Define attribution parameters
         self.attribute_to = None
-        self.url_mask = None
-        self.url = None
         self.sources = []
+        self.url_mask = None
+        # Some subclasses use URL as a term
+        try:
+            self._url = None
+        except AttributeError as exc:
+            if "Cannot modify existing attribute" not in str(exc):
+                raise
         # Define indexing and cache params
         self.from_cache = False
         self._indexed = None

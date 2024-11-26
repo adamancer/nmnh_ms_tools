@@ -4,10 +4,12 @@ from .. import _ImportClock
 
 with _ImportClock("utils"):
     from .classes import (
+        LazyAttr,
         custom_copy,
         custom_eq,
         get_attrs,
         mutable,
+        read_csv,
         repr_class,
         str_class,
         set_immutable,
@@ -48,6 +50,9 @@ with _ImportClock("utils"):
         hasher,
         is_different,
         is_newer,
+        read_csv,
+        read_json,
+        read_tsv,
         skip_hashed,
     )
     from .geo import (

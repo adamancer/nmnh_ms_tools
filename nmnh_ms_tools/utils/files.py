@@ -7,6 +7,7 @@ import os
 from collections import namedtuple
 from pathlib import Path
 
+import pandas as pd
 from PIL import Image
 
 
@@ -241,3 +242,52 @@ def skip_hashed(f):
     f.seek(0)
     f.read(size)
     return f
+
+
+def read_csv(*args, **kwargs):
+    """Convenience function a read a CSV file
+
+    Parameters
+    ---------
+    args, kwargs :
+        parameters to pass to pd.read_csv()
+
+    Returns:
+    list[dict]
+        content of CSV as list of records
+    """
+    kwargs.setdefault("comment", "#")
+    kwargs.setdefault("dtype", "str")
+    return pd.read_csv(*args, **kwargs).to_dict("records")
+
+
+def read_tsv(*args, **kwargs):
+    """Convenience function a read a TSV file
+
+    Parameters
+    ---------
+    args, kwargs :
+        parameters to pass to pd.read_csv()
+
+    Returns:
+    list[dict]
+        content of CSV as list of records
+    """
+    kwargs.setdefault("delimiter", "\t")
+    return read_csv(*args, **kwargs)
+
+
+def read_json(fp: str | Path, encoding: str = "utf-8", **kwargs):
+    """Convenience function a read a JSON file
+
+    Parameters
+    ----------
+    fp : str | Path
+        path to JSON file
+    encoding : str
+        encoding of JSON file
+    kwargs:
+        parametets to pass to json.load()
+    """
+    with open(fp, encoding=encoding) as f:
+        return json.load(f, **kwargs)

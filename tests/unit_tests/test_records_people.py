@@ -2,7 +2,7 @@
 
 import pytest
 
-from nmnh_ms_tools.records.people import Person, combine_authors, parse_names
+from nmnh_ms_tools.records.people import Person, combine_names, parse_names
 
 
 @pytest.mark.parametrize(
@@ -85,10 +85,14 @@ def test_names_are_different(test_input):
     assert not person.similar_to(other)
 
 
-def test_combine_authors():
+def test_combine_names():
     names = "Simpson, HJ, Simpson, M, Simpson, B, Simpson, LM, and Simpson, M"
-    assert combine_authors(names) == "Simpson, H. J., Simpson, M. et al."
     assert (
-        combine_authors(names, max_names=5)
-        == "Simpson, H. J., Simpson, M., Simpson, B., Simpson, L. M., and Simpson, M."
+        combine_names(names, delim=", ", max_names=5)
+        == "H. J. Simpson, M. Simpson, B. Simpson, L. M. Simpson, and M. Simpson"
     )
+
+
+def test_combine_names_max():
+    names = "Simpson, HJ, Simpson, M, Simpson, B, Simpson, LM, and Simpson, M"
+    assert combine_names(names, delim=", ") == "H. J. Simpson, M. Simpson et al."

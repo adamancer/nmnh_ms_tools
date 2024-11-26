@@ -1,17 +1,137 @@
 """Defines methods used across internal classes"""
 
 from contextlib import contextmanager
+from pathlib import Path
+from collections.abc import Callable
+from typing import Any
 
 import pandas as pd
 from shapely.geometry.base import BaseGeometry
 
+from .files import read_csv, read_json, read_tsv
 
-def get_attrs(inst):
+
+class LazyAttr:
+    """Lazily loads data upon first access to a class attribute
+
+    Parameters
+    ----------
+    obj : Any
+        the object
+    attr : str
+        the name of the attribute
+    func : callable
+        the function used to load data
+    args, kwargs:
+        arguments and keyword arguments to pass to func
+    """
+
+    def __init__(self, obj: Any, attr: str, *args, func: callable = Callable, **kwargs):
+        self._lazyobj = obj
+        self._lazyattr = attr
+        self._lazyargs = args
+        self._lazykwargs = kwargs
+
+        # Infer function for simple file reads
+        if func is None:
+            try:
+                func = {
+                    ".csv": read_csv,
+                    ".json": read_json,
+                    ".tsv": read_tsv,
+                }[Path(args[0]).suffix.lower()]
+            except (IndexError, KeyError):
+                raise ValueError("Could not infer function from arguments")
+
+        self._lazyfunc = func
+
+        # Assign self to attribute. This is to avoid having to specify the attribute
+        # both here and during assignment.
+        setattr(self._lazyobj, self._lazyattr, self)
+
+    def __getattr__(self, attr):
+        return getattr(self.lazyload(), attr)
+
+    def __setattr__(self, attr, val):
+        if attr in {"_lazyobj", "_lazyattr", "_lazyfunc", "_lazyargs", "_lazykwargs"}:
+            super().__setattr__(attr, val)
+        else:
+            return setattr(self.lazyload(), attr, val)
+
+    def __delattr__(self, attr):
+        delattr(self.lazyload(), attr)
+
+    def __getitem__(self, key):
+        return self.lazyload()[key]
+
+    def __setitem__(self, key, val):
+        self.lazyload()[key] = val
+
+    def __deltitem__(self, key):
+        del self.lazyload()[key]
+
+    def __contains__(self, val):
+        return val in self.lazyload()
+
+    def __iter__(self):
+        return iter(self.lazyload())
+
+    def __bool__(self):
+        return bool(self.lazyload())
+
+    def __float__(self):
+        return float(self.lazyload())
+
+    def __int__(self):
+        return int(self.lazyload())
+
+    def __str__(self):
+        return str(self.lazyload())
+
+    def __repr__(self):
+        return repr(self.lazyload())
+
+    def lazyload(self):
+        """Lazy loads data using function and sets the associated attribute"""
+        setattr(
+            self._lazyobj,
+            self._lazyattr,
+            self._lazyfunc(*self._lazyargs, **self._lazykwargs),
+        )
+        return getattr(self._lazyobj, self._lazyattr)
+
+
+def get_attrs(inst: Any) -> set:
+    """Gets the list of instance attributes, excluding class attributes
+
+    Parameters
+    ----------
+    inst : Any
+        a Python object
+
+    Returns
+    -------
+    set
+        instance attributes
+    """
     return set(dir(inst)) - set(dir(inst.__class__))
 
 
-def str_class(inst, attributes=None):
-    """Convenience function to depict a class as a string"""
+def str_class(inst: Any, attributes: list = None) -> str:
+    """Provides a human-readable depiction of the class as a string
+
+    Parameters
+    ----------
+    inst : Any
+        a Python object
+    attributes : list
+        a list of attributes to include. Defaults to attributes attribute if None.
+
+    Returns
+    -------
+    str
+        depiction of instance
+    """
     if attributes is None:
         attributes = inst.attributes
     rows = [("class", inst.__class__.__name__)]
@@ -27,18 +147,41 @@ def str_class(inst, attributes=None):
     return "\n".join(["{}: {}".format(a.ljust(maxlen), v) for a, v in rows])
 
 
-def repr_class(inst, attributes=None):
-    """Convenience function to represent major attributes of a class"""
+def repr_class(inst: Any, attributes: list[str] = None) -> str:
+    """Provides a compact depiction of the class as a string
+
+    Parameters
+    ----------
+    inst : Any
+        a Python object
+    attributes : list
+        a list of attributes to include. Defaults to attributes attribute if None.
+
+    Returns
+    -------
+    str
+        compact depiction of instance
+    """
     if attributes is None:
         attributes = inst.attributes
     attrs = ["{}={}".format(a, getattr(inst, a)) for a in attributes]
     return "{}({})".format(inst.__class__.__name__, ", ".join(attrs))
 
 
-def custom_copy(inst):
+def custom_copy(inst: Any) -> Any:
     """Convenience function to copy all attributes of a class
 
-    It must be possibly to create an empty class for this to work.
+    It must be possible to create an empty class based on the instance for this to work.
+
+    Parameters
+    ----------
+    inst : Any
+        a Python object
+
+    Returns
+    -------
+    object
+        a copy of the original object
     """
     obj = inst.__class__()
     with mutable(obj):
@@ -53,8 +196,24 @@ def custom_copy(inst):
     return obj
 
 
-def custom_eq(inst, other, coerce=False, ignore=None):
-    """Convenience function to compare instance to another object"""
+def custom_eq(inst: Any, other: Any, coerce: bool = False, ignore: list = None) -> bool:
+    """Convenience function to compare instance to another object
+
+    Parameters
+    ----------
+    inst : Any
+        a Python object
+    other : Any
+        a Python object
+    coerce : bool
+        whether to try to coerce other if it is not the same type as inst
+    ignore :
+
+    Returns
+    -------
+    bool
+        whether the objects are the same
+    """
     if not isinstance(other, inst.__class__):
         if coerce:
             try:
@@ -83,7 +242,28 @@ def custom_eq(inst, other, coerce=False, ignore=None):
     return True
 
 
-def set_immutable(inst, attr, val, cls=None):
+def set_immutable(inst: Any, attr: str, val: Any, cls: type = None):
+    """Convenience function to make a custom class immutable
+
+    Note that any data type that can be modified in place (like list or dict) is
+    not immutable.
+
+    Parameters
+    ----------
+    inst : Any
+        a Python object
+    attr : str
+        an attribute
+    val :
+        the value to which to set the attribute
+    cls : class
+        a Python class. Not needed unless
+
+    Returns
+    -------
+    bool
+        whether the objects are the same
+    """
     if cls is None:
         cls = inst.__class__
     if (
@@ -103,6 +283,7 @@ def set_immutable(inst, attr, val, cls=None):
 
 @contextmanager
 def mutable(inst):
+    """Context manager allowing nominally immutable classes to be modified"""
     inst._mutable = True
     try:
         yield inst

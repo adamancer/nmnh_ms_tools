@@ -14,7 +14,7 @@ from unidecode import unidecode
 from .bibtex import BibTeXMapper
 from .formatters import CSEFormatter
 from ..core import Record, Records
-from ..people import People, Person, combine_authors, parse_names
+from ..people import People, Person, combine_names, parse_names
 from ...bots import Bot
 from ...utils.standardizers import Standardizer
 
@@ -325,7 +325,7 @@ class Reference(Record):
 
     def author_string(self, max_names=20, delim=", ", conj="&", **kwargs):
         """Converts list of authors objects to a string"""
-        return combine_authors(
+        return combine_names(
             self.authors, max_names=max_names, delim=delim, conj=conj, **kwargs
         )
 

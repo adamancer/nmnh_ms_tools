@@ -147,10 +147,9 @@ class Person(Record):
         suffix = self.suffix if self.suffix else ""
         if len(first) == 1 or (initials and first):
             first = first[0] + "."
-        if len(middle) == 1 or (
-            initials and middle and not (" " in middle or middle.count(".") > 1)
-        ):
-            middle = middle[0] + "."
+        if len(middle) == 1 or (initials and " " in middle):
+            middles = [m + "." if len(m) == 1 else m for m in middle.split(" ")]
+            middle = " ".join(middles)
         name = mask.format(
             title=title, first=first, middle=middle, last=self.last, suffix=suffix
         )
@@ -319,16 +318,20 @@ class People(Records):
         return combine_names(self)
 
 
-def parse_names(val, delims="|;,"):
+def parse_names(val: str | list, delims: str = "|;,") -> list[Person]:
     """Parses names in the given object
 
-    Parameters:
-        val (mixed): a list of names or string to break into a list of names
-        delims (str): list of delimiters to try when breaking a string into a list of
-            names
+    Parameters
+    ----------
+        val : str or list
+            a list of names or string to break into a list of names
+        delims : str
+            delimiters to try when breaking a string into a list of names
 
-    Returns:
-        list of names
+    Returns
+    -------
+    list[Person]
+        list of Person objects
     """
     if not val:
         return []
@@ -341,20 +344,32 @@ def parse_names(val, delims="|;,"):
         val = re.split(r"\d", val, 1)[0].strip()
         val = clean_name(val)
 
-        # Split the list of names on the first delimiter
-        for delim in delims:
-            if delim in val:
-                vals = re.split(f" *{re.escape(delim)} *", val.replace(" and ", delim))
-                break
+        # Check if all values are delimited by and
+        vals = re.split(" +and +", val)
+        # No more than one comma per name
+        if all((s.count(",") <= 1 for s in vals)):
+            delim = " and "
         else:
-            delim = None
-            vals = val.split(" and ")
+            # Split the list of names on the matching delimiter
+            for delim in delims:
+                if delim in val:
+                    vals = re.split(
+                        f" *{re.escape(delim)} *", val.replace(" and ", delim)
+                    )
+                    # No more than one comma per name
+                    if all((s.count(",") <= 1 for s in vals)):
+                        break
+            else:
+                delim = None
+                vals = [val]
 
         # Some publishers use commas to delimit both first name and individual names.
         # This block works around this by replacing every other comma with a pipe, but
         # will give a bad result for a list of last names.
         if delim == ",":
-            return parse_names(re.sub("(.*?,.*?),", r"\1|", val.replace(" and ", ", ")))
+            val_ = re.sub("(.*?,.*?),", r"\1|", val.replace(" and ", ", "))
+            if val_ != val:
+                return parse_names(val_)
 
         # Catch bad title splits
         names = []
@@ -368,8 +383,19 @@ def parse_names(val, delims="|;,"):
         return names
 
 
-def clean_name(name):
-    """Standardizes name string to make it easier to parse"""
+def clean_name(name: str) -> str:
+    """Standardizes name string to make it easier to parse
+
+    Parameters
+    ----------
+    name : str
+        the name to clean
+
+    Returns
+    -------
+    str
+        a nice clean name
+    """
     # Normalize unicode
     name = unicodedata.normalize("NFC", name)
     # Remove multiple spaces
@@ -386,14 +412,36 @@ def clean_name(name):
 
 
 def combine_names(
-    names,
-    mask="{first} {middle} {last}",
-    initials=True,
-    max_names=2,
-    delim="; ",
-    conj="and",
+    names: list[str] | list[Person],
+    mask: str = "{first} {middle} {last}",
+    initials: bool = True,
+    max_names: int = 2,
+    delim: str = "; ",
+    conj: str = "and",
 ):
-    """Combines a list of names into a string"""
+    """Combines a list of names into a string
+
+    Parameters
+    ----------
+    names : list[str] | list[Person]
+        list of names
+    mask : str
+        mask to use to format each name
+    initials : bool
+        whether to use initials
+    max_names : int
+        maximum number of names to list individually. If more names are present,
+        the combined string will conclude with et al.
+    delim : str
+        the character used to delimit each name in the string
+    conj : str
+        the word or character used to delimit the final name in the string
+
+    Returns
+    -------
+    str
+        the list of names as a string
+    """
     if not any(names):
         return ""
     if not isinstance(names[0], Person):
@@ -405,14 +453,6 @@ def combine_names(
         )
         return f"{names} et al."
     return re.sub(r" +", " ", oxford_comma(names, delim=delim, conj=conj))
-
-
-def combine_authors(*args, **kwargs):
-    """Combines list of authors into a string suitable for a reference"""
-    kwargs.setdefault("mask", "{last}, {first} {middle}")
-    kwargs.setdefault("initials", True)
-    kwargs.setdefault("delim", ", ")
-    return combine_names(*args, **kwargs)
 
 
 def is_name(val):

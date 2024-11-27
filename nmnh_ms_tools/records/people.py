@@ -10,7 +10,7 @@ import regex as re
 
 from .core import Record, Records
 from ..config import DATA_DIR
-from ..utils import Standardizer, mutable, oxford_comma, same_to_length
+from ..utils import LazyAttr, Standardizer, mutable, oxford_comma, same_to_length
 
 
 SimpleName = namedtuple("SimpleName", ["last", "first", "middle"])
@@ -43,6 +43,10 @@ SUFFIX_PATTERN = r"\b(" + "|".join(ALL_SUFFIXES) + ")$"
 class Person(Record):
     """Defines methods for parsing and manipulating names"""
 
+    # Deferred class attributes are defined at the end of the file
+    std = None
+
+    # Normal class attributes
     terms = [
         "title",
         "first",
@@ -51,7 +55,6 @@ class Person(Record):
         "suffix",
         "organization",
     ]
-    std = Standardizer(minlen=1)
     irns = {}
 
     def __init__(self, *args, **kwargs):
@@ -462,3 +465,7 @@ def is_name(val):
         return True
     except ValueError:
         return False
+
+
+# Define deferred class attributes
+LazyAttr(Person, "std", Standardizer, minlen=1)

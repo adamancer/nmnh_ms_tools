@@ -12,7 +12,7 @@ from ....databases.geohelper import get_preferred
 from ....records import Site
 from ....tools.geographic_names.caches import RecordCache
 from ....tools.geographic_names.parsers.modified import has_direction
-from ....utils import as_list
+from ....utils import LazyAttr, as_list
 
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,10 @@ CODES_TO_FEATURE = {"-".join(sorted(set(v))): k for k, v in FEATURE_TO_CODES.ite
 class MatchGeoNames(MatchPipe):
     """Matches feature names to GeoNames records"""
 
-    bot = GeoNamesBot()
+    # Deferred class attributes are defined at the end of the file
+    bot = None
+
+    # Normal class attributes
     cache = {}
     use_cache = False
 
@@ -461,4 +464,8 @@ class MatchGeoNames(MatchPipe):
         MatchGeoNames.use_cache = True
 
 
-Site.pipe = MatchGeoNames()
+# Deferred class attributes are defined at the end of the file
+LazyAttr(MatchGeoNames, "bot", GeoNamesBot)
+
+# The pipe attribute of Site is defined here to avoid a circular import
+LazyAttr(Site, "pipe", MatchGeoNames)

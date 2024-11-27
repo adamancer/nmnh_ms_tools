@@ -9,7 +9,7 @@ import yaml
 from unidecode import unidecode
 
 from ...config import CONFIG_DIR
-from ...utils import slugify
+from ...utils import LazyAttr, slugify
 
 
 Part = namedtuple("Part", ["word", "stem", "index", "pos", "kind"])
@@ -19,14 +19,14 @@ Phrase = namedtuple("Phrase", ["phrase", "taxon", "start", "end"])
 class TaxaParser:
     """Analyzes and segments a rock name"""
 
-    config = yaml.safe_load(
-        open(os.path.join(CONFIG_DIR, "config_classification.yml"), "r")
-    )
-    _colors = sorted(config["colors"], key=len, reverse=True)
-    _modifiers = sorted(config["modifiers"], key=len, reverse=True)
-    _textures = sorted(config["textures"], key=len, reverse=True)
-    _stopwords = config["stopwords"]
-    _endings = sorted(config["endings"], key=len, reverse=True)
+    # Deferred class attributes are defined at the end of the file
+    config = None
+    _colors = None
+    _modifiers = None
+    _textures = None
+    _endings = None
+
+    # Populated by get_tree()
     tree = None
 
     def __init__(self, name):
@@ -351,7 +351,7 @@ class TaxaParser:
         """Strips stopwords from a rock name"""
         # Check for stopwords
         self.name = self.name.strip()
-        for stopword in self._stopwords:
+        for stopword in self.config["stopwords"]:
             if self.name.startswith("{} ".format(stopword)):
                 self.name = self.name[len(stopword) :].strip()
             if self.name.endswith(" {}".format(stopword)):
@@ -410,3 +410,31 @@ class TaxaParser:
         last = endswith[-1].phrase if endswith else ""
         assert first or last
         return first, last
+
+
+# Deferred class attributes are defined at the end of the file
+LazyAttr(TaxaParser, "config", os.path.join(CONFIG_DIR, "config_classification.yml"))
+LazyAttr(
+    TaxaParser,
+    "_colors",
+    lambda: sorted(TaxaParser.config["colors"], key=len, reverse=True),
+)
+LazyAttr(
+    TaxaParser,
+    "_modifiers",
+    lambda: sorted(TaxaParser.config["modifiers"], key=len, reverse=True),
+)
+LazyAttr(
+    TaxaParser,
+    "_textures",
+    lambda: sorted(TaxaParser.config["textures"], key=len, reverse=True),
+)
+LazyAttr(
+    TaxaParser,
+    "_endings",
+    lambda: sorted(TaxaParser.config["endings"], key=len, reverse=True),
+)
+
+config = yaml.safe_load(
+    open(os.path.join(CONFIG_DIR, "config_classification.yml"), "r")
+)

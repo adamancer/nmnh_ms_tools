@@ -8,48 +8,16 @@ from nltk.corpus import stopwords as nltk_stopwords
 from unidecode import unidecode
 
 from ....config import DATA_DIR
-from ....utils import AbbrDict
-
-
-def _load_stopwords(langs):
-    words = {}
-    for abbr, lang in langs.items():
-        try:
-            for word in nltk_stopwords.words(lang):
-                words.setdefault(word, []).append(abbr)
-        except OSError:
-            pass
-    return {k: set(v) for k, v in words.items()}
-
-
-def issn_abbrs_to_json(fp):
-    """Updates global abbreviation file"""
-
-    abbrs = {}
-    with open(fp, "r", encoding="utf-8") as f:
-        rows = csv.reader(f, delimiter="\t")
-        keys = next(rows)
-        for row in rows:
-            word, abbr, langs = row
-            word = unidecode(word.lower())
-            abbr = unidecode(abbr.lower())
-            langs = langs.split(", ")
-            if abbr == "n.a.":
-                abbr = None
-            abbrs.setdefault(word, []).append([abbr, langs])
-
-    json_path = os.path.join(DATA_DIR, "issn", "issn_abbrs.json")
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(abbrs, f, indent=2, sort_keys=True)
+from ....utils import AbbrDict, LazyAttr, read_json
 
 
 class BaseFormatter:
-    with open(
-        os.path.join(DATA_DIR, "issn", "issn_abbrs.json"), "r", encoding="utf-8"
-    ) as f:
-        abbrs = AbbrDict(json.load(f))
 
-    # Maps ISSN language abbrebiations to full names
+    # Deferred class attributes are defined at the end of the file
+    abbrs = None
+    stopwords = None
+
+    # Normal class attributes
     languages = {
         "aze": "azerbaijani",
         "dan": "danish",
@@ -72,8 +40,6 @@ class BaseFormatter:
         "tur": "turkish",
         "mul": "multiple",
     }
-
-    stopwords = _load_stopwords(languages)
 
     def __init__(self, ref):
         self.ref = ref
@@ -167,3 +133,44 @@ class BaseFormatter:
                         abbrs.append(word.title())
 
         return " ".join(abbrs)
+
+
+def issn_abbrs_to_json(fp):
+    """Updates global abbreviation file"""
+
+    abbrs = {}
+    with open(fp, "r", encoding="utf-8") as f:
+        rows = csv.reader(f, delimiter="\t")
+        keys = next(rows)
+        for row in rows:
+            word, abbr, langs = row
+            word = unidecode(word.lower())
+            abbr = unidecode(abbr.lower())
+            langs = langs.split(", ")
+            if abbr == "n.a.":
+                abbr = None
+            abbrs.setdefault(word, []).append([abbr, langs])
+
+    json_path = os.path.join(DATA_DIR, "issn", "issn_abbrs.json")
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(abbrs, f, indent=2, sort_keys=True)
+
+
+def _read_stopwords(langs):
+    words = {}
+    for abbr, lang in langs.items():
+        try:
+            for word in nltk_stopwords.words(lang):
+                words.setdefault(word, []).append(abbr)
+        except OSError:
+            pass
+    return {k: set(v) for k, v in words.items()}
+
+
+def _read_issn_abbrs():
+    return AbbrDict(read_json(os.path.join(DATA_DIR, "issn", "issn_abbrs.json")))
+
+
+# Define deferred class attributes
+LazyAttr(BaseFormatter, "abbrs", _read_issn_abbrs)
+LazyAttr(BaseFormatter, "stopwords", _read_stopwords, BaseFormatter.languages)

@@ -36,6 +36,7 @@ from ...records import (
 )
 from ...utils import (
     BaseDict,
+    LazyAttr,
     as_list,
     create_note,
     create_yaml_note,
@@ -50,6 +51,7 @@ RANGE_DELIMS = [r"\b-+\b", r"\bto\b", r"\bthrough\b", r"\bthru\b"]
 
 
 class Job(BaseDict):
+
     def __init__(self, path="job.yml"):
         super().__init__(self.load(path))
         self.used = {}
@@ -190,6 +192,7 @@ class Job(BaseDict):
 
 
 class Source(BaseDict):
+
     found = {}
     defaults = {}
     missing = {}
@@ -220,20 +223,21 @@ class Source(BaseDict):
 
 
 class ImportRecord(EMuRecord):
+
+    # Deferred class attributes are defined at the end of the file
+    job = None
+    geo = None
+    gvp = None
+    tree = None
+    ancillary = None
+
+    # Normal class attributes
     module_classes = {
         "ebibliography": Reference,
         "ecollectionevents": CollectionEvent,
         "elocations": Location,
         "eparties": Person,
     }
-    try:
-        job = Job("job.yml")
-    except FileNotFoundError:
-        warnings.warn("Job file not found!")
-    geo = None
-    gvp = None
-    tree = None
-    ancillary = None
     records = {}
     fast = False
     test = False
@@ -243,18 +247,6 @@ class ImportRecord(EMuRecord):
         kwargs["dict_class"] = self.__class__
 
         super().__init__(*args, **kwargs)
-
-        # Set class-wide attrs the first time an ImportRecord is created
-        if self.ancillary is None:
-            self.__class__.ancillary = []
-            for source in self.job.get("job", {}).get("additional_files", []):
-                self._add_source(**source)
-        if self.geo is None:
-            self.__class__.geo = Georeferencer()
-        if self.gvp is None:
-            self.__class__.gvp = GVPVolcanoes()
-        if self.tree is None:
-            self.__class__.tree = get_tree()
 
         self.data = None
         self.combined = None
@@ -1783,3 +1775,17 @@ def _is_irn(val, min_val=1000000, max_val=30000000):
         return False
     else:
         return min_val <= val <= max_val
+
+
+def _read_ancillary():
+    ImportRecord.ancillary = []
+    for source in ImportRecord.job.get("job", {}).get("additional_files", []):
+        ImportRecord._add_source(**source)
+
+
+# Define deferred class attributes
+LazyAttr(ImportRecord, "job", "job.yml", raise_on_error=False)
+LazyAttr(ImportRecord, "geo", Georeferencer)
+LazyAttr(ImportRecord, "gvp", GVPVolcanoes)
+LazyAttr(ImportRecord, "tree", get_tree)
+LazyAttr(ImportRecord, "ancillary", _read_ancillary)

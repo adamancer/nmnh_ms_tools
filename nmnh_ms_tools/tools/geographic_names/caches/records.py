@@ -4,12 +4,14 @@ import json
 
 from ....databases.cache import CacheDict
 from ....databases.geonames import GeoNamesFeatures
+from ....utils import LazyAttr
 
 
 class RecordCache(CacheDict):
     """Caches list of sites matching a query"""
 
-    local = GeoNamesFeatures()
+    # Deferred class attributes are defined at the end of the file
+    local = None
 
     def __init__(self, path=None):
         super().__init__()
@@ -43,3 +45,7 @@ class RecordCache(CacheDict):
             site.filter = fltr
             site.from_cache = True
         return sites
+
+
+# Define deferred class attributes
+LazyAttr(RecordCache, "local", GeoNamesFeatures)

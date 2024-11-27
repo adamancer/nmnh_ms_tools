@@ -25,8 +25,9 @@ from ..tools.geographic_names.parsers import (
     parse_localities,
 )
 from ..tools.geographic_operations import GeoMetry, geoms_to_geodataframe
-from ..tools.geographic_operations.kml import write_kml
 from ..utils import (
+    LazyAttr,
+    LocStandardizer,
     as_list,
     as_str,
     combine,
@@ -38,7 +39,6 @@ from ..utils import (
     set_immutable,
     to_attribute,
 )
-from ..utils.standardizers import LocStandardizer
 
 
 logger = logging.getLogger(__name__)
@@ -239,15 +239,17 @@ for sea in list(SEAS):
 class Site(Record):
     """Defines methods for parsing and manipulating locality data"""
 
-    config = CONFIG
-    adm = AdminFeatures()
-    admin_cache = CacheDict()
-    bot = GeoNamesBot() if CONFIG["bots"]["geonames_username"] else None
-    cache = {}
-    local = GeoNamesFeatures()
-    std = LocStandardizer()
-    pipe = None
+    # Deferred class attributes are defined at the end of the file
+    adm = None
+    admin_cache = None
+    bot = None
+    local = None
+    std = None
 
+    # Normal class attributes
+    cache = {}
+    config = CONFIG
+    pipe = None
     terms = [
         "location_id",
         "continent",
@@ -1314,3 +1316,11 @@ def sites_to_geodataframe(sites, **kwargs):
                 val = " | ".join(val)
             metadata.setdefault(key, []).append(val if val else np.nan)
     return geoms_to_geodataframe(geoms, **metadata)
+
+
+# Define deferred class attributes
+LazyAttr(Site, "adm", AdminFeatures)
+LazyAttr(Site, "admin_cache", CacheDict)
+LazyAttr(Site, "bot", GeoNamesBot)
+LazyAttr(Site, "local", GeoNamesFeatures)
+LazyAttr(Site, "std", LocStandardizer)

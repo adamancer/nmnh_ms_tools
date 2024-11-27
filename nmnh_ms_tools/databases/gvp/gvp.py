@@ -14,6 +14,7 @@ Volcano = namedtuple(
 
 
 class GVPVolcanoes:
+
     def __init__(self):
         self._df = None
 

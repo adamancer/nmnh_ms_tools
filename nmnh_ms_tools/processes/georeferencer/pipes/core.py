@@ -10,15 +10,19 @@ from ....tools.geographic_names.parsers import (
     FeatureParser,
     MultiFeatureParser,
 )
-from ....utils import LocStandardizer, as_list, mutable
+from ....utils import LazyAttr, LocStandardizer, as_list, mutable
 
 
 logger = logging.getLogger(__name__)
 
 
 class MatchPipe:
+
+    # Deferred class attributes are defined at the end of the file
+    std = None
+
+    # Normal class attributes
     parser = None
-    std = LocStandardizer(allow_numbers=True)
     hints = {}
 
     def __init__(self, site=None):
@@ -326,3 +330,7 @@ class Georeference:
 
     def __bool__(self):
         return bool(self.sites)
+
+
+# Define deferred class attributes
+LazyAttr(MatchPipe, "std", LocStandardizer, allow_numbers=True)

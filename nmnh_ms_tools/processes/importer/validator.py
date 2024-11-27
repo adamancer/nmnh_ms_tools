@@ -19,6 +19,7 @@ from xmu import (
 
 
 class Validator:
+
     def __init__(self, import_path):
         self.import_path = import_path
         self.schema = EMuSchema()

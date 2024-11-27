@@ -7,6 +7,7 @@ from ....records.people import combine_names
 
 
 class CSEFormatter(BaseFormatter):
+
     def __str__(self):
         masks = {
             "article": "{authors}. {year}. {title}. {publication}. {volume}({number}):{pages}. Available from: {url}; doi:{doi}.",

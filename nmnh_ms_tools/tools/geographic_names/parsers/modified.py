@@ -5,8 +5,14 @@ import re
 
 from .core import Parser
 from .feature import FeatureParser, is_generic_feature, get_feature_pattern, OF_WORDS
-from ....utils.standardizers import LocStandardizer
-from ....utils import dedupe, std_case, validate_direction, ucfirst
+from ....utils import (
+    LazyAttr,
+    LocStandardizer,
+    dedupe,
+    std_case,
+    validate_direction,
+    ucfirst,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -18,9 +24,12 @@ TO_WORDS = ["approach", "approaches" "entrance", "entrances"]
 class ModifiedParser(Parser):
     """Parses feature names modified by compass directions"""
 
+    # Deferred class attributes are defined at the end of the file
+    std = None
+
+    # Normal class attributes
     kind = "modified"
     attributes = ["kind", "verbatim", "unconsumed", "feature", "modifier", "modified"]
-    std = LocStandardizer()
 
     def __init__(self, *args, **kwargs):
         self.modifier = None  # directional modifier on feature name
@@ -358,3 +367,7 @@ def abbreviate_direction(name):
 
     pattern = r"\b(north|south|east|west)+(ern)?\b"
     return re.sub(pattern, abbreviate, name, flags=re.I)
+
+
+# Define deferred class attributes
+LazyAttr(ModifiedParser, "std", LocStandardizer)

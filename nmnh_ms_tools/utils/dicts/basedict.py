@@ -8,11 +8,23 @@ class BaseDict(dict):
         # Some subclasses will not want to coerce child dictionaries
         if not hasattr(self, "_coerce_dicts_to"):
             self._coerce_dicts_to = None
-        self._keymap = {}
+        # Child classes can set keymap to None to disable key formatting
+        if not hasattr(self, "keymap"):
+            self.keymap = {}
         self.update(*args, **kwargs)
 
+    def __str__(self):
+        if self.keymap is not None:
+            return str(dict(self.items()))
+        return super().__str__()
+
+    def __repr__(self):
+        if self.keymap is not None:
+            return repr(dict(self.items()))
+        return super().__repr__()
+
     def __setstate__(self, state):
-        self._keymap = state["_keymap"]
+        self.keymap = state["keymap"]
         self._coerce_dicts_to = state["_coerce_dicts_to"]
         self.update(self._deferred)
         del self._deferred
@@ -23,9 +35,11 @@ class BaseDict(dict):
     def __setitem__(self, key, val):
         """Coerces dictionaries when key is set"""
         try:
-            formatted = self.format_key(key)
-            self._keymap.setdefault(formatted, key)
-            super().__setitem__(formatted, self._coerce_dicts(val))
+            if self.keymap is not None:
+                formatted = self.format_key(key)
+                self.keymap.setdefault(formatted, key)
+                key = formatted
+            super().__setitem__(key, self._coerce_dicts(val))
         except AttributeError:
             # Defer set item when loading with pickle, which does not set the
             # required attributes until after this method is called
@@ -36,6 +50,14 @@ class BaseDict(dict):
 
     def __delitem__(self, key):
         super().__delitem__(self.format_key(key))
+
+    def __iter__(self):
+        if self.keymap is not None:
+            return iter(self.keymap.values())
+        return super().__iter__()
+
+    def format_key(self, key):
+        return key
 
     def get(self, key, default=None):
         """Explicitly route get through class.__getitem__"""
@@ -52,8 +74,14 @@ class BaseDict(dict):
         for key, val in dict(*args, **kwargs).items():
             self[key] = val
 
-    def format_key(self, key):
-        return key
+    def items(self):
+        for key, val in super().items():
+            yield (self.keymap[key] if self.keymap is not None else key), val
+
+    def keys(self):
+        if self.keymap is not None:
+            return dict(self.items()).keys()
+        return super().keys()
 
     def to_dict(self):
         """Converts BaseDict to dict"""

@@ -2,14 +2,17 @@ import json
 import os
 import re
 
+from ..config import DATA_DIR
+from ..utils import LazyAttr
+
 
 class Preparation:
-    map_path = os.path.expanduser(r"~\data\nmnh_ms_tools\preps\prepmap.json")
-    try:
-        with open(map_path) as f:
-            _map = json.load(f)
-    except FileNotFoundError:
-        _map = {}
+
+    # Deferred class attributes are defined at the end of the file
+    _map = None
+
+    # Normal class attributes
+    map_path = os.path.join(DATA_DIR, "preps", "prepmap.json")
     handle_new = "skip"
 
     def __init__(self, val):
@@ -99,3 +102,7 @@ class Preparation:
             for s in re.split(r"(?: +and,? +| *& *| *\+ *|[,;] +|\n+)", val.lower())
         ]
         return [p for p in preps if p]
+
+
+# Define deferred class attributes
+LazyAttr(Preparation, "_map", Preparation.map_path, raise_on_error=False)

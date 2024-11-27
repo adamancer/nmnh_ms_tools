@@ -14,6 +14,7 @@ from ..cache import CacheDict
 from ..geohelper import get_alt_geometry
 from ..geonames import GeoNamesFeatures
 from ...utils import (
+    LazyAttr,
     LocStandardizer,
     as_list,
     combine,
@@ -38,7 +39,8 @@ class AdminCache(CacheDict):
 class AdminFeatures(GeoNamesFeatures):
     """Fills and searches a SQLite db based on the user-provided gazetteers"""
 
-    cache = AdminCache()
+    # Deferred class attributes are defined at the end of the file
+    cache = None
 
     def __init__(self):
         super().__init__()
@@ -569,3 +571,7 @@ class AdminFeatures(GeoNamesFeatures):
             result = self.query(names, kind, is_name=False, **admin)
 
         return result
+
+
+# Define deferred class attributes
+LazyAttr(AdminFeatures, "cache", AdminCache)

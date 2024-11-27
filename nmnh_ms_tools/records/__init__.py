@@ -11,6 +11,7 @@ with _ImportClock("records"):
         Citation,
         Citations,
         Reference,
+        Reference2,
         References,
         get_author_and_year,
         is_doi,

@@ -6,6 +6,7 @@ import sys
 from .core import Bot, JSONResponse
 from ..config import CONFIG
 from ..databases.geonames import GeoNamesFeatures
+from ..utils import LazyAttr
 
 
 logger = logging.getLogger(__name__)
@@ -282,7 +283,10 @@ FEATURE_TO_CODES = {
 class GeoNamesBot(Bot):
     """Defines methods to interact with http://api.geonames.org"""
 
-    geonames_db = GeoNamesFeatures()
+    # Deferred class attributes are defined at the end of the file
+    geonames_db = None
+
+    # Normal class attributes
     username = CONFIG["bots"]["geonames_username"]
 
     def __init__(self, *args, username=None, **kwargs):
@@ -561,3 +565,7 @@ class GeoNamesResponse(JSONResponse):
     def __init__(self, response, **kwargs):
         kwargs.setdefault("results_path", ["geonames"])
         super().__init__(response, **kwargs)
+
+
+# Define deferred class attributes
+LazyAttr(GeoNamesBot, "geonames_db", GeoNamesFeatures)

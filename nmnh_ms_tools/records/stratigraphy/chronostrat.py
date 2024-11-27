@@ -11,24 +11,20 @@ from .utils import CHRONOSTRAT_RANKS, parse_strat_package, split_strat, split_st
 from .unit import StratUnit, parse_strat_unit
 from ...bots.adamancer import AdamancerBot
 from ...config import DATA_DIR
-from ...utils import dedupe, to_attribute
+from ...utils import LazyAttr, dedupe, to_attribute
 
 
 logger = logging.getLogger(__name__)
 
 
-def read_keywords(path):
-    words = []
-    with open(path, "r") as f:
-        for line in f:
-            words.append(to_attribute(line.rsplit(" ", 1)[0]))
-    return set(words)
-
-
 class ChronoStrat(StratRecord):
     """Defines methods for storing a single chronostratigraphic unit"""
 
-    bot = AdamancerBot()
+    # Deferred class attributes are defined at the end of the file
+    bot = None
+    keywords = None
+
+    # Normal class attributes
     terms = [
         "eonothem",
         "erathem",
@@ -40,7 +36,6 @@ class ChronoStrat(StratRecord):
         "max_ma",
     ]
     ranks = CHRONOSTRAT_RANKS[:]
-    _keywords = None
 
     def __init__(self, *args, **kwargs):
         # Set lists of original class attributes and reported properties
@@ -73,14 +68,6 @@ class ChronoStrat(StratRecord):
     def name(self):
         vals = [getattr(self, a) for a in self.ranks]
         return ":".join(vals)
-
-    @property
-    def keywords(self):
-        if self.__class__._keywords is None:
-            self.__class__._keywords = read_keywords(
-                os.path.join(DATA_DIR, "chronostrat", "chronostrat.txt")
-            )
-        return self.__class__._keywords
 
     def parse(self, data):
         """Parses data from various sources to populate class"""
@@ -292,3 +279,21 @@ class ChronoStrat(StratRecord):
 
 def parse_chronostrat(val):
     return parse_strat_package(val, ChronoStrat)
+
+
+def read_keywords(path):
+    words = []
+    with open(path, "r") as f:
+        for line in f:
+            words.append(to_attribute(line.rsplit(" ", 1)[0]))
+    return set(words)
+
+
+# Define deferred class attributes
+LazyAttr(ChronoStrat, "bot", AdamancerBot)
+LazyAttr(
+    ChronoStrat,
+    "keywords",
+    read_keywords,
+    os.path.join(DATA_DIR, "chronostrat", "chronostrat.txt"),
+)

@@ -8,20 +8,20 @@ import re
 from .core import Record, Records
 from ..tools.specimen_numbers.parsers import Parser
 from ..tools.specimen_numbers.specnum import SpecNum, parse_spec_num
-from ..utils import PrefixedNum, to_attribute
+from ..utils import LazyAttr, PrefixedNum, to_attribute
 
 
 logger = logging.getLogger(__name__)
 
 
-DEFAULT_PARSER = Parser(clean=True, require_code=False)
-
-
 class CatNum(Record):
     """Defines methods for parsing and manipulating NMNH catalog numbers"""
 
+    # Deferred class attributes are defined at the end of the file
+    parser = None
+
+    # Normal class attributes
     terms = ["code", "prefix", "number", "suffix", "delim"]
-    parser = DEFAULT_PARSER
 
     def __init__(self, *args, **kwargs):
         # Set lists of original class attributes and reported properties
@@ -606,3 +606,8 @@ def is_antarctic(val):
         and bool(re.search(r"^[A-Z]{3}[A ]\d{5,6}(?:,[-A-Z\d]+)?$", val))
         and not val.upper().startswith(("AND", "NWA"))
     )
+
+
+# Define deferred class attributes
+LazyAttr(CatNum, "parser", Parser, clean=True, require_code=False)
+DEFAULT_PARSER = CatNum.parser

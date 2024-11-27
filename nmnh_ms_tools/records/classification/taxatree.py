@@ -10,7 +10,7 @@ from .taxalist import TaxaList
 from .taxaparser import TaxaParser
 from .taxon import Taxon
 from ...config import CONFIG
-from ...utils import slugify
+from ...utils import LazyAttr, slugify
 
 
 logger = logging.getLogger(__name__)
@@ -121,6 +121,7 @@ class TaxaIndex(MutableMapping):
 class TaxaTree(TaxaIndex):
     """Builds an indexed taxonmic hierarchy"""
 
+    # Deferred class attributes are defined at the end of the file
     name_index = None
     stem_index = None
 
@@ -212,11 +213,7 @@ class TaxaTree(TaxaIndex):
         """Retrieves the index, creating it if needed"""
         if self.disable_index:
             return TaxaIndex()
-        index = getattr(self, name)
-        if index is None:
-            setattr(self.__class__, name, self.indexers[name](self))
-            index = getattr(self, name)
-        return index
+        return getattr(self, name)
 
     def write_new(self, fp="import.xml"):
         """Writes an EMu import file containing any new taxa"""
@@ -225,7 +222,7 @@ class TaxaTree(TaxaIndex):
         except ModuleNotFoundError:
             raise ModuleNotFoundError("write_new requires the minsci module")
         if self.new:
-            taxa = [self.new[k] for k in sorted(self.new.keys())]
+            taxa = [self.new[k] for k in sorted(self.new.identifiers())]
             xmu.write(fp, [t.to_emu() for t in taxa], "etaxonomy")
 
     @staticmethod
@@ -353,3 +350,8 @@ class StemIndex(TaxaIndex):
     @staticmethod
     def key(val):
         return val
+
+
+# Define deferred class attributes
+LazyAttr(TaxaTree, "name_index", NameIndex)
+LazyAttr(TaxaTree, "stem_index", StemIndex)

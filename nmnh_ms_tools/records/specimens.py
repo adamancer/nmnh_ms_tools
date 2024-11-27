@@ -17,18 +17,29 @@ from ..tools.specimen_match.link import (
     REPLACEMENTS,
 )
 from ..tools.specimen_numbers.parsers import Parser
-from ..utils import as_list, dedupe, to_attribute, to_camel, to_pattern
-from ..utils.standardizers import Standardizer
+from ..utils import (
+    LazyAttr,
+    Standardizer,
+    as_list,
+    dedupe,
+    to_attribute,
+    to_camel,
+    to_pattern,
+)
 
 
 class Specimen(Record):
     """Defines methods for parsing and manipulating specimen data"""
 
-    parser = Parser()
-    _site_attrs = Site({}).attributes
-    _strat_attrs = LithoStrat({}).attributes
+    # Deferred class attributes are defined at the end of the file
+    parser = None
+    std = None
+    terms = None
+    _site_attrs = None
+    _strat_attrs = None
+
+    # Normal class attributes
     _to_attr = {}
-    terms = read_dwc_terms()
 
     def __init__(self, *args, **kwargs):
         # Set lists of original class attributes and reported properties
@@ -168,12 +179,7 @@ class Specimen(Record):
         Returns:
            MatchObject summarizing the quality of the match
         """
-        std = Standardizer(
-            minlen=5,
-            stopwords=STOPWORDS,
-            replace_endings=ENDINGS,
-            replace_words=REPLACEMENTS,
-        )
+
         score = MatchObject()
         score.record = self
         score.threshold = 1
@@ -302,7 +308,7 @@ class Specimen(Record):
         if text:
 
             # Delimit text to simplify some of the matching operations
-            delimited_text = std.delimit(text)
+            delimited_text = self.std.delimit(text)
 
             # Compare taxonomy/classification
             if self.collection_code != "Mineral Sciences":
@@ -495,3 +501,19 @@ class Specimen(Record):
                 raise ValueError(f"Too many catalog numbers: {val}")
             return catnums[0]
         raise ValueError("Not a Mineral Sciences record")
+
+
+# Define deferred class attributes
+LazyAttr(Specimen, "parser", Parser)
+LazyAttr(Specimen, "terms", read_dwc_terms)
+LazyAttr(Specimen, "_site_attrs", lambda: Site({}).attributes)
+LazyAttr(Specimen, "_strat_attrs", lambda: LithoStrat({}).attributes)
+LazyAttr(
+    Specimen,
+    "std",
+    Standardizer,
+    minlen=5,
+    stopwords=STOPWORDS,
+    replace_endings=ENDINGS,
+    replace_words=REPLACEMENTS,
+)

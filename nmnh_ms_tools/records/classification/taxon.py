@@ -14,6 +14,7 @@ from ...utils import BaseDict, slugify
 class Taxon(BaseDict):
     """Defines methods for parsing and manipulating rock and mineral names"""
 
+    # Populated by get_tree()
     tree = None
 
     def __init__(self, data):
@@ -94,10 +95,10 @@ class Taxon(BaseDict):
         """Retrieves the index, creating it if it does not exist"""
         return self.tree.get_index(name)
 
-    def keys(self):
+    def identifiers(self):
         """Returns the list of identifiers for this name"""
-        keys = [self.name, self.sci_name] + [a["code"] for a in self.authorities]
-        return sorted(set(keys))
+        ids = [self.name, self.sci_name] + [a["code"] for a in self.authorities]
+        return sorted(set(ids))
 
     def same_as(self, other):
         """Tests if taxon is the same as another taxon"""

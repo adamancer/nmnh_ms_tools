@@ -6,9 +6,8 @@ import os
 from collections.abc import MutableMapping
 from pprint import pformat
 
+import pandas as pd
 import yaml
-
-from ..utils import skip_hashed
 
 
 logger = logging.getLogger(__name__)
@@ -223,8 +222,8 @@ class MinSciConfig(MutableMapping):
 class GeoConfig:
     """Configuration for geographic classes and functions"""
 
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, config=None):
+        self.config = config if config else CONFIG
         self._codes = None  # maps feature codes to data about them
         self._classes = None  # maps feature classes to feature codes
         self._fields = None  # maps DwC-ish fields to feature codes
@@ -251,22 +250,17 @@ class GeoConfig:
         """Reads GeoNames feature definitions from CSV"""
         if fp is None:
             fp = os.path.join(DATA_DIR, "geonames", "geonames_feature_codes.csv")
+        # Read codes and classes
         codes = {}
         classes = {}
-        with open(fp, "r", encoding="utf-8-sig", newline="") as f:
-            rows = csv.reader(skip_hashed(f), dialect="excel")
-            keys = next(rows)
-            for row in rows:
-                if not any(row):
-                    continue
-                rowdict = dict(zip(keys, row))
-                try:
-                    rowdict["SizeIndex"] = int(float(rowdict["SizeIndex"]))
-                except ValueError:
-                    pass
-                code = rowdict["FeatureCode"]
-                codes[code] = rowdict
-                classes.setdefault(rowdict["FeatureClass"], []).append(code)
+        for rowdict in pd.read_csv(fp, comment="#", dtype=str).to_dict("records"):
+            try:
+                rowdict["SizeIndex"] = int(float(rowdict["SizeIndex"]))
+            except ValueError:
+                pass
+            code = rowdict["FeatureCode"]
+            codes[code] = rowdict
+            classes.setdefault(rowdict["FeatureClass"], []).append(code)
         # Fix empty codes
         for code in ["n/a", "", None]:
             codes[code] = {"SizeIndex": 10}
@@ -364,4 +358,4 @@ class GeoConfig:
 
 
 CONFIG = MinSciConfig()
-GEOCONFIG = GeoConfig(CONFIG)
+GEOCONFIG = GeoConfig()

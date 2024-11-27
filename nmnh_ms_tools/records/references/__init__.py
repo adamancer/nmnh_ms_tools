@@ -10,3 +10,4 @@ from .references import (
     is_doi,
     std_doi,
 )
+from .references2 import Reference as Reference2

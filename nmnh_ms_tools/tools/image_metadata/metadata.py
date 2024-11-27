@@ -5,10 +5,16 @@ import subprocess
 import warnings
 from pathlib import Path
 
-import yaml
-
 from ..specimen_numbers import parse_spec_num
-from ...utils import hash_file, hash_image_data, oxford_comma, to_attribute
+from ...config import DATA_DIR
+from ...utils import (
+    LazyAttr,
+    hash_file,
+    hash_image_data,
+    oxford_comma,
+    read_yaml,
+    to_attribute,
+)
 
 
 class MetadataField:
@@ -55,10 +61,8 @@ class MetadataField:
 
 class MediaFile:
 
-    with open(
-        Path.home() / "data" / "nmnh_ms_tools" / "metadata" / "metadata.yml"
-    ) as f:
-        fields = {k: MetadataField(**v) for k, v in yaml.safe_load(f).items()}
+    # Deferred class attributes are defined at the end of the file
+    fields = None
 
     def __init__(self, data, **kwargs):
 
@@ -327,3 +331,12 @@ class MediaFile:
                             parts.pop(-1)
                     dst = dst.parent / f"{'_'.join(parts)}_{i}{dst.suffix}"
         return dst
+
+
+def _read_fields():
+    path = Path(DATA_DIR) / "metadata" / "metadata.yml"
+    return {k: MetadataField(**v) for k, v in read_yaml(path).items()}
+
+
+# Define deferred class attributes
+LazyAttr(MediaFile, "fields", _read_fields)

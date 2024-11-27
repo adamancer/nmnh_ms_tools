@@ -7,12 +7,16 @@ from .unit import StratUnit, parse_strat_unit
 from ..core import Record
 from ...bots.macrostrat import MacrostratBot
 from ...tools.geographic_operations.geometry import GeoMetry
+from ...utils import LazyAttr
 
 
 class LithoStrat(Record):
     """Defines methods for working with lithostratigraphic names"""
 
-    bot = MacrostratBot()
+    # Deferred class attributes are defined at the end of the file
+    bot = None
+
+    # Normal class attributes
     terms = [
         "unit_id",
         "macrostrat_id",
@@ -205,3 +209,7 @@ class LithoStrat(Record):
 
 def parse_lithostrat(val):
     return val
+
+
+# Define deferred class attributes
+LazyAttr(LithoStrat, "bot", MacrostratBot)

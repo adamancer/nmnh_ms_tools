@@ -16,7 +16,7 @@ from .formatters import CSEFormatter
 from ..core import Record, Records
 from ..people import People, Person, combine_names, parse_names
 from ...bots import Bot
-from ...utils.standardizers import Standardizer
+from ...utils import LazyAttr, Standardizer
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +39,13 @@ ENTITIES = {
 class Reference(Record):
     """Defines methods for parsing and manipulating references"""
 
-    bot = Bot()
-    _btm = BibTeXMapper()
+    # Deferred class attributes are defined at the end of the file
+    bot = None
+    std = None
+    _btm = None
+
+    # Normal class attributes
+    irns = {}
     terms = [
         "authors",
         "year",
@@ -55,8 +60,6 @@ class Reference(Record):
         "url",
         "doi",
     ]
-    std = Standardizer()
-    irns = {}
 
     def __init__(self, data=None, resolve_parsed_doi=True):
         # Set lists of original class attributes and reported properties
@@ -1003,3 +1006,9 @@ def is_doi(val):
     if not isinstance(val, str):
         return False
     return std_doi(val, as_url=False).startswith("10.")
+
+
+# Define deferred class attributes
+LazyAttr(Reference, "bot", Bot)
+LazyAttr(Reference, "std", Standardizer)
+LazyAttr(Reference, "_btm", BibTeXMapper)

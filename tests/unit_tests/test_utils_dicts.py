@@ -4,50 +4,14 @@ import pytest
 
 
 from nmnh_ms_tools.utils.dicts import (
-    AttrDict,
     IndexedDict,
-    StaticDict,
     combine,
     get_common_items,
     get_first,
     get_all,
     dictify,
-    nameddict,
     prune,
 )
-
-
-def test_attrdict_get_methods():
-    obj = AttrDict({"key": "val"})
-    assert obj.key == "val"
-    assert obj["key"] == "val"
-
-
-def test_nameddict_factory():
-    factory = nameddict("DictName", keys=["key"])
-    obj = factory("val")
-    assert obj.key == "val"
-    assert obj["key"] == "val"
-
-
-def test_nameddict_from_list():
-    factory = nameddict("DictName", keys=["key1", "key2"])
-    obj = factory("val1", "val2")
-    assert obj.key1 == "val1"
-    assert obj["key1"] == "val1"
-    assert obj[0] == "val1"
-    assert obj.key2 == "val2"
-    assert obj["key2"] == "val2"
-    assert obj[1] == "val2"
-
-
-def test_nameddict_from_dict():
-    factory = nameddict("DictName", keys=["key1", "key2"])
-    obj = factory({"key1": "val1", "key2": "val2"})
-    assert obj.key1 == "val1"
-    assert obj["key1"] == "val1"
-    assert obj.key2 == "val2"
-    assert obj["key2"] == "val2"
 
 
 def test_indexeddict_item_methods():
@@ -69,18 +33,6 @@ def test_indexeddict_from_dict():
 def test_indexeddict_from_indexeddict():
     dct = IndexedDict({"001": {"1": 1}, "002": {"2": 2}})
     assert dict(dct) == {"001": {"1": 1}, "002": {"2": 2}}
-
-
-def test_staticdict_change_existing_key():
-    dct = StaticDict({"key1": "val1"})
-    with pytest.raises(KeyError):
-        dct["key1"] = "val2"
-
-
-def test_staticdict_delete_key():
-    dct = StaticDict({"key1": "val1"})
-    with pytest.raises(KeyError):
-        del dct["key1"]
 
 
 def test_combine():

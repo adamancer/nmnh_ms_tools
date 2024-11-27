@@ -24,6 +24,7 @@ from .pipes import (
 )
 from ...records import RecordEncoder, Site
 from ...utils import (
+    LazyAttr,
     as_list,
     clear_empty,
     configure_log,
@@ -37,10 +38,11 @@ from ...utils import (
 logger = logging.getLogger(__name__)
 
 
-ATTRS = Site({}).attributes
-
-
 class Georeferencer:
+
+    # Deferred class attributes are defined at the end of the file
+    _site_attrs = None
+
     def __init__(
         self,
         records=None,
@@ -594,7 +596,9 @@ class Georeferencer:
         try:
             site = Site(rowdict)
         except KeyError:
-            site = Site({k: v for k, v in rowdict.items() if k in ATTRS and v})
+            site = Site(
+                {k: v for k, v in rowdict.items() if k in self._site_attrs and v}
+            )
 
         # Remove sites from less specific fields
         sitedict = site.to_dict()
@@ -648,3 +652,7 @@ class Georeferencer:
         """Calculates the median and interquartile range for a set of values"""
         iqr = np.percentile(vals, 75) - np.percentile(vals, 25)
         return "{:.1f} ± {:.1f} km".format(np.median(vals), iqr / 2)
+
+
+# Define deferred class attributes
+LazyAttr(Georeferencer, "_site_attrs", lambda: Site({}).attributes)

@@ -11,14 +11,15 @@ import yaml
 from lxml import etree
 
 from ...bots import Bot
+from ...config import DATA_DIR
 from ...records import CatNum, Record, Site, get_tree
-from ...utils import base_to_int, fast_hash, int_to_base, oxford_comma
+from ...utils import LazyAttr, base_to_int, fast_hash, int_to_base, oxford_comma
 from vocmap import VocMap
 from xmu import EMuDate
 
 logger = logging.getLogger(__name__)
 
-SESAR_DIR = Path(r"~\data\nmnh_ms_tools\sesar").expanduser()
+SESAR_DIR = Path(DATA_DIR) / "sesar"
 IGSN_PATH = SESAR_DIR / "igsns.csv"
 
 
@@ -360,24 +361,19 @@ class SESARBot(Bot):
 class SESARRecord(Record):
     """Template for record subclasss"""
 
-    bot = SESARBot()
-    schema = etree.XMLSchema(etree.parse(SESAR_DIR / "sample.xsd"))
-    update_schema = etree.XMLSchema(etree.parse(SESAR_DIR / "updateSample.xsd"))
-    template = etree.parse(SESAR_DIR / "sample.xml")
-    tree = get_tree()
+    # Deferred class attributes are defined at the end of the file
+    bot = None
+    schema = None
+    update_schema = None
+    template = None
+    tree = None
+    terms = None
 
+    # Normal class attributes
+    map_unknown_terms = True
     _df = None
     _types = None
     _vocabs = None
-
-    terms = [
-        c.tag.split("}")[1]
-        for c in template.xpath(
-            "/g:samples/g:sample", namespaces={"g": "http://app.geosamples.org"}
-        )[0]
-    ]
-
-    map_unknown_terms = True
 
     def __init__(self, *args, **kwargs):
         # Set lists of original class attributes and reported properties
@@ -1190,3 +1186,26 @@ def lookup_igsn(igsn):
 
 def display_igsn(igsn, prefix=""):
     return f"{prefix}/{igsn}".lstrip("/")
+
+
+def _read_xml(path: str | Path):
+    parsed = etree.parse(path)
+    return etree.XMLSchema(parsed) if path.endswith(".xsd") else parsed
+
+
+def _read_terms(obj: SESARRecord) -> list[str]:
+    return [
+        c.tag.split("}")[1]
+        for c in template.xpath(
+            "/g:samples/g:sample", namespaces={"g": "http://app.geosamples.org"}
+        )[0]
+    ]
+
+
+# Define deferred class attributes
+LazyAttr(SESARRecord, "bot", SESARBot)
+LazyAttr(SESARRecord, "schema", _read_xml, path=SESAR_DIR / "sample.xsd")
+LazyAttr(SESARRecord, "update_schema", _read_xml, path=SESAR_DIR / "updateSample.xsd")
+LazyAttr(SESARRecord, "template", _read_xml, path=SESAR_DIR / "sample.xml")
+LazyAttr(SESARRecord, "tree", get_tree)
+LazyAttr(SESARRecord, "terms", _read_terms, SESARRecord)

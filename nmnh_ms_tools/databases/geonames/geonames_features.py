@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import re
+from functools import cache
 
 from shapely import wkt
 from sqlalchemy import case, or_
@@ -21,6 +22,8 @@ from .database import (
 from ...config import DATA_DIR
 from ...utils.standardizers import LocStandardizer
 from ...utils import (
+    BaseDict,
+    LazyAttr,
     as_list,
     as_str,
     dedupe,
@@ -35,26 +38,25 @@ from ...utils import (
 logger = logging.getLogger(__name__)
 
 
-class Lookup:
+class Lookup(BaseDict):
 
-    std = LocStandardizer()
+    # Deferred class attributes are defined at the end of the file
+    std = None
 
-    def __init__(self, dct):
-        self._dct = {}
-        for key, val in dct.items():
-            self._dct[self.std(key)] = val
-
-    def __getitem__(self, key):
-        return self._dct[self.std(key)]
-
-    def __setitem__(self, key, val):
-        self._dct[self.std(key)] = val
+    def format_key(self, key):
+        return self.std(key)
 
 
 class GeoNamesFeatures:
     """Fills and searches a SQLite db based on the GeoNames text dump file"""
 
-    std = LocStandardizer()
+    # Deferred class attributes are defined at the end of the file
+    std = None
+    continent_name_to_code = None
+    continent_code_to_name = None
+    country_name_to_code = None
+    country_code_to_name = None
+    country_code_to_continent = None
 
     def __init__(self):
         self.features = AllCountries
@@ -92,21 +94,6 @@ class GeoNamesFeatures:
             4597040: "carolina",
             5769223: "dakota",
         }
-
-    def __getattr__(self, attr):
-        if attr in [
-            "continent_code_to_name",
-            "continent_name_to_code",
-            "country_code_to_name",
-            "country_code_to_continent",
-            "country_name_to_code",
-        ]:
-            self._load_continents()
-            self._load_countries()
-            return getattr(self, attr)
-        raise AttributeError(
-            f"'{self.__class__.__name__}' object has no attribute {repr(attr)}"
-        )
 
     @property
     def session(self):
@@ -625,6 +612,14 @@ class GeoNamesFeatures:
             valid = [n for n in valid if re.search(r"[aeiou]", n, flags=re.I)]
         return sorted(set([n for n in valid if n]))
 
+    def get_continent(self, country, return_continent_code=False):
+        """Gets the continent name for the given country"""
+        try:
+            code = self.country_code_to_continent[self.get_country_code(country)]
+        except KeyError:
+            code = self.country_code_to_continent[country]
+        return self.get_continent_name(code) if return_continent_code else code
+
     def get_continent_name(self, code):
         """Gets the continent name for the given continent code"""
         return self.continent_code_to_name[code]
@@ -644,6 +639,10 @@ class GeoNamesFeatures:
         """Gets the country name for the given country code"""
         return self.country_code_to_name[code]
 
+    def get_country_code(self, name):
+        """Gets the country code for the given country name"""
+        return self.country_name_to_code[name]
+
     def assign_short_country_name(self, rec):
         """Gets the short country name from the GeoNames country list"""
         fcodes = ["PCL", "PCLD", "PCLF", "PCLH", "PCLI", "PCLIX", "PCLS", "TERR"]
@@ -660,59 +659,6 @@ class GeoNamesFeatures:
                     "Country code '{}' not found".format(rec["country_code"])
                 )
         return rec
-
-    def get_country_code(self, name):
-        """Gets the country code for the given country name"""
-        return self.country_name_to_code[self.std(name)]
-
-    def get_continent(self, country, return_continent_code=False):
-        """Gets the continent name for the given country"""
-        try:
-            code = self.country_code_to_continent[self.get_country_code(country)]
-        except KeyError:
-            code = self.country_code_to_continent[country]
-        return self.get_continent_name(code) if return_continent_code else code
-
-    def _load_continents(self):
-        """Loads continent lookups"""
-        name_to_code = {
-            "Africa": "AF",
-            "Antarctica": "AN",
-            "Asia": "AS",
-            "Europe": "EU",
-            "North America": "NA",
-            "Oceania": "OC",
-            "South America": "SA",
-        }
-        code_to_name = Lookup({v: k for k, v in name_to_code.items()})
-        # Map common synonyms
-        name_to_code["Antarctic"] = "Antarctica"
-        name_to_code["Australasia"] = "Oceania"
-        name_to_code["Australia"] = "Oceania"
-        name_to_code["Central America"] = "North America"
-        name_to_code["North and Central America"] = "North America"
-        name_to_code["Pacific Islands"] = "Oceania"
-        name_to_code["West Indies"] = "North America"
-        GeoNamesFeatures.continent_name_to_code = name_to_code
-        GeoNamesFeatures.continent_code_to_name = code_to_name
-
-    def _load_countries(self):
-        """Loads country lookups from a GeoNames text file"""
-        fp = os.path.join(DATA_DIR, "geonames", "geonames_countries.txt")
-        code_to_name = {}
-        code_to_cont = {}
-        with open(fp, "r", encoding="utf-8", newline="") as f:
-            for line in skip_hashed(f):
-                row = line.strip().split("\t")
-                code_to_name[row[0]] = row[4]
-                code_to_cont[row[0]] = row[8]
-        # Map missing values that occur in the GeoNames database
-        code_to_name["YU"] = "Yugoslavia"
-        code_to_cont["YU"] = "Europe"
-        name_to_code = {v.lower(): k for k, v in code_to_name.items()}
-        GeoNamesFeatures.country_name_to_code = Lookup(name_to_code)
-        GeoNamesFeatures.country_code_to_name = Lookup(code_to_name)
-        GeoNamesFeatures.country_code_to_continent = Lookup(code_to_cont)
 
 
 def to_geonames_api(result):
@@ -745,3 +691,75 @@ def to_geonames_api(result):
                 raise ValueError(rowdict)
 
         return rowdict
+
+
+@cache
+def _get_continent_name_to_code():
+    # Canonical values
+    name_to_code = {
+        "Africa": "AF",
+        "Antarctica": "AN",
+        "Asia": "AS",
+        "Europe": "EU",
+        "North America": "NA",
+        "Oceania": "OC",
+        "South America": "SA",
+    }
+    # Map common synonyms
+    name_to_code["Antarctic"] = "AN"
+    name_to_code["Australasia"] = "OC"
+    name_to_code["Australia"] = "OC"
+    name_to_code["Central America"] = "NA"
+    name_to_code["North and Central America"] = "NA"
+    name_to_code["Pacific Islands"] = "OC"
+    name_to_code["West Indies"] = "NA"
+    return Lookup(name_to_code)
+
+
+@cache
+def _get_continent_code_to_name():
+    code_to_name = {}
+    for key, val in _get_continent_name_to_code().items():
+        code_to_name.setdefault(val, key)
+    return Lookup(code_to_name)
+
+
+@cache
+def _read_country_name_to_code():
+    fp = os.path.join(DATA_DIR, "geonames", "geonames_countries.txt")
+    name_to_code = {}
+    with open(fp, "r", encoding="utf-8", newline="") as f:
+        for line in skip_hashed(f):
+            row = line.strip().split("\t")
+            name_to_code[row[4]] = row[0]
+    # Map missing values that occur in the GeoNames database
+    name_to_code["Yugoslavia"] = "YU"
+    return Lookup(name_to_code)
+
+
+@cache
+def _read_country_code_to_name():
+    return Lookup({v: k for k, v in _read_country_name_to_code().items()})
+
+
+@cache
+def _read_country_code_to_continent():
+    fp = os.path.join(DATA_DIR, "geonames", "geonames_countries.txt")
+    code_to_cont = {}
+    with open(fp, "r", encoding="utf-8", newline="") as f:
+        for line in skip_hashed(f):
+            row = line.strip().split("\t")
+            code_to_cont[row[0]] = row[8]
+    # Map missing values that occur in the GeoNames database
+    code_to_cont["YU"] = "Europe"
+    return Lookup(code_to_cont)
+
+
+# Define deferred class attributes
+LazyAttr(Lookup, "std", LocStandardizer)
+LazyAttr(GeoNamesFeatures, "std", LocStandardizer)
+LazyAttr(GeoNamesFeatures, "continent_name_to_code", _get_continent_name_to_code)
+LazyAttr(GeoNamesFeatures, "continent_code_to_name", _get_continent_code_to_name)
+LazyAttr(GeoNamesFeatures, "country_name_to_code", _read_country_name_to_code)
+LazyAttr(GeoNamesFeatures, "country_code_to_name", _read_country_code_to_name)
+LazyAttr(GeoNamesFeatures, "country_code_to_continent", _read_country_code_to_continent)

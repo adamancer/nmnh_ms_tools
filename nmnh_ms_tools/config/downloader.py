@@ -7,6 +7,7 @@ Files downloaded to _files/data/downloads include:
 
 """
 
+import logging
 import hashlib
 import os
 import tempfile
@@ -15,6 +16,9 @@ import zipfile
 import requests
 
 from .config import DATA_DIR
+
+
+logger = logging.getLogger(__name__)
 
 
 HASHES = {

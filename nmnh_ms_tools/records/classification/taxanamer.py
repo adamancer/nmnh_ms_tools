@@ -8,31 +8,15 @@ import yaml
 from .taxalist import TaxaList
 from .taxatree import TaxaTree
 from ...config import CONFIG_DIR
-from ...utils import ucfirst
+from ...utils import LazyAttr, ucfirst
 
 
 class TaxaNamer(TaxaTree):
     """Derives names for taxa based on position in a hierarchy"""
 
-    _capex = None
-    _config = None
-
-    @property
-    def config(self):
-        if not self.__class__._config:
-            with open(os.path.join(CONFIG_DIR, "config_classification.yml"), "r") as f:
-                self.__class__.config = yaml.safe_load(f)
-            self.__class__._capex = [
-                str(s) if isinstance(s, int) else s
-                for s in self.__class__.config["capex"]
-            ]
-        return self.__class__.config
-
-    @property
-    def capex(self):
-        if not self.__class__._capex:
-            self.config
-        return self.__class__._capex
+    # Deferred class attributes are defined at the end of the file
+    capex = None
+    config = None
 
     def capped(self, name=None, capitalize=True):
         """Capitalizes taxon name based on simple set of rules and exceptions"""
@@ -85,3 +69,12 @@ class TaxaNamer(TaxaTree):
         """Generates a name describing a list of taxa"""
         name = self.join(TaxaList(taxa).names()).lower()
         return ucfirst(name) if capitalize else name
+
+
+def _read_capitalization_rules():
+    return [str(s) if isinstance(s, int) else s for s in TaxaNamer.config["capex"]]
+
+
+# Define deferred class attributes
+LazyAttr(TaxaNamer, "capex", _read_capitalization_rules)
+LazyAttr(TaxaNamer, "config", os.path.join(CONFIG_DIR, "config_classification.yml"))

@@ -12,27 +12,6 @@ from ..files import skip_hashed
 class LocStandardizer(Standardizer):
     def __init__(self, *args, **kwargs):
         replace_words = read_abbreviations()
-        # replace_words = {
-        #    'co': 'county',
-        #    'cr': 'creek',
-        #    'dept': 'department',
-        #    'dist': 'district',
-        #    'dsto': 'district',
-        #    'mt': 'mount',
-        #    'mtn': 'mountain',
-        #    'mtns': 'mountains',
-        #    'penin': 'peninsula',
-        #    'pk': 'peak',
-        #    'pref': 'prefecture',
-        #    'prov de': 'provincia de',
-        #    'prov': 'province',
-        #    'pt': 'point',
-        #    'r': 'river',
-        #    'reg': 'region',
-        #    'st': 'saint',
-        #    'ste': 'sainte',
-        #    'twp': 'township'
-        # }
         stopwords = {
             "a",
             "au",

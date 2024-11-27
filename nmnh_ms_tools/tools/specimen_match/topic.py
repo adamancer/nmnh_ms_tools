@@ -9,7 +9,7 @@ import re
 from collections import OrderedDict, namedtuple
 
 from ...bots import GNRDBot, ITISBot
-from ...utils.standardizers import Standardizer
+from ...utils import LazyAttr, Standardizer
 
 
 logger = logging.getLogger(__name__)
@@ -22,7 +22,10 @@ Mapping = namedtuple("Mapping", ["rank", "value", "dept"])
 class TaxonLookup:
     """Matches taxa to a collecting department"""
 
-    std = Standardizer(minlen=1)
+    # Deferred class attributes are defined at the end of the file
+    std = None
+
+    # Normal class attributes
     custom = {
         "Corosaurus": "pl",
         "Phiomys": "pl",
@@ -100,6 +103,13 @@ class TaxonLookup:
 
 
 class Topicker:
+
+    # Deferred class attributes are defined at the end of the file
+    lookup = None
+    itis_bot = None
+    gnrd_bot = None
+
+    # Normal class attributes
     depts = {
         "an": "Anthropology",
         "bt": "Botany",
@@ -123,9 +133,6 @@ class Topicker:
         Mapping("phylum", "Chordata", "fs"),  # assign remaining verts to fs
         Mapping("phylum", "!Chordata", "iz"),  # assign remaining inverts to iz
     ]
-    lookup = TaxonLookup()
-    itis_bot = ITISBot()
-    gnrd_bot = GNRDBot()
 
     def __init__(self):
         try:
@@ -437,3 +444,10 @@ class Topicker:
                     if len(genus.strip(".")) > 1:
                         taxa.append(genus)
             return self.lookup.get_department(sorted(set(taxa)))
+
+
+# Define deferred class attributes
+LazyAttr(TaxonLookup, "std", Standardizer, minlen=1)
+LazyAttr(Topicker, "lookup", TaxonLookup)
+LazyAttr(Topicker, "itis_bot", ITISBot)
+LazyAttr(Topicker, "gnrd_bot", GNRDBot)

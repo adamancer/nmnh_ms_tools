@@ -27,6 +27,7 @@ from xmu import EMuLatitude, EMuLongitude, EMuRow
 
 from ....databases.cache import CacheDict
 from ....utils import (
+    LazyAttr,
     as_list,
     custom_copy,
     custom_eq,
@@ -51,14 +52,16 @@ logger = logging.getLogger(__name__)
 class GeoMetry:
     """Subclasses NaiveGeometry to handle common projection operations"""
 
+    # Deferred class attributes are defined at the end of the file
+    geom_cache = None
+    op_cache = None
+
+    # Normal class attributes
     lat_lon_mask = "+proj=longlat +lat_0={lat:.1f} +lon_0={lon:.1f} +ellps=WGS84 +datum=WGS84 +no_defs"
     lat_lon_bounds = (-180, -90, 180, 90)
 
     equal_area_mask = "+proj=eck4 +lat_0={lat:.1f} +lon_0={lon:.1f} +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
     equal_area_bounds = (-16921202.92, -8460500, 16921202.92, 8460500)
-
-    geom_cache = CacheDict()
-    op_cache = CacheDict()
 
     cached = (
         "x",
@@ -1416,3 +1419,8 @@ def _truncate(val):
     if isinstance(val, gpd.GeoSeries):
         val = val.iloc[0]
     return repr(truncate(str(val), 128))
+
+
+# Define deferred class attributes
+LazyAttr(GeoMetry, "geom_cache", CacheDict)
+LazyAttr(GeoMetry, "op_cache", CacheDict)

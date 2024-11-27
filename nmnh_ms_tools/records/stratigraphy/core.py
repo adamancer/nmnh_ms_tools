@@ -6,6 +6,7 @@ from ...utils import mutable
 
 
 class StratRecord(Record):
+
     def __init__(self, *args, **kwargs):
         with mutable(self):
             # Set lists of original class attributes and reported properties

@@ -3,6 +3,7 @@
 from .. import _ImportClock
 
 with _ImportClock("utils"):
+
     from .classes import (
         LazyAttr,
         custom_copy,
@@ -25,11 +26,8 @@ with _ImportClock("utils"):
     )
     from .dicts import (
         AbbrDict,
-        AttrDict,
         BaseDict,
         IndexedDict,
-        NamedDict,
-        StaticDict,
         combine,
         dictify,
         get_all,

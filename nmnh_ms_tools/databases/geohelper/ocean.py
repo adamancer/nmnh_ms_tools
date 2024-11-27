@@ -19,6 +19,7 @@ Tile = namedtuple("Tile", ["geom", "name"])
 class OceanQuery:
     """Tiles and queries the global ocean"""
 
+    # Deferred but not with LazyAttr
     _tree = None
 
     def __init__(self, interval=15):

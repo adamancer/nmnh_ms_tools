@@ -11,6 +11,7 @@ import warnings
 from ..config import DATA_DIR
 from ..utils.standardizers import Standardizer
 from ..utils import (
+    LazyAttr,
     as_list,
     as_str,
     coerce,
@@ -28,36 +29,13 @@ from ..utils import (
 logger = logging.getLogger(__name__)
 
 
-def read_dwc_terms():
-    """Reads ordered list of DwC terms based on file from TDWG"""
-    fp = os.path.join(DATA_DIR, "dwc", "simple_dwc_vertical.csv")
-    terms = []
-    with open(fp, "r") as f:
-        terms.extend(f.read().splitlines())
-    return [to_attribute(t.strip("*")) for t in terms]
-
-
-def write_csv(fp, records, keep_empty=False):
-    """Write a list of records to CSV"""
-    keys = records[0].attributes
-    if not keep_empty:
-        empty = keys[:]
-        for rec in records:
-            for key in empty[:]:
-                if getattr(rec, key):
-                    empty.remove(key)
-        keys = [k for k in keys if k not in empty]
-    with open(fp, "w", encoding="utf-8-sig", newline="") as f:
-        writer = csv.writer(f, dialect="excel")
-        writer.writerow([to_dwc_camel(k) for k in keys])
-        for rec in records:
-            writer.writerow(rec.to_csv(keys))
-
-
 class Record:
     """Defines base methods for parsing and manipulating natural history data"""
 
-    std = Standardizer()
+    # Deferred class attributes are defined at the end of the file
+    std = None
+
+    # Normal class attributes
     terms = []
 
     def __init__(self, data=None, **kwargs):
@@ -428,3 +406,33 @@ class RecordEncoder(json.JSONEncoder):
                 return obj.to_json()
             except AttributeError:
                 return str(obj)
+
+
+def read_dwc_terms():
+    """Reads ordered list of DwC terms based on file from TDWG"""
+    fp = os.path.join(DATA_DIR, "dwc", "simple_dwc_vertical.csv")
+    terms = []
+    with open(fp, "r") as f:
+        terms.extend(f.read().splitlines())
+    return [to_attribute(t.strip("*")) for t in terms]
+
+
+def write_csv(fp, records, keep_empty=False):
+    """Write a list of records to CSV"""
+    keys = records[0].attributes
+    if not keep_empty:
+        empty = keys[:]
+        for rec in records:
+            for key in empty[:]:
+                if getattr(rec, key):
+                    empty.remove(key)
+        keys = [k for k in keys if k not in empty]
+    with open(fp, "w", encoding="utf-8-sig", newline="") as f:
+        writer = csv.writer(f, dialect="excel")
+        writer.writerow([to_dwc_camel(k) for k in keys])
+        for rec in records:
+            writer.writerow(rec.to_csv(keys))
+
+
+# Define deferred class attributes
+LazyAttr(Record, "std", Standardizer)

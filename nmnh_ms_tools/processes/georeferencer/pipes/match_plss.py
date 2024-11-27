@@ -3,14 +3,17 @@
 from .core import MatchPipe, Georeference
 from ....bots.plss import PLSSBot
 from ....tools.geographic_names.parsers import PLSSParser
-from ....utils import mutable
+from ....utils import LazyAttr, mutable
 
 
 class MatchPLSS(MatchPipe):
     """Converts PLSS strings to geometries"""
 
+    # Deferred class attributes are defined at the end of the file
+    bot = None
+
+    # Normal class attributes
     parser = PLSSParser
-    bot = PLSSBot()
 
     def __init__(self):
         super().__init__()
@@ -74,3 +77,7 @@ class MatchPLSS(MatchPipe):
                 }
             sites.append(site)
         return Georeference(sites)
+
+
+# Define deferred class attributes
+LazyAttr(MatchPLSS, "bot", PLSSBot)

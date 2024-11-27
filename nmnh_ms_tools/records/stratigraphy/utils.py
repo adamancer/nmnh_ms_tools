@@ -13,12 +13,7 @@ CHRONOSTRAT_RANKS = ["eonothem", "erathem", "system", "series", "stage", "substa
 
 LITHOSTRAT_RANKS = ["group", "formation", "member", "bed"]
 
-LITHOSTRAT_ABBRS = {
-    "gp": "group",
-    "fm": "formation",
-    "mbr": "member",
-    #'bd': 'bed'
-}
+LITHOSTRAT_ABBRS = {"gp": "group", "fm": "formation", "mbr": "member", "bd": "bed"}
 
 LITHOLOGIES = {
     "cgl": "conglomerate",
@@ -118,9 +113,9 @@ def split_strat(val, class_=None):
     val = std_modifiers(val)
 
     # Test if given string is valid for current class
-    if class_ is not None and class_._keywords is None:
+    if class_ is not None and class_.keywords is None:
         class_().keywords
-    if class_ is not None and to_attribute(val) in class_._keywords:
+    if class_ is not None and to_attribute(val) in class_.keywords:
         return [val]
 
     # Extract parentheticals

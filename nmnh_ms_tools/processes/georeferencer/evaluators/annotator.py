@@ -10,7 +10,7 @@ from ....config import CONFIG
 from ....databases.georef_job import Session, Localities, Uncertainties
 from ....tools.geographic_operations.kml import Kml
 from ....utils.standardizers import LocStandardizer
-from ....utils import mutable, oxford_comma
+from ....utils import LazyAttr, mutable, oxford_comma
 
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 class MatchAnnotator(MatchEvaluator):
     """Describes how georeference was determined"""
 
-    std = LocStandardizer()
+    # Deferred class attributes are defined at the end of the file
+    std = None
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -464,3 +465,7 @@ class MatchAnnotator(MatchEvaluator):
         if not use_quotes:
             use_quotes = "(" in val or re.search(r"\b[a-z]{4,}\b", val)
         return '"{}"'.format(val.strip('"').replace('"', "'")) if use_quotes else val
+
+
+# Define deferred class attributes
+LazyAttr(MatchAnnotator, "std", LocStandardizer)

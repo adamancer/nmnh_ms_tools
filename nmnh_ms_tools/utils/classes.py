@@ -8,7 +8,7 @@ from typing import Any
 import pandas as pd
 from shapely.geometry.base import BaseGeometry
 
-from .files import read_csv, read_json, read_tsv
+from .files import read_csv, read_json, read_tsv, read_yaml
 
 
 class LazyAttr:
@@ -20,34 +20,57 @@ class LazyAttr:
         the object
     attr : str
         the name of the attribute
-    func : callable
-        the function used to load data
+    action : callable | path
+        the function used to load data or a path that can be read using a standard
+        method (currently CSV, TSV, or JSON)
     args, kwargs:
         arguments and keyword arguments to pass to func
     """
 
-    def __init__(self, obj: Any, attr: str, *args, func: callable = Callable, **kwargs):
+    def __init__(self, obj: Any, attr: str, action: Callable | Path, *args, **kwargs):
         self._lazyobj = obj
         self._lazyattr = attr
         self._lazyargs = args
         self._lazykwargs = kwargs
 
         # Infer function for simple file reads
-        if func is None:
+        if not callable(action):
             try:
-                func = {
+                path = Path(action)
+                action = {
                     ".csv": read_csv,
                     ".json": read_json,
                     ".tsv": read_tsv,
-                }[Path(args[0]).suffix.lower()]
+                    ".yaml": read_yaml,
+                    ".yml": read_yaml,
+                }[path.suffix.lower()]
             except (IndexError, KeyError):
                 raise ValueError("Could not infer function from arguments")
+            else:
+                # Update args to include path
+                self._lazyargs = [path] + list(args)
 
-        self._lazyfunc = func
+        self._lazyfunc = action
 
         # Assign self to attribute. This is to avoid having to specify the attribute
         # both here and during assignment.
-        setattr(self._lazyobj, self._lazyattr, self)
+        try:
+            val = getattr(self._lazyobj, self._lazyattr)
+        except AttributeError:
+            _lazyobj = str(self._lazyobj)[8:].rstrip("'> ")
+            raise AttributeError(
+                f"Tried to lazy load an attribute that was not defined: {_lazyobj}.{self._lazyattr}"
+            )
+        else:
+            if val is not None:
+                _lazyobj = str(self._lazyobj)[8:].rstrip("'> ")
+                raise AttributeError(
+                    f"Tried to lazy load an attribute that is already populated: {_lazyobj}.{self._lazyattr}"
+                )
+            setattr(self._lazyobj, self._lazyattr, self)
+
+    def __call__(self, *args, **kwargs):
+        return self.lazyload()(*args, **kwargs)
 
     def __getattr__(self, attr):
         return getattr(self.lazyload(), attr)

@@ -4,10 +4,12 @@ import hashlib
 import json
 import logging
 import os
+import warnings
 from collections import namedtuple
 from pathlib import Path
 
 import pandas as pd
+import yaml
 from PIL import Image
 
 
@@ -244,40 +246,53 @@ def skip_hashed(f):
     return f
 
 
-def read_csv(*args, **kwargs):
+def read_csv(raise_on_error: bool = True, *args, **kwargs) -> list[dict]:
     """Convenience function a read a CSV file
 
     Parameters
     ---------
+    raise_on_error : bool
+        whether to throw an exception if the file is not found or is unreadable
     args, kwargs :
         parameters to pass to pd.read_csv()
 
-    Returns:
+    Returns
+    -------
     list[dict]
         content of CSV as list of records
     """
     kwargs.setdefault("comment", "#")
     kwargs.setdefault("dtype", "str")
-    return pd.read_csv(*args, **kwargs).to_dict("records")
+    try:
+        return pd.read_csv(*args, **kwargs).to_dict("records")
+    except FileNotFoundError:
+        if raise_on_error:
+            raise
+        return []
 
 
-def read_tsv(*args, **kwargs):
+def read_tsv(raise_on_error: bool = True, *args, **kwargs) -> list[dict]:
     """Convenience function a read a TSV file
 
     Parameters
     ---------
+    raise_on_error : bool
+        whether to throw an exception if the file is not found or is unreadable
     args, kwargs :
         parameters to pass to pd.read_csv()
 
-    Returns:
+    Returns
+    -------
     list[dict]
         content of CSV as list of records
     """
     kwargs.setdefault("delimiter", "\t")
-    return read_csv(*args, **kwargs)
+    return read_csv(raise_on_error=raise_on_error, *args, **kwargs)
 
 
-def read_json(fp: str | Path, encoding: str = "utf-8", **kwargs):
+def read_json(
+    fp: str | Path, encoding: str = "utf-8", raise_on_error: bool = True, **kwargs
+) -> dict | list:
     """Convenience function a read a JSON file
 
     Parameters
@@ -286,8 +301,62 @@ def read_json(fp: str | Path, encoding: str = "utf-8", **kwargs):
         path to JSON file
     encoding : str
         encoding of JSON file
+    raise_on_error : bool
+        whether to throw an exception if the file is not found or is unreadable
     kwargs:
-        parametets to pass to json.load()
+        parameters to pass to json.load()
+
+    Returns
+    -------
+    dict | list
+        JSON as dict or list
     """
-    with open(fp, encoding=encoding) as f:
-        return json.load(f, **kwargs)
+    try:
+        with open(fp, encoding=encoding) as f:
+            return json.load(f, **kwargs)
+    except FileNotFoundError:
+        if raise_on_error:
+            raise
+        warnings.warn(f"{repr(fp)} not found")
+        return {}
+    except json.JSONDecodeError:
+        if raise_on_error:
+            raise
+        warnings.warn(f"{repr(fp)} invalid")
+        return {}
+
+
+def read_yaml(
+    fp: str | Path, encoding: str = "utf-8", raise_on_error: bool = True, **kwargs
+) -> dict | list:
+    """Convenience function a read a YAML file
+
+    Parameters
+    ----------
+    fp : str | Path
+        path to YAML file
+    encoding : str
+        encoding of YAML file
+    raise_on_error : bool
+        whether to throw an exception if the file is not found or is unreadable
+    kwargs:
+        parameters to pass to yaml.safeload()
+
+    Returns
+    -------
+    dict | list
+        YAML as dict or list
+    """
+    try:
+        with open(fp, encoding=encoding) as f:
+            return yaml.safe_load(f, **kwargs)
+    except FileNotFoundError:
+        if raise_on_error:
+            raise
+        warnings.warn(f"{repr(fp)} not found")
+        return {}
+    except yaml.YAMLError:
+        if raise_on_error:
+            raise
+        warnings.warn(f"{repr(fp)} invalid")
+        return {}

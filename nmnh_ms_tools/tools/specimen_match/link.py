@@ -8,7 +8,6 @@ from ...utils.lists import oxford_comma
 
 
 logger = logging.getLogger(__name__)
-logger.debug("Loading link.py")
 
 
 ENDINGS = ["idae", "ian", "ide", "ine", "ia", "us", "s", "a", "e"]

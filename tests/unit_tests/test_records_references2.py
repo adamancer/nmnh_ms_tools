@@ -51,7 +51,7 @@ def test_ref_to_emu(ref):
             ],
         ],
         "NteDate0": [
-            EMuDate("2024-11-25"),
+            EMuDate("today"),
         ],
         "NteText0": [
             "@article{Mansur_2014, title={Granulite-Facies Xenoliths in Rift "

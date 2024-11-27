@@ -20,12 +20,17 @@ from .utils import (
 from ..core import Record
 from ...bots.adamancer import AdamancerBot
 from ...bots.macrostrat import MacrostratBot
+from ...utils import LazyAttr
 
 
 class StratUnit(Record):
+
+    # Deferred class attributes are defined at the end of the file
+    chronobot = None
+    lithobot = None
+
+    # Normal class attributes
     terms = ["kind", "rank", "lithology", "modifier", "unit"]
-    chronobot = AdamancerBot()
-    lithobot = MacrostratBot()
 
     def __init__(self, *args, hint=None, **kwargs):
         # Set lists of original class attributes and reported properties
@@ -267,3 +272,8 @@ def parse_strat_unit(val, hint=None):
                 unit.unit = base_name(last.unit)
                 unit.check_name()
     return units
+
+
+# Define deferred class attributes
+LazyAttr(StratUnit, "chronobot", AdamancerBot)
+LazyAttr(StratUnit, "lithobot", MacrostratBot)

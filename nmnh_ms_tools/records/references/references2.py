@@ -38,7 +38,7 @@ class Reference(Record):
     entry_types = None
     terms = None
 
-    # Local class attributes
+    # Normal class attributes
     terms = [
         "entry_type",
         "title",
@@ -462,4 +462,4 @@ def _ordered_pop(dct: dict, keys: list[str]) -> list:
 
 
 # Define deferred class attributes
-LazyAttr(Reference, "bot", func=Bot)
+LazyAttr(Reference, "bot", Bot)

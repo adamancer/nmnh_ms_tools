@@ -507,7 +507,7 @@ class ImportRecord(EMuRecord):
                 evt._set_path(key, verbatim)
 
     def map_dynamic_properties(
-        self, src, dst="", key=None, mask="{}", raise_on_error=False
+        self, src, dst="", key=None, mask='"{}"', raise_on_error=False
     ):
         if isinstance(src, dict):
             for src, key in src.items():

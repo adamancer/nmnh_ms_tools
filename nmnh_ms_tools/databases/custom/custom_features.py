@@ -104,5 +104,5 @@ class CustomFeatures(GeoNamesFeatures):
         try:
             fn = gazetteers[source]
         except KeyError:
-            raise KeyError("Name must be one of {}".format(list(gazetteers)))
+            raise KeyError(f"Name must be one of {list(gazetteers)}")
         self.from_csv(os.path.join(DATA_DIR, "gazetteers", fn))

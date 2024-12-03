@@ -24,7 +24,6 @@ def as_list(val, delims="|;"):
         return [val]
     if isinstance(val, (set, tuple, KeysView, ValuesView)):
         return list(val)
-    # raise TypeError('Cannot coerce {} to list'.format(type(val)))
     # Fall back to a single-item list
     return [val]
 

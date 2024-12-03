@@ -441,7 +441,7 @@ class Site(Record):
         """Summarizes the content of a record"""
         if mask is None:
             loc_id = self.location_id if self.location_id else "not provided"
-            return "{} ({})".format(self.name, loc_id)
+            return f"{self.name} ({loc_id})"
         if mask == "admin":
             attrs = ["county", "state_province", "country"]
             admin = [as_str(getattr(self, a)) for a in attrs]
@@ -533,7 +533,7 @@ class Site(Record):
         for attr in ("continent", "country", "state_province", "county"):
             vals = as_list(getattr(self, attr))
             for pat in blacklist:
-                pat = r"^\[?{}\]?$".format(pat)
+                pat = rf"^\[?{pat}\]?$"
                 vals = [s for s in vals if not re.search(pat, s, flags=re.I)]
             setattr(self, attr, vals)
         # Make major ocean names explicit
@@ -554,16 +554,16 @@ class Site(Record):
             try:
                 self.map_admin()
             except (AssertionError, ValueError):
-                logger.error("Could not map admin: {}".format(adm))
+                logger.error(f"Could not map admin: {adm}")
                 return False
             if not self.country_code:
-                logger.error("Invalid country: {}".format(adm[-1]))
+                logger.error(f"Invalid country: {adm[-1]}")
                 return False
             if self.state_province and not self.admin_code_1:
-                logger.error("Invalid state/province: {}, {}".format(*adm[-2:]))
+                logger.error(f"Invalid state/province: {adm[-2]}, {adm[-1]}")
                 return False
             if self.county and not self.admin_code_2:
-                logger.error("Invalid county: {}, {}, {}".format(*adm))
+                logger.error(f"Invalid county: {adm[-2]}, {adm[-1]}, {adm[0]}")
                 return False
         return True
 
@@ -719,7 +719,6 @@ class Site(Record):
 
     def compare_attr(self, val, other, attr, std_func=None):
         """Tests and tracks filters"""
-        # print('{}: {} => {}'.format(attr, val, other))
         if attr == "names":
             score = 1 if self.has_name(other, std_func=std_func) else -1
         elif bool(val) != bool(other) or not val and not other:
@@ -773,7 +772,7 @@ class Site(Record):
             # Note the subsectioning and update identifiers
             site.location_id += "_" + direction.upper()
             if name is None:
-                name = "{} {}".format(direction, self.name)
+                name = f"{direction} {self.name}"
             site.site_names = [name]
             site.filter["name"] = name
         return site
@@ -792,7 +791,7 @@ class Site(Record):
                 if ocean and other:
                     assert ocean == other
             except (AssertionError, AttributeError):
-                logger.debug(f'Ocean mismatch: "{ocean}" != "{other}"')
+                logger.debug(f"Ocean mismatch: {repr(ocean)} != {repr(other)}")
                 return False
             else:
                 buffer_km = 200
@@ -805,8 +804,9 @@ class Site(Record):
             row = gdf.iloc[-1]
             geom = GeoMetry(gdf.geometry.iloc[-1:].reset_index(drop=True), gdf.crs)
             if not self.intersects(geom.buffer(buffer_km)):
-                mask = "Coordinates fall outside {}: {}"
-                logger.debug(mask.format(row["field"], self.location_id))
+                logger.debug(
+                    f"Coordinates fall outside {row['field']}: {self.location_id}"
+                )
                 return False
         return True
 
@@ -927,7 +927,7 @@ class Site(Record):
             except KeyError:
                 parsed, _ = self.parse_locality(self.sea_gulf)
                 if len(parsed) == 1:
-                    logger.warning("Unknown sea: {}".format(self.sea_gulf))
+                    logger.warning(f"Unknown sea: {self.sea_gulf}")
         self.changed(func_name)
 
     def is_marine(self):
@@ -979,7 +979,7 @@ class Site(Record):
             try:
                 return name if "ocean" in name.lower() else SEAS[name.lower()]
             except KeyError:
-                logger.warning("Unknown sea: {}".format(name))
+                logger.warning(f"Unknown sea: {name}")
         return
 
     def get_sea(self):
@@ -1232,7 +1232,7 @@ class Site(Record):
                 vals = [vals]
             if vals:
                 if not self.location_id:
-                    self.location_id = "{}:{}".format(key, vals[0])
+                    self.location_id = f"{key}:{vals[0]}"
                 self.other_ids.setdefault(key, []).extend(vals)
         self.other_ids = {k: sorted(v) for k, v in self.other_ids.items()}
         # Get site kind
@@ -1256,16 +1256,16 @@ class Site(Record):
             other_ids = []
             for key, vals in self.other_ids.items():
                 for val in vals:
-                    other_ids.append("{}:{}".format(key, val))
+                    other_ids.append(f"{key}:{val}")
             other_ids = "; ".join(other_ids) if other_ids else "No ID"
-            self.site_names = ["Unnamed {} ({})".format(feature, other_ids)]
+            self.site_names = [f"Unnamed {feature} ({other_ids})"]
         if "National" in self.site_kind:
             pattern = r"\bN[A-Z]?([& ]*[A-Z]+)\b"
             self.site_names = [
                 re.sub(pattern, self.site_kind, n) for n in self.site_names
             ]
             if self.site_kind not in self.site_names[0]:
-                name = "{} {}".format(self.site_names[0], self.site_kind)
+                name = f"{self.site_names[0]} {self.site_kind}"
                 self.site_names.insert(0, name)
         self.site_source = "Natural Earth"
         self.geometry = self._build_geometry(data["geometry"], crs=4326)
@@ -1290,7 +1290,7 @@ class Site(Record):
                 try:
                     getattr(self, key)
                 except AttributeError:
-                    raise KeyError("Illegal key: {}".format(key))
+                    raise KeyError(f"Illegal key: {key}")
             setattr(self, key, val)
 
         if geom:

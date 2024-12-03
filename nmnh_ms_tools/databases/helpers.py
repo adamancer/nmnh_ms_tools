@@ -26,7 +26,7 @@ def init_helper(fp, base, session, deferred=False, tables=None, poolclass=None):
             dn, fn = os.path.split(os.path.realpath(fp))
             os.chdir(dn)
             engine = create_engine(
-                "sqlite:///{}".format(fn),
+                f"sqlite:///{fn}",
                 poolclass=poolclass,
             )
             os.chdir(cwd)
@@ -43,9 +43,9 @@ def time_query(query):
     compiled = query.statement.compile(compile_kwargs={"literal_binds": True})
     start_time = dt.datetime.now()
     query.all()
-    msg = "{} (t={})".format(compiled, dt.datetime.now() - start_time)
-    logger.debug(msg)
+    msg = f"{compiled} (t={(dt.datetime.now() - start_time).total_seconds()})"
     print(msg)
+    logger.debug(msg)
 
 
 def from_csv(sessionmaker, table, path, **kwargs):

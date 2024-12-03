@@ -188,8 +188,7 @@ class FeatureParser(Parser):
         # Do not parse names that contain punctuation
         for char in punc.strip():
             if char in val:
-                mask = 'Could not parse "{}" (illegal characters)'
-                raise ValueError(mask.format(val))
+                raise ValueError(f"Could not parse {repr(val)} (illegal characters)")
 
         # Look for generic features
         if allow_generic and val.lower() in FEATURES:
@@ -200,59 +199,54 @@ class FeatureParser(Parser):
             return self
 
         if is_generic_feature(val):
-            mask = 'Could not parse "{}" (generic name)'
-            raise ValueError(mask.format(val))
+            raise ValueError(f"Could not parse {repr(val)} (generic feature)")
 
         if val.islower():
-            mask = 'Could not parse "{}" (all lower)'
-            raise ValueError(mask.format(val))
+            raise ValueError(f"Could not parse {repr(val)} (all lower)")
 
         if val.isnumeric():
-            mask = 'Could not parse "{}" (numeric)'
-            raise ValueError(mask.format(val))
+            raise ValueError(f"Could not parse {repr(val)} (numeric)")
 
         # Reject borders and junctions
         if val.lower().startswith(("border of", "junction of")):
-            mask = 'Could not parse "{}" (border/junction)'
-            raise ValueError(mask.format(val))
+            raise ValueError(f"Could not parse {repr(val)} (border/junction)")
 
         # Reject features that start with certain adjectives or prepositions
         if val.startswith(("which", "with")):
-            mask = 'Could not parse "{}" (bad first word)'
-            raise ValueError(mask.format(val))
+            raise ValueError(f"Could not parse {repr(val)} (bad first word)")
 
         # Ensure that phrases look feature-like
         pattern = get_feature_pattern(True, True)
         if not re.search(pattern, val):
-            raise ValueError('Could not parse "{}" (invalid name)'.format(val))
+            raise ValueError(f"Could not parse {repr(val)} (invalid name)")
 
         # Ensure that phrase does not start with of/de/etc.
         if re.search(r"^[a-z]{1,3}(?= [A-Z])", val):
-            raise ValueError('Could not parse "{}" (invalid first)'.format(val))
+            raise ValueError(f"Could not parse {repr(val)} (invalid first)")
 
         # Ensure that phrase does not end with of/de/etc.
         if re.search(r"\b[a-z]{1,3}$", val):
-            raise ValueError('Could not parse "{}" (invalid last)'.format(val))
+            raise ValueError(f"Could not parse {repr(val)} (invalid last)")
 
         # Verify numbers if present
         pattern = r"(No\.? |Num(ber|\.)? |# ?)[0-9]+$"
         if val and val[-1].isdigit() and not re.search(pattern, val):
-            raise ValueError('Could not parse "{}" (invalid num)'.format(val))
+            raise ValueError(f"Could not parse {repr(val)} (invalid num)")
 
         # Look for phrases that are unlikely to be specific feature names
         pattern = r"(^({0})( {0})?\b|\b({0})$)".format("|".join(self.bad))
         if re.search(pattern, val, flags=re.I):
-            raise ValueError('Could not parse "{}" (unlikely name)'.format(val))
+            raise ValueError(f"Could not parse {repr(val)} (unlikely name)")
 
         # Exclude features that start/end with a preposition
         pattern = r"(^{0}\b|\b{0}$)".format(r"(a|aux?|d[aeo]s?|del|of)")
         if re.search(pattern, val, flags=re.I):
-            raise ValueError('Could not parse "{}" (starts/ends with prep)'.format(val))
+            raise ValueError(f"Could not parse {repr(val)} (starts/ends with prep)")
 
         # Assign attributes
         cleaned = self.clean(val)
         if not cleaned:
-            raise ValueError('Could not parse "{}" (clean failed)'.format(val))
+            raise ValueError(f"Could not parse {repr(val)} (clean failed)")
         self.feature = titlecase(cleaned)
 
         # Attempt to classify the feature
@@ -296,7 +290,7 @@ class FeatureParser(Parser):
                     return key, kind, terms[kind]
             except KeyError:
                 pass
-        # logger.debug('Could not classify {}'.format(self.feature))
+        logger.debug(f"Could not classify {self.feature}")
         return None, None, None
 
     def clean(self, val):
@@ -326,32 +320,32 @@ class FeatureParser(Parser):
         """Classifies a feature based on a list of terms"""
         piped = "|".join([f + "(?:es|s)?" for f in terms])
         # If the parsed feature exactly matches one of the terms, raise error
-        pattern = r"^({})$".format(piped)
+        pattern = rf"^({piped})$"
         if re.search(pattern, self.feature, flags=re.I):
-            mask = "Could not parse: {} (generic feature)"
-            raise ValueError(mask.format(self.feature))
+            raise ValueError(f"Could not parse: {self.feature} (generic feature)")
         # Check if feature is of the class defined by the keywords
-        pattern = r"\b({})$".format(piped)
+        pattern = rf"\b({piped})$"
         match = re.search(pattern, self.feature, flags=re.I)
         if not match:
-            pattern = r"^({})\b".format(piped)
+            pattern = rf"^({piped})\b"
             match = re.search(pattern, self.feature, flags=re.I)
         if match is not None:
             key = match.group().lower()
             while key not in terms:
                 key = key[:-1]
                 if not key:
-                    mask = "Could not parse: {} (invalid feature)"
-                    raise ValueError(mask.format(match.group().lower()))
+                    raise ValueError(
+                        f"Could not parse: {match.group().lower()} (invalid feature)"
+                    )
             return key
 
 
 def is_generic_feature(val):
     """Tests if feature name appears to be generic (e.g., East Coast)"""
     dirs = ["North", "South", "East", "West"]
-    dirs = ["{}({})?".format(d[0], d[1:]) for d in dirs]
-    dirs = "({})".format("|".join(dirs))
-    features = r"({})".format("|".join(OF_WORDS))
+    dirs = [f"{d[0]}({d[1:]})?" for d in dirs]
+    dirs = f"({"|".join(dirs)})"
+    features = rf"({"|".join(OF_WORDS)})"
     pattern = r"^({0}({0}){{0,2}}(ern)? )?{1}$".format(dirs, features)
     return bool(re.match(pattern, val, flags=re.I))
 
@@ -367,7 +361,7 @@ def get_feature_pattern(match_start=False, match_end=False):
     p2 = r"(?:[A-z][-a-z]+(?: (?:[A-Z][-a-z]+|a|aux?|d[aeo]s?|d?el|l[aeo]|l[aeo]s|of(?: the)?)){1,5})"
     p3 = r"[A-z][-a-z]{2,}"  # Maine
     p4 = r"(?:# ?)?[0-9]+"  # Test Well No. 1
-    feature = r"(?:{})?(?:{}|{}|{})(?: {})?".format(p0, p1, p2, p3, p4)
+    feature = rf"(?:{p0})?(?:{p1}|{p2}|{p3})(?: {p4})?"
     pattern = r"^" if match_start else r""
     # Match features jointed by "and" and equivalents
     pattern += r"(?:{0}(?: (?:[Aa]nd|&|[Yy]) {0})?)".format(feature)
@@ -415,8 +409,7 @@ def get_feature_string(parsed):
 
 def strip_of_modifiers(feature):
     """Strips generic terms (like 'coast of') from feature name"""
-    pattern = r"^({}) of\b".format("|".join(OF_WORDS))
-    return re.sub(pattern, "", feature, flags=re.I).strip()
+    return re.sub(rf"^({"|".join(OF_WORDS)}) of\b", "", feature, flags=re.I).strip()
 
 
 # Add FeatureParser to the main parser class to allow feature name expansions

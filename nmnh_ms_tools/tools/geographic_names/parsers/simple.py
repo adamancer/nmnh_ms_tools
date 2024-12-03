@@ -33,10 +33,10 @@ class SimpleParser(Parser):
         val = val.strip()
         # Exclude generic features
         if test_generic and is_generic_feature(val):
-            raise ValueError("Could not parse: {}".format(val))
+            raise ValueError(f"Could not parse: {val}")
         # Exclude values with common delimiters
         if re.search(r"(,|;|:|(?!\b[A-Z])\.)", val):
-            raise ValueError("Could not parse: {}".format(val))
+            raise ValueError(f"Could not parse: {val}")
         self.verbatim = val
         self.feature = val
         # Not possible to calculate these?

@@ -178,7 +178,7 @@ class ChronoStrat(StratRecord):
 
     def _parse_dwc(self, data):
         """Parses chronostratigraphic info from a Darwin Core record"""
-        keys = [
+        masks = [
             "{}EonOr{}Eonothem",
             "{}EraOr{}Erathem",
             "{}PeriodOr{}System",
@@ -189,18 +189,18 @@ class ChronoStrat(StratRecord):
         # Populated dicts for earliest and latest
         earliest = {}
         latest = {}
-        for key in keys:
+        for mask in masks:
 
             # Get the last word in the string
-            attr = re.findall(r"[A-Z][a-z]+", key)[-1].lower()
+            attr = re.findall(r"[A-Z][a-z]+", mask)[-1].lower()
 
             # Look for data in lowest/earliest
-            val = data.get(key.format("earliest", "Lowest"))
+            val = data.get(mask.format("earliest", "Lowest"))
             if val:
                 earliest[attr] = val
 
             # Look for data in latest/highest
-            val = data.get(key.format("latest", "Highest"))
+            val = data.get(mask.format("latest", "Highest"))
             if val:
                 latest[attr] = val
 

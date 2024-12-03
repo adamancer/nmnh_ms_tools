@@ -91,12 +91,12 @@ class Record:
                     rows.append((attr, val))
                     attr = ""
         maxlen = max([len(row[0]) for row in rows])
-        val = "\n".join(["{}: {}".format(a.ljust(maxlen), v) for a, v in rows])
+        val = "\n".join([f"{a.ljust(maxlen)}: {v}" for a, v in rows])
         return "-" * 70 + "\n" + val
 
     def __repr__(self):
-        attrs = ["{}={}".format(a, repr(getattr(self, a))) for a in self.attributes]
-        return "{}({})".format(self.__class__.__name__, ", ".join(attrs))
+        attrs = [f"{a}={repr(getattr(self, a))}" for a in self.attributes]
+        return f"{self.__class__.__name__}({", ".join(attrs)})"
 
     def __setattr__(self, attr, val):
         try:
@@ -167,9 +167,9 @@ class Record:
         if self.sources:
             sources = sorted(set(self.sources))
             return (
-                "Data from the following sources was used to generate"
-                " this record: {}"
-            ).format("; ".join(sources))
+                f"Data from the following sources was used to generate"
+                f" this record: {"; ".join(sources)}"
+            )
         return ""
 
     @property
@@ -211,7 +211,7 @@ class Record:
             for key, val in data.items():
                 # Verify that key is valid
                 if key.rstrip("+") not in obj.valid_attrs:
-                    warnings.warn("Unrecognized key: {}".format(key))
+                    warnings.warn(f"Unrecognized key: {key}")
                 if key in append_to or key.endswith("+"):
                     key = key.rstrip("+")
                     existing = getattr(obj, key) if hasattr(obj, key) else ""
@@ -221,8 +221,9 @@ class Record:
                         val = as_str(val, "; ")
                         val = (existing + delim + val).strip(delim)
                     else:
-                        mask = "Invalid data type for append: {}"
-                        raise TypeError(mask.format(type(existing)))
+                        raise TypeError(
+                            f"Invalid data type for append: {type(existing)}"
+                        )
                 setattr(obj, key.rstrip("+"), val)
         return obj
 
@@ -266,7 +267,7 @@ class Record:
 
     def match(self, keyword):
         """Tests if keyword occurs in record"""
-        pattern = r"\b{}\b".format(self.std(keyword))
+        pattern = rf"\b{self.std(keyword)}\b"
         return bool(re.search(pattern, self.indexed))
 
     def changed(self, name):
@@ -306,7 +307,7 @@ class Record:
                 if isinstance(val, list):
                     val = "; ".join(val)
                 key = attr.title().replace("_", " ").replace("Id", "ID")
-                html.append("<strong>{}:</strong> {}".format(key, val))
+                html.append(f"<strong>{key}:</strong> {val}")
         return "<br />".join(html)
 
     def to_emu(self, use_irn=True, **kwargs):
@@ -321,7 +322,7 @@ class Record:
         """Parses pre-formatted data into a record object"""
         for key, val in rec.items():
             if key not in self.attributes:
-                raise KeyError("Illegal key: {}".format(key))
+                raise KeyError(f"Illegal key: {key}")
             setattr(self, key, val)
         return self
 

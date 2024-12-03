@@ -41,8 +41,9 @@ class Coordinate:
         if kind not in ["latitude", "longitude"]:
             raise ValueError("kind must be either latitude or longitude")
         if not isinstance(val, (float, int, str)):
-            mask = "Coordinate must be float, int, or str ({} given)"
-            raise TypeError(mask.format(type(val)))
+            raise TypeError(
+                f"Coordinate must be float, int, or str ({type(val)} given)"
+            )
 
         self.original = val
         self.kind = kind
@@ -64,7 +65,7 @@ class Coordinate:
             self.parse()
             self.validate()
         except ValueError:
-            raise ValueError("Invalid {}: {}".format(kind, val))
+            raise ValueError(f"Invalid {kind}: {val}")
 
     def __str__(self):
         if self.is_decimal():
@@ -118,9 +119,9 @@ class Coordinate:
                 self.degrees = str(mod * (abs(int(self.degrees)) - 360))
                 self.decimal = mod * (abs(self.decimal) - 360)
             if abs(self.decimal) > 180:
-                raise ValueError("Invalid longitude: {}".format(self.decimal))
+                raise ValueError(f"Invalid longitude: {self.decimal}")
         elif abs(self.decimal) > 90:
-            raise ValueError("Invalid latitude: {}".format(self.decimal))
+            raise ValueError(f"Invalid latitude: {self.decimal}")
 
     def as_decimal(self):
         return self._format_decimal()
@@ -185,11 +186,10 @@ class Coordinate:
                 integer, fractional = part.split(".")
                 parts[i] = integer
                 if parts[i + 1] != "0":
-                    mask = "Mixes deg-min-sec and decimals: {}"
-                    raise ValueError(mask.format(self.verbatim))
+                    raise ValueError(f"Mixes deg-min-sec and decimals: {self.verbatim}")
                 val = 60 * int(fractional) / 10 ** len(fractional)
                 # Note the final value so high precision is OK
-                val = self._strip_trailing_zeroes("{:.6f}".format(val))
+                val = self._strip_trailing_zeroes(f"{val:.6f}")
                 parts[i + 1] = val
         # Check if minutes or seconds equal 60, which is weirdly common and
         # is an import-breaking error in EMu
@@ -226,7 +226,6 @@ class Coordinate:
         """Formats decimal as a string"""
         val = "{{:.{}f}}".format(self.dec_places).format(self.decimal)
         return val
-        return self._strip_trailing_zeroes(val)
 
     def _format_dms(self):
         """Formats degrees-minutes-seconds as a string"""
@@ -234,13 +233,13 @@ class Coordinate:
         for part in [self.seconds, self.minutes, self.degrees]:
             if parts or float(part):
                 parts.insert(0, str(part))
-        return "{} {}".format(" ".join(parts), self.hemisphere)
+        return f"{" ".join(parts)} {self.hemisphere}"
 
     def _format_verbatim(self):
         """Coerces original value to a string"""
         verbatim = self.original
         if isinstance(verbatim, (float, int)):
-            verbatim = self._strip_trailing_zeroes("{:.4f}".format(verbatim))
+            verbatim = self._strip_trailing_zeroes(f"{verbatim:.4f}")
         return verbatim.strip()
 
     def _get_dec_places(self):

@@ -46,7 +46,6 @@ class CacheDict:
             self.recent[key] = val
             while len(self.recent) > self.max_recent:
                 self.recent.popitem(last=False)
-            # logger.warning('{}: {} (max={})'.format(self.__class__.__name__, len(self.recent), self.max_recent))
 
     def __getitem__(self, key):
         key = self.keyer(key)
@@ -62,7 +61,7 @@ class CacheDict:
                     return val
                 except AttributeError:
                     pass
-            raise KeyError("'{}' not found".format(key))
+            raise KeyError("'{key}' not found")
 
     def __delitem__(self, key):
         raise NotImplementedError

@@ -88,7 +88,7 @@ class TaxaList(MutableSequence):
                 return unique[0]
             if force_match:
                 return self[0]
-        raise ValueError("{}: {}".format(name, self.irns()))
+        raise ValueError(f"{name}: {self.irns()}")
 
     def unique(self):
         """Remove duplicate taxa, including less specific names"""

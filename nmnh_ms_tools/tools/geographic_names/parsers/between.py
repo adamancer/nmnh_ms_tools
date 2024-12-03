@@ -35,7 +35,7 @@ class BetweenParser(Parser):
     def name(self):
         """Returns a string describing the parsed locality"""
         if self.features and not self.inclusive:
-            return "Between {}".format(self.feature)
+            return f"Between {self.feature}"
         elif self.features:
             return self.feature
         return ""
@@ -47,25 +47,26 @@ class BetweenParser(Parser):
         delim = r"(?:between|from)(?: the )?"
         if not re.search(delim, text, flags=re.I):
             self.inclusive = True
-            raise ValueError('Could not parse "{}"'.format(text))
+            raise ValueError(f"Could not parse {repr(text)}")
         else:
             pre, text = re.split(delim, text, 1, flags=re.I)
             # Check pre for common delimiters
             if re.search(r"[,;:]", pre):
-                mask = 'Could not parse: "{}" (too complex)'
-                raise ValueError(mask.format(pre + delim + text))
+                raise ValueError(
+                    f"Could not parse: {repr(pre + delim + text)} (too complex)"
+                )
         between = text.rstrip("() ")
         delim = r"(?:\band\b|\bor\b|\bto\b|&|\+|,|;)(?: the )?"
         features = re.split(delim, between, flags=re.I)
         features = [s.strip() for s in features if s.strip()]
         if len(features) < 2:
-            raise ValueError('Could not parse "{}"'.format(text))
+            raise ValueError(f"Could not parse {repr(text)}")
         # Test feature names using FeatureParser
         for feature in features:
             try:
                 FeatureParser(feature)
             except ValueError:
-                raise ValueError('Could not parse "{}"'.format(text))
+                raise ValueError(f"Could not parse {repr(text)}")
         self.features = append_feature_type(features)
         self.specific = True
         return self

@@ -58,8 +58,9 @@ def prompt(
     Return:
         Validated response to prompt
     """
+    # FIXME: Check the output of this function, the formatting strings are weird
     # Prepare string
-    text = "{} ".format(text.rstrip())
+    text = f"{text.rstrip()} "
     # Prepare validator
     if isinstance(validator, str):
         validator = re.compile(validator, re.U)
@@ -125,7 +126,7 @@ def prompt(
             except UnicodeEncodeError:
                 result = str(result)
             loop = prompt(
-                'Is this value correct: "{}"?'.format(result),
+                f"Is this value correct: {repr(result)}?",
                 {"y": False, "n": True},
                 confirm=False,
             )
@@ -160,8 +161,8 @@ def write_emu_search(vals, field="irn", operator="=", mask=None, output="search.
         if isinstance(val, str):
             val = val.replace("'", r"\'")
         if re.match(r"[a-z]", val, flags=re.I) or operator != "=":
-            val = "'{}'".format(val)
-        search.append("\t(\n\t\t{} {} {}\n\t)".format(field, operator, val))
+            val = repr(val)
+        search.append(f"\t(\n\t\t{field} {operator} {val}\n\t)")
     with open(output, "w") as f:
         f.write(mask.format("\n\tor\n".join(search)))
 
@@ -250,16 +251,14 @@ def coerce(val, coerce_to, delim=" | "):
     if isinstance(val, (list, tuple)) and isinstance(coerce_to, types):
         val = [cast_to(s) for s in val if not isinstance(val, cast_to)]
         return cast_from(val) if any(val) else cast_from()
-    raise TypeError(
-        "Could not coerce {} ({}) to {}".format(repr(val), type(val), cast_to)
-    )
+    raise TypeError(f"Could not coerce {repr(val)} ({type(val)}) to {cast_to}")
 
 
 def configure_log(name=None, level="DEBUG", stream=True, filters=None):
     """Convenience function that configures a simple log"""
     if name is None:
         name = __name__
-    fn = name if name.lower().endswith(".log") else "{}.log".format(name)
+    fn = name if name.lower().endswith(".log") else f"{name}.log"
     handlers = [logging.FileHandler(fn, "w", encoding="utf-8")]
     if stream:
         handlers.append(logging.StreamHandler())
@@ -302,9 +301,7 @@ def validate_direction(direction):
         if re.match(pattern, direction):
             return True
     else:
-        msg = "Invalid direction: {}".format(direction)
-        # logger.debug(msg)
-        raise ValueError(msg)
+        raise ValueError(f"Invalid direction: {repr(direction)}")
 
 
 def get_ocean_name(ocean):
@@ -324,13 +321,12 @@ def clear_empty(val):
     if len(vals) == 1 and re.search(delim, vals[0]):
         vals = re.split(delim, vals[0])
     # Remove strings used to denote missing data
-    blacklist = [
+    disallowed = [
         r"([a-z]+ )?((not |il)legible|not stated|(not |un)determined|unknown)",
         r"locality in multiple [a-z]+",
     ]
-    for pattern in blacklist:
-        pattern = r"^\[?{}\]?$".format(pattern)
-        vals = [s for s in vals if not re.search(pattern, s, flags=re.I)]
+    for pattern in disallowed:
+        vals = [s for s in vals if not re.search(rf"^\[?{pattern}\]?$", s, flags=re.I)]
     if vals:
         return vals[0] if isinstance(val, str) else vals
     # Return empty of same class as original value

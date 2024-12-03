@@ -43,7 +43,7 @@ class StratUnit(Record):
         self.lithology = ""
         self.modifier = ""
         # Define additional attributes required for parse
-        self._hint = "[{}]".format(hint.lower()) if hint else None
+        self._hint = f"[{hint.lower()}]" if hint else None
         # Initialize instance
         super().__init__(*args, **kwargs)
 
@@ -84,7 +84,7 @@ class StratUnit(Record):
         """Searches for additional info about this unit"""
         if self.kind == "lithostrat":
             return self.lithobot.get_units_by_name(self.unit.rstrip("?"))
-        names = ["{} {}".format(self.modifier, self.unit).strip(), self.unit]
+        names = [(f"{self.modifier} {self.unit}").strip(), self.unit]
         for name in names:
             name = name.rstrip("?")
             response = self.chronobot.chronostrat(name, **kwargs)
@@ -143,14 +143,15 @@ class StratUnit(Record):
         if vals["modifier"] and not (vals["unit"] or vals["lithology"]):
             vals["unit"] = vals["modifier"]
             vals["modifier"] = ""
-        name = "{unit} {lithology} ({modifier})".format(**vals)
+        mask = "{unit} {lithology} ({modifier})"
+        name = mask.format(**vals)
         return re.sub(r" +", " ", name).replace("()", "").strip()
 
     def _parse_rank(self, unit):
         """Parses rank from unit name"""
         matches = []
         for val in LITHOSTRAT_RANKS:
-            match = re.search(r"\b{}\b".format(val), unit, flags=re.I)
+            match = re.search(rf"\b{val}\b", unit, flags=re.I)
             if match:
                 matches.append(match)
         if matches:
@@ -162,7 +163,7 @@ class StratUnit(Record):
         """Parses lithology type from unit name"""
         matches = []
         for val in LITHOLOGIES.values():
-            match = re.search(r"\b{}\b".format(val), unit, flags=re.I)
+            match = re.search(rf"\b{val}\b", unit, flags=re.I)
             if match:
                 matches.append(match)
         if matches:
@@ -177,19 +178,19 @@ class StratUnit(Record):
         mask = r"(?:{0})(?:(?: ?- ?| to | |/)(?:{0}))*"
         mods = mask.format("|".join(MODIFIERS))
         # Leading modifiers (Early Jurassic
-        pattern = r"^((?:{0}))(?: part of(?: the)?)?".format(mods)
+        pattern = rf"^((?:{mods}))(?: part of(?: the)?)?"
         result = re.search(pattern, unit, flags=re.I)
         if result is not None:
             modifier = result.group(1)
         # Parenthetical modifiers (Jurassic (Early))
         if not modifier:
-            pattern = r"\(({})\)$".format(mods)
+            pattern = rf"\(({mods})\)$"
             result = re.search(pattern, unit, flags=re.I)
             if result is not None:
                 modifier = result.group(1)
         # Trailing modifiers (Jurassic, Early)
         if not modifier:
-            pattern = r", ?({})$".format(mods)
+            pattern = rf", ?({mods})$"
             result = re.search(pattern, unit, flags=re.I)
             if result is not None:
                 modifier = result.group(1)
@@ -235,7 +236,7 @@ class StratUnit(Record):
         """Checks if modified unit name is an official ICS unit"""
         if self.kind == "chronostrat" and self.modifier:
             mods = re.split(r" ", self.modifier)
-            mod_name = "{} {}".format(mods[-1], self.unit)
+            mod_name = f"{mods[-1]} {self.unit}"
             response = self.chronobot.chronostrat(mod_name)
             if response.get("success"):
                 self.unit = mod_name

@@ -73,27 +73,25 @@ class PLSSParser(Parser):
         """Returns a string describing the parsed locality"""
         qtr = " ".join(self.qtr)
         feature = " ".join([qtr, self.sec, self.twp, self.rng]).strip()
-        return '"{}"'.format(feature)
+        return feature
 
     def parse(self, text):
         """Parse section-township-range from a string"""
         if not self.is_plss_string(text):
-            raise ValueError('Could not parse "{}" (not PLSS)'.format(text))
+            raise ValueError(f"Could not parse {repr(text)} (not PLSS)")
         self.verbatim = text
         matches = [
             m[0]
             for m in self._sec_twn_rng.findall(text)
             if "n" in m[0].lower() or "s" in m[0].lower()
         ]
-        msg = None
-        first_match = None
+
         # Iterate through matches, longest to shortest
         for match in sorted(matches, key=lambda s: len(s), reverse=True):
 
             # Strip bad prefixes (hwy, loc, etc.) that can be mistaken for
             # section numbers
             match = self._bad_prefixes.sub("", match)
-            verbatim = self._format_verbatim(match)
 
             # Clean up match to make parsing quarter sections easier
             pattern = r"\b([TR])\.? *(\d{1,2})\.? *([NSEW])\.?"
@@ -112,10 +110,10 @@ class PLSSParser(Parser):
                     break
             else:
                 self.specific = True
-                logger.debug('Parsed "{}"'.format(text))
+                logger.debug(f"Parsed {repr(text)}")
                 return self
 
-        raise ValueError('Could not parse "{}"'.format(text))
+        raise ValueError(f"Could not parse {repr(text)}")
 
     def is_plss_string(self, val):
         """Tests if the given value is a clean PLSS string"""
@@ -147,8 +145,7 @@ class PLSSParser(Parser):
             val = sre_match.group(0)
             twp = "T" + val.strip("., ").upper().lstrip("TOWNSHIP. ")
             return twp
-        mask = "Could not parse: {} (township={})"
-        raise ValueError(mask.format(val, match))
+        raise ValueError(f"Could not parse: {val} (township={match})")
 
     def _format_range(self, match):
         """Formats range as R4W"""
@@ -158,8 +155,7 @@ class PLSSParser(Parser):
             val = sre_match.group(0)
             rng = "R" + val.strip("., ").upper().lstrip("RANGE. ")
             return rng
-        mask = "Could not parse: {} (range={})"
-        raise ValueError(mask.format(val, match))
+        raise ValueError(f"Could not parse: {val} (range={match})")
 
     def _format_section(self, match):
         """Formats section as Sec. 30"""
@@ -170,8 +166,7 @@ class PLSSParser(Parser):
             sec = sorted([val[0] for val in matches], key=len, reverse=True)[0]
             sec = "Sec. " + sec.strip("., ").upper().lstrip("SECTION. ")
             return sec
-        mask = "Could not parse: {} (section={})"
-        raise ValueError(mask.format(sec, match))
+        raise ValueError(f"Could not parse: {sec} (section={match})")
 
     def _format_quarter_section(self, match):
         """Formats quarter section as NW SE NE"""
@@ -208,6 +203,5 @@ class PLSSParser(Parser):
                 # If no illegal characters, return list of quarter sections
                 if not qtr.strip("NEWS23 "):
                     return qtr.strip().split()
-            mask = "Could not parse: {} (quarter section={})"
-            raise ValueError(mask.format(match, matches))
+            raise ValueError(f"Could not parse: {match} (quarter section={matches})")
         return []

@@ -203,6 +203,5 @@ def write_kml(fp, sites):
             assert site.name
             kml.add_site(site, "candidate", name=site.name, desc="")
         except (AssertionError, AttributeError):
-            name = "site {}".format(i + 1)
-            kml.add_site(site, "candidate", name=name, desc="")
+            kml.add_site(site, "candidate", name=f"site {i + 1}", desc="")
     kml.save(fp)

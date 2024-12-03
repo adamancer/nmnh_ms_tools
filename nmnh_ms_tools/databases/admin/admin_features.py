@@ -175,7 +175,7 @@ class AdminFeatures(GeoNamesFeatures):
             pass
         # Do not map names that indicate uncertainty
         if "?" in str(names):
-            raise ValueError("Names uncertain: {}".format(names))
+            raise ValueError(f"Names uncertain: {names}")
         logger.debug(f"Resolving {names} ({kind}, {admin})")
         rows = self.query(names, kind, is_name=is_name, **admin)
         unresolved = self.unresolved(names, kind, rows)
@@ -197,7 +197,7 @@ class AdminFeatures(GeoNamesFeatures):
                 admin = {k: v for k, v in admin.items() if "code" not in k}
                 logger.debug("Calling get_admin from map_deprecated")
                 return self.get_admin(**admin)
-            raise ValueError("{}={} superseded by thesaurus".format(kind, unresolved))
+            raise ValueError(f"{kind}={unresolved} superseded by thesaurus")
         # Restrict to needed fields
         code_fld = self.kinds[kind]
         rows = [
@@ -352,7 +352,7 @@ class AdminFeatures(GeoNamesFeatures):
                 for vals in list(itertools.product(*vals)):
                     session.add(AdminThesaurus(**dict(zip(self.name_fields, vals))))
                 session.commit()
-            raise ValueError("{} does not resolve".format(vals))
+            raise ValueError(f"{vals} does not resolve")
         session.close()
         mapping.update(combine(*mappings))
         # Check if mapping points to another row in the thesaurus
@@ -399,8 +399,7 @@ class AdminFeatures(GeoNamesFeatures):
             else:
                 session.delete(row)
             if i and not i % 100:
-                logger.debug("{} records checked".format(i))
-                # break
+                logger.debug(f"{i:,} records checked")
         session.commit()
         session.close()
         self.update_thesaurus = update_thesaurus
@@ -424,7 +423,6 @@ class AdminFeatures(GeoNamesFeatures):
                     self.get_admin(**admin)
                 except ValueError:
                     raise
-                    print("Failed to map {}".format(admin))
         session.close()
         self.update_thesaurus = update_thesaurus
 
@@ -445,7 +443,7 @@ class AdminFeatures(GeoNamesFeatures):
             features = []
             for i, row in enumerate(rows):
                 if i and not i % 100000:
-                    logger.debug("{:,} records processed".format(i))
+                    logger.debug(f"{i:,} records processed")
                 rowdict = {k: v if v else None for k, v in zip(keys, row)}
                 if rowdict["fcl"] != "A":
                     continue
@@ -464,15 +462,14 @@ class AdminFeatures(GeoNamesFeatures):
                     features.append(alt_feature)
                 if len(features) >= 10000:
                     td = dt.datetime.now() - start
-                    mask = "{:,} admins processed (t={}s)"
-                    logger.debug(mask.format(len(features), td))
+                    logger.debug(f"{len(features):,} admins processed (t={td}s)")
                     session.bulk_insert_mappings(self.names, features)
                     session.commit()
                     features = []
                     start = dt.datetime.now()
                     # break
             # Add remaining features
-            logger.debug("{:,} records processed".format(i))
+            logger.debug(f"{i:,} records processed")
             session.bulk_insert_mappings(self.names, features)
             session.commit()
             session.close()
@@ -508,15 +505,15 @@ class AdminFeatures(GeoNamesFeatures):
             if drop:
                 try:
                     index.drop(bind=self.session.get_bind())
-                    logger.debug("Dropped index '%s'" % index.name)
+                    logger.debug(f"Dropped index {repr(index.name)}")
                 except OperationalError as e:
                     pass
             if create:
                 try:
                     index.create(bind=self.session.get_bind())
-                    logger.debug("Created index '%s'" % index.name)
+                    logger.debug(f"Created index {index.name}")
                 except OperationalError:
-                    logger.debug("Failed to create index '%s'" % index.name)
+                    logger.debug(f"Failed to create index {repr(index.name)}")
 
     def query(self, names, kind, is_name=True, **admin):
         kindmap = {

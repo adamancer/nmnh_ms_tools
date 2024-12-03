@@ -69,8 +69,8 @@ class MatchAnnotator(MatchEvaluator):
         # Add interpretations to debug
         for loc_id, status in self.interpreted.items():
             site = self.expand(loc_id)
-            logger.debug("{} ({}): {}".format(site.name, loc_id, status))
-        logger.debug("Description:\n{}".format(desc))
+            logger.debug(f"{site.name} ({loc_id}): {status}")
+        logger.debug(f"Description:\n{desc}")
         self.description = desc
         return desc
 
@@ -101,8 +101,8 @@ class MatchAnnotator(MatchEvaluator):
         for site in self.expand(candidates):
             if site.radius_km <= 2000:
                 kml.add_site(site, "candidate")
-        if not fn.endswith(".kml"):
-            fn = "{}.kml".format(fn)
+        if not fn.lower().endswith(".kml"):
+            fn += ".kml"
         kml.save(os.path.join("kml", fn))
 
     def _describe_selection(self):
@@ -134,19 +134,18 @@ class MatchAnnotator(MatchEvaluator):
         if constrained_to:
             constrained_to.sort(key=lambda s: s.radius_km)
             selected += [self.name(s) for s in constrained_to]
-            mask = "the intersection between {}"
-            result = mask.format(oxford_comma(selected, delim="; "))
+            result = f"the intersection between {oxford_comma(selected, delim="; ")}"
+        elif len(selected) == 1:
+            result = oxford_comma(selected, delim="; ")
         else:
-            mask = "{}" if len(selected) == 1 else "a polygon encompassing {}"
-            result = mask.format(oxford_comma(selected, delim="; "))
-        return "Coordinates and uncertainty based on {}".format(result)
+            result = f"a polygon encompassing {oxford_comma(selected, delim='; ')}"
+        return "Coordinates and uncertainty based on " + result
 
     def _describe_miss(self):
         """Lists names considered for a missed georeference"""
         desc = []
-        desc.append("Terms checked: {}".format(self.terms_checked))
-        desc.append("Terms missed: {}".format(self.missed()))
-        mask = "{} (id={}, code={}, lat={:.1f}, lng={:.1f}, radius={:.1f} km)"
+        desc.append(f"Terms checked: {self.terms_checked}")
+        desc.append(f"Terms missed: {self.missed()}")
         for name, group in self.group_by_name(self._sites).items():
             # Limit to active sites
             group = [s for s in group if s in self.active()]
@@ -154,17 +153,14 @@ class MatchAnnotator(MatchEvaluator):
                 desc.append(name)
                 for site in group:
                     centroid = site.centroid
-                    summary = mask.format(
-                        site.name,
-                        site.location_id,
-                        site.site_kind,
-                        float(centroid.y),
-                        float(centroid.x),
-                        site.radius_km,
+                    summary = (
+                        f"{site.name} (id={site.location_id}, code={site.site_kind},"
+                        f" lat={float(centroid.y):.1f}, lng={float(centroid.x):.1f},"
+                        f" radius={site.radius_km:.1f} km)"
                     )
-                    desc.append("+ {}".format(summary))
+                    desc.append(f"+ {summary}")
             else:
-                desc.append("{} (no active sites)".format(name))
+                desc.append(f"{name} (no active sites)")
         return desc
 
     def _describe_uncertainty(self):
@@ -180,41 +176,39 @@ class MatchAnnotator(MatchEvaluator):
         if estimated < 1:
             estimated = 1
         if self.radius_km < 10:
-            radius_km = "{:.1f}".format(self.radius_km)
+            radius_km = f"{self.radius_km:.1f}"
             if radius_km.endswith(".0"):
                 radius_km = radius_km.split(".")[0]
         else:
             radius_km = int(round(self.radius_km))
         return (
-            "The uncertainty radius ({} km) {} an estimate"
-            " of the minimum likely uncertainty radius calculated"
-            " based on the provided locality information"
-            " (~{} km)"
-        ).format(radius_km, rel, int(round(estimated)))
+            f"The uncertainty radius ({radius_km} km) {rel} an estimate"
+            f" of the minimum likely uncertainty radius calculated"
+            f" based on the provided locality information"
+            f" (~{int(round(estimated))} km)"
+        )
 
     def _describe_filter(self):
         """Describes common elements of filters for selected sites"""
-        master = None
+        main = None
         for site in self.interpreted_as("selected"):
-            if master is None:
-                master = site.filter
+            if main is None:
+                main = site.filter
             else:
-                master = {
-                    k: v for k, v in master.items() if v and v == site.filter.get(k)
-                }
+                main = {k: v for k, v in main.items() if v and v == site.filter.get(k)}
         # Map admin codes back to names
         codes = {
             "country_code": "country",
             "admin_code_1": "state_province",
             "admin_code_2": "county",
         }
-        master = {codes.get(k, k): v for k, v in master.items() if v}
-        logger.debug("Final filter: {}".format(master))
+        main = {codes.get(k, k): v for k, v in main.items() if v}
+        logger.debug(f"Final filter: {main}")
         ordered = CONFIG["georeferencing"]["ordered_field_list"]
-        fltr = [f["field"] for f in ordered if f["field"] in master]
+        fltr = [f["field"] for f in ordered if f["field"] in main]
         fltr = [self.field(f).replace("_", "/") for f in fltr]
         if fltr:
-            return "Feature(s) matched on {}".format(oxford_comma(fltr))
+            return f"Feature(s) matched on {oxford_comma(fltr)}"
         return
 
     def _describe_encompassing(self):
@@ -224,13 +218,12 @@ class MatchAnnotator(MatchEvaluator):
             if site.field not in {"country", "state_province", "county"}:
                 sites.append(site)
         if sites:
-            mask = (
-                "The following place names mentioned in this record"
-                " appear to encompass the selected feature(s): {}"
-            )
             keys = [self.key(s).split(":")[-1] for s in sites]
             names = sorted({self.quote(k) for k in keys})
-            return mask.format(oxford_comma(names))
+            return (
+                f"The following place names mentioned in this record appear to"
+                f" encompass the selected feature(s): {oxford_comma(names)}"
+            )
         return
 
     def _describe_intersecting(self):
@@ -241,13 +234,12 @@ class MatchAnnotator(MatchEvaluator):
         if countries:
             sites = [s for s in sites if s.site_kind != "CONT"]
         if sites:
-            mask = (
-                "The following place names mentioned in this record"
-                " intersect the selected features: {}"
-            )
             keys = [self.key(s).split(":")[-1] for s in sites]
             names = sorted({self.quote(k) for k in keys})
-            return mask.format(oxford_comma(names))
+            return (
+                f"The following place names mentioned in this record intersect"
+                f" the selected features: {oxford_comma(names)}"
+            )
         return
 
     def _describe_multiples(self):
@@ -264,65 +256,64 @@ class MatchAnnotator(MatchEvaluator):
                 name = self.quote(name.split(":", 1)[1])
                 # Don't mention places that were ignored
                 if name not in self.ignored():
-                    mask = "{} (n={})"
                     if group[0].intersects_all(group[1:]):
-                        mask = "{} (n={}, all intersecting)"
-                    sites.append(mask.format(name, count))
+                        msg = f"{name} (n={count}, all intersecting)"
+                    else:
+                        msg = f"{name} (n={count})"
+                    sites.append(msg)
 
         if sites:
-            mask = (
-                "The following place names mentioned in this record"
-                " match multiple places: {}. The final georeference "
+            msg = (
+                f"The following place names mentioned in this record match multiple"
+                f" places: {oxford_comma(sites)}. The final georeference "
             )
             if len(selected) == 1:
                 name = sites[0].split(" (n=")[0]
                 explanations = self.multiples.get(name, [])
                 if len(set(explanations)) != 1:
-                    logger.warning('Could not explain "{}"'.format(name))
-                    mask += "uses the best match on this name"
+                    logger.warning(f"Could not explain {repr(name)}")
+                    msg += "uses the best match on this name"
                 else:
-                    mask += explanations[0]
+                    msg += explanations[0]
             elif len(groups) == 1 and len(set([self.key(s) for s in selected])) == 1:
                 name = list(groups.keys())[0]
                 count = [self.key(s) for s in selected].count(name)
                 if count == len(selected):
-                    mask += "includes all features matching this name"
+                    msg += "includes all features matching this name"
                 else:
-                    mask += "uses {count} features matching this name"
+                    msg += f"uses {count} features matching this name"
             else:
-                mask += (
+                msg += (
                     "encompasses the features matching each place name"
                     " with the smallest distance between them"
                 )
-            return mask.format(oxford_comma(sites))
+            return msg
         return
 
     def _describe_less_specific(self):
         """Lists names that were less specific than the selected sites"""
         sites = self.interpreted_as("less specific")
         if sites:
-            mask = (
-                "The following place names mentioned in this record"
-                " appear to describe less specific features and"
-                " were ignored: {}"
-            )
             keys = [self.key(s).split(":")[-1] for s in sites]
             names = sorted({self.quote(k) for k in keys})
-            return mask.format(oxford_comma(names))
+            return (
+                f"The following place names mentioned in this record"
+                f" appear to describe less specific features and"
+                f" were ignored: {oxford_comma(names)}"
+            )
         return
 
     def _describe_more_specific(self):
         """Lists names that were more specific than the selected sites"""
         sites = self.interpreted_as("more specific")
         if sites:
-            mask = (
-                "The following place names mentioned in this record"
-                " appear to describe more specific features but could"
-                " not be matched: {}"
-            )
             keys = [self.key(s).split(":")[-1] for s in sites]
             names = sorted({self.quote(k) for k in keys})
-            return mask.format(oxford_comma(names))
+            return (
+                f"The following place names mentioned in this record"
+                f" appear to describe more specific features but could"
+                f" not be matched: {oxford_comma(names)}"
+            )
         return
 
     def _describe_ignored(self):
@@ -332,12 +323,11 @@ class MatchAnnotator(MatchEvaluator):
         sites = [s for s in self.ignored() if not re.match(r"^{.*}$", s)]
 
         if sites:
-            mask = (
-                "The following place names mentioned in this record"
-                " could not be reconciled with other locality info"
-                " and were ignored: {}"
+            return (
+                f"The following place names mentioned in this record"
+                f" could not be reconciled with other locality info"
+                f" and were ignored: {oxford_comma(sorted(set(sites)))}"
             )
-            return mask.format(oxford_comma(sorted(set(sites))))
         return
 
     def _describe_missed(self):
@@ -345,11 +335,11 @@ class MatchAnnotator(MatchEvaluator):
         stmt = []
         missed = self.missed()
         if missed:
-            mask = (
-                "The following place names mentioned"
-                " in this record were not found: {}"
+            stmt.append(
+                f"The following place names mentioned in this record"
+                f" were not found: {oxford_comma(missed)}"
             )
-            stmt.append(mask.format(oxford_comma(missed)))
+
         ignored = [s for s in self.ignored() if re.match(r"^{.*}$", s)]
         if self.leftovers or ignored:
             stmt.append("Some data in this record could not be interpreted")
@@ -358,8 +348,9 @@ class MatchAnnotator(MatchEvaluator):
     def _describe_sources(self):
         """Lists sources that provided base coordinates and geometries"""
         if self.sources:
-            mask = "This georeference is based on data from {}"
-            return mask.format(oxford_comma(self.sources))
+            return (
+                f"This georeference is based on data from {oxford_comma(self.sources)}"
+            )
         return
 
     def get_uncertainty(self):
@@ -397,7 +388,7 @@ class MatchAnnotator(MatchEvaluator):
                     counties = []
                     for county in name:
                         if not re.search(pattern, county, flags=re.I):
-                            county = "{} Co.".format(county)
+                            county = f"{county} Co."
                         else:
                             county = county.replace("County", "Co.")
                         counties.append(county)
@@ -423,7 +414,7 @@ class MatchAnnotator(MatchEvaluator):
                 source = f"{site.site_kind}: {source}"
         elif site.site_source:
             source = f"via {site.site_source}"
-        return "{} ({})".format(loc, source) if source else loc
+        return f"{loc} ({source})" if source else loc
 
     def save_parsed(self):
         """Saves parses of locality names to a SQLite database"""
@@ -464,7 +455,9 @@ class MatchAnnotator(MatchEvaluator):
         """Adds quotes to a phrase"""
         if not use_quotes:
             use_quotes = "(" in val or re.search(r"\b[a-z]{4,}\b", val)
-        return '"{}"'.format(val.strip('"').replace('"', "'")) if use_quotes else val
+        if use_quotes:
+            return val
+        return '"' + val.strip('"').replace('"', "'") + '"'
 
 
 # Define deferred class attributes

@@ -21,7 +21,7 @@ class MeasurementParser(Parser):
         if is_range(val):
             self.feature = val
             return self
-        raise ValueError('Could not parse "{}"'.format(val))
+        raise ValueError(f"Could not parse {repr(val)}")
 
     def name(self):
         """Returns a string describing the parsed locality"""

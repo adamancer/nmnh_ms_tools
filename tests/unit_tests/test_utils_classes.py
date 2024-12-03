@@ -28,8 +28,8 @@ def test_str_class(test_input, expected):
 @pytest.mark.parametrize(
     "test_input,expected",
     [
-        (None, "FakeClass(a=a, b=['b'], c=None)"),
-        (["a"], "FakeClass(a=a)"),
+        (None, "FakeClass(a='a', b=['b'], c=None)"),
+        (["a"], "FakeClass(a='a')"),
     ],
 )
 def test_repr_class(test_input, expected):

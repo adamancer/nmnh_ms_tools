@@ -64,7 +64,7 @@ class PLSSBot(Bot):
 
     def get_townships(self, state, twp, rng):
         """Finds matching townships and ranges using BLM webservices"""
-        url = "{}/1/query".format(self.base_url)
+        url = f"{self.base_url}/1/query"
         # Set query params and write WHERE clause
         query = {
             "state": state,
@@ -112,7 +112,7 @@ class PLSSBot(Bot):
         """Finds a specific section using BLM webservices"""
         if plss_id is None:
             return []
-        url = "{}/2/query".format(self.base_url)
+        url = f"{self.base_url}/2/query"
         # Set query params and write WHERE clause
         query = {"plss_id": plss_id, "sec": str(sec.lower()).strip("sec. ").zfill(2)}
         mask = "PLSSID='{plss_id}'" " AND FRSTDIVNO='{sec}'" " AND FRSTDIVTYP='SN'"
@@ -149,5 +149,4 @@ class PLSSResponse(JSONResponse):
 
     def wkid(self, prefix="epsg"):
         """Returns the datum for the response"""
-        wkid = self.json["spatialReference"]["latestWkid"]
-        return "{}:{}".format(prefix, wkid)
+        return f"{prefix}:{self.json['spatialReference']['latestWkid']}"

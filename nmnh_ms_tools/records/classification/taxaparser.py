@@ -84,7 +84,7 @@ class TaxaParser:
     def patternize(self, val, **kwargs):
         """Constructs a regex pattern including modifiers"""
         modifiers = "|".join(self._modifiers)
-        pattern = r"\b((({})[ \-]){{0,4}}{})\b".format(modifiers, val)
+        pattern = rf"\b((({modifiers})[ \-]){{0,4}}{val})\b"
         return re.compile(pattern, **kwargs)
 
     def parse(self):
@@ -101,7 +101,7 @@ class TaxaParser:
         if any(self.keywords):
             primary = self.keywords[0]
             associated = self.keywords[1:] if len(self.keywords) > 1 else []
-            self.indexed = "{} {}".format("-".join(associated), primary).strip()
+            self.indexed = (f"{"-".join(associated)} {primary}").strip()
         self.indexed = self.key(self.indexed)
 
     def segment(self):
@@ -293,7 +293,7 @@ class TaxaParser:
         parents = [parts[0]]
         for i in range(len(parts)):
             modifiers = "-".join(parts[1 : i + 2])
-            parents.append("{} {}".format(modifiers, parts[0]).strip())
+            parents.append((f"{modifiers} {parts[0]}").strip())
         parents = [self.key(p) for p in parents]
         parents = [p for p in parents if p != self.indexed]
         parents = [p for i, p in enumerate(parents) if p not in parents[:i]]
@@ -307,7 +307,7 @@ class TaxaParser:
         """Converts a list of parts to a key"""
         if parts is None:
             parts = self.parts if self.parts else self.segment()
-        return "|".join(["{}-{}".format(p.index, p.stem) for p in parts])
+        return "|".join([f"{p.index}-{p.stem}" for p in parts])
 
     @staticmethod
     def split(name):
@@ -338,7 +338,7 @@ class TaxaParser:
     def _parse_colors(self):
         """Parses color terms from a rock name"""
         colors = "|".join(self._colors)
-        val = r"({0})(([ \-]and[ \-]|-)({0}))?(?!-)".format(colors)
+        val = rf"({colors})(([ \-]and[ \-]|-)({colors}))?(?!-)"
         pattern = self.patternize(val)
         matches = pattern.search(self.name)
         if matches is not None:
@@ -352,9 +352,9 @@ class TaxaParser:
         # Check for stopwords
         self.name = self.name.strip()
         for stopword in self.config["stopwords"]:
-            if self.name.startswith("{} ".format(stopword)):
+            if self.name.startswith(f"{stopword} "):
                 self.name = self.name[len(stopword) :].strip()
-            if self.name.endswith(" {}".format(stopword)):
+            if self.name.endswith(f" {stopword}"):
                 self.name = self.name[: -len(stopword)].strip()
         # Check for host rock
         pattern = re.compile(r"^([a-z]+)-hosted\b")
@@ -388,7 +388,7 @@ class TaxaParser:
         prefixes = ["meta"]
         for prefix in prefixes:
             if val.startswith(prefix) and val != prefix:
-                val = "{}-{}".format(prefix, val[len(prefix) :])
+                val = f"{prefix}-{val[len(prefix) :]}"
         return val.split("-")
 
     @staticmethod
@@ -400,11 +400,10 @@ class TaxaParser:
             elif endswith[-1].taxon.is_official():
                 startswith.pop()
             else:
-                mask = "Could not reconcile startswith={}, endswith={}"
                 raise ValueError(
-                    mask.format(
-                        [s.phrase for s in startswith], [s.phrase for s in endswith]
-                    )
+                    f"Could not reconcile"
+                    f" startswith={[s.phrase for s in startswith]},"
+                    f" endswith={[s.phrase for s in endswith]}"
                 )
         first = startswith[-1].phrase if startswith else ""
         last = endswith[-1].phrase if endswith else ""

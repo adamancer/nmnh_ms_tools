@@ -21,17 +21,17 @@ class AdamancerBot(Bot):
 
     def chronostrat(self, earliest, **kwargs):
         """Gets info about a given named or numeric geologic age"""
-        url = "{}/chronostrat".format(self.domain.rstrip("/"))
+        url = f"{self.domain.rstrip('/')}/chronostrat"
         params = {"earliest": earliest}
         params.update(kwargs)
         return self.get(url, params=params)
 
     def metbull(self, name):
         """Gets info about a meteorite"""
-        return self.get("{}/metbull/{}".format(self.domain.rstrip("/"), name))
+        return self.get(f"{self.domain.rstrip('/')}/metbull/{name}")
 
     def tas(self, sample_id, sio2, na2o, k2o):
-        url = "{}/tas/name".format(self.domain.rstrip("/"))
+        url = f"{self.domain.rstrip('/')}/tas/name"
 
         # Convert pandas series to lists
         if isinstance(sample_id, pd.Series):

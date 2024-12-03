@@ -288,7 +288,7 @@ class GeoNamesFeatures:
                 alt_names.extend(self.map_alt_names(rowdict))
                 if i and not i % 25000:
                     td = dt.datetime.now() - start
-                    logger.debug("{:,} records processed (t={}s)".format(i, td))
+                    logger.debug(f"{i:,} records processed (t={td}s)")
                     session.bulk_insert_mappings(self.features, features)
                     session.bulk_insert_mappings(self.names, alt_names)
                     session.commit()
@@ -298,7 +298,7 @@ class GeoNamesFeatures:
                     # break
 
             # Add remaining features
-            logger.debug("{:,} records processed".format(i))
+            logger.debug(f"{i:,} records processed")
             session.bulk_insert_mappings(self.features, features)
             session.bulk_insert_mappings(self.names, alt_names)
             session.commit()
@@ -351,14 +351,14 @@ class GeoNamesFeatures:
         total = 0
         offset = 0
         while query.first():
-            logger.debug("New query: {:,}".format(offset))
+            logger.debug(f"New query: {offset:,}")
             for row in query:
                 alt_names.extend(self.map_alt_names(dictify(row)))
                 if len(alt_names) >= 10000:
                     session.bulk_insert_mappings(self.names, alt_names)
                     session.commit()
                     total += len(alt_names)
-                    logger.debug("Committed {:,} records".format(total))
+                    logger.debug(f"Committed {total:,} records")
                     alt_names = []
             offset += self.batch_size
             query = query.offset(offset)
@@ -366,7 +366,7 @@ class GeoNamesFeatures:
             session.bulk_insert_mappings(self.names, alt_names)
             session.commit()
             total += len(alt_names)
-            logger.debug("Committed {:,} records".format(len(alt_names)))
+            logger.debug(f"Committed {len(alt_names):,} records")
         session.close()
         self.create_indexes()
 
@@ -417,7 +417,7 @@ class GeoNamesFeatures:
         # Standardize names
         st_names = self.std_names(names)
         if not st_names:
-            logger.debug('Could not standardize term: "{}"'.format(names[0]))
+            logger.debug(f"Could not standardize term: {repr(names[0])}")
             return []
         # Create full records for valid names
         alt_names = []
@@ -455,14 +455,14 @@ class GeoNamesFeatures:
                         logger.debug(f"Could not standardize {repr(syn)}")
                 synonyms = self.delim.join(synonyms)
                 if synonyms != row.alternate_names:
-                    mask = "Updated synonyms for geoname_id={}"
-                    logger.debug(mask.format(row.geoname_id))
+                    logger.debug(f"Updated synonyms for geoname_id={row.geoname_id}")
                     row.alternate_names = synonyms
             for row in session.query(self.names).filter(
                 self.names.geoname_id == geoname_id, self.names.st_name == st_name
             ):
-                mask = "Deleted geoname_id={} where st_name={}"
-                logger.debug(mask.format(row.geoname_id, row.st_name))
+                logger.debug(
+                    f"Deleted geoname_id={row.geoname_id} where st_name={row.st_name}"
+                )
                 session.delete(row)
         session.commit()
         session.close()
@@ -504,15 +504,15 @@ class GeoNamesFeatures:
             if drop:
                 try:
                     index.drop(bind=self.session.get_bind())
-                    logger.debug("Dropped index '%s'" % index.name)
+                    logger.debug(f"Dropped index {repr(index.name)}")
                 except OperationalError as e:
                     pass
             if create:
                 try:
                     index.create(bind=self.session.get_bind())
-                    logger.debug("Created index '%s'" % index.name)
+                    logger.debug(f"Created index {repr(index.name)}")
                 except OperationalError:
-                    logger.debug("Failed to create index '%s'" % index.name)
+                    logger.debug(f"Failed to create index {repr(index.name)}")
 
     def create_indexes(self):
         """Helper method to create indexes on the names table"""
@@ -632,7 +632,7 @@ class GeoNamesFeatures:
             try:
                 return self.continent_name_to_code[name.split("-")[0].strip()]
             except KeyError:
-                logger.warning("Could not map continent: {}".format(name))
+                logger.warning(f"Could not map continent: {name}")
                 return
 
     def get_country_name(self, code):
@@ -655,9 +655,7 @@ class GeoNamesFeatures:
                 ):
                     rec["name"] = self.get_country_name(rec["country_code"])
             except (AttributeError, KeyError):
-                logger.warning(
-                    "Country code '{}' not found".format(rec["country_code"])
-                )
+                logger.warning(f"Country code {repr(rec['country_code'])} not found")
         return rec
 
 

@@ -71,7 +71,7 @@ class TaxaIndex(MutableMapping):
         try:
             matches = self[key]
         except KeyError:
-            raise KeyError('No matches on "{}"'.format(self.key(key)))
+            raise KeyError(f"No matches on {repr(self.key(key))}")
         # Result is a taxon record
         if isinstance(matches, dict):
             return matches
@@ -79,8 +79,8 @@ class TaxaIndex(MutableMapping):
         if len(matches) == 1:
             return matches[0]
         if not matches:
-            raise KeyError('No matches on "{}"'.format(self.key(key)))
-        raise KeyError('Multiple matches on "{}"'.format(self.key(key)))
+            raise KeyError(f"No matches on {repr(self.key(key))}")
+        raise KeyError(f"Multiple matches on {repr(self.key(key))}")
 
     def from_json(self, fp, encoding="utf-8"):
         """Reads data from JSON file"""
@@ -298,15 +298,15 @@ class NameIndex(TaxaIndex):
         try:
             self.from_json(self.path)
         except (IOError, OSError):
-            print("Building {} index...".format(self.path.split("_")[0]))
+            print(f"Building {self.path.split("_")[0]} index...")
             count = 0
             for obj in (tree.obj, tree.new):
                 for taxon in obj.values():
                     self.add_taxon(taxon)
                     count += 1
                     if not count % 5000:
-                        print("{:,} names processed".format(count))
-            print("{:,} names processed".format(count))
+                        print(f"{count:,} names processed")
+            print("{count:,} names processed")
             for key, taxa in self.items():
                 self[key] = sorted(set(taxa))
             self.to_json(self.path)
@@ -329,15 +329,15 @@ class StemIndex(TaxaIndex):
         try:
             self.from_json(self.path)
         except (IOError, OSError):
-            print("Building {} index...".format(self.path.split("_")[0]))
+            print(f"Building {self.path.split("_")[0]} index...")
             count = 0
             for obj in (tree.obj, tree.new):
                 for taxon in obj.values():
                     self.add_taxon(taxon)
                     count += 1
                     if not count % 5000:
-                        print("{:,} names processed".format(count))
-            print("{:,} names processed".format(count))
+                        print("{count:,} names processed")
+            print("{count:,} names processed")
             for key, taxa in self.items():
                 self[key] = sorted(set(taxa))
             self.to_json(self.path)

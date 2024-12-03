@@ -115,8 +115,8 @@ def add_article(val):
     starts_with = re.compile(r"[aeiou]|[fhlmnrsx]{1,2}(\s|\d)", re.I)
     not_starts_with = re.compile(r"eu|i{1,3}[abcd]|iv[abcd]", re.I)
     if starts_with.match(val) and not not_starts_with.match(val):
-        return "an {}".format(val)
-    return "a {}".format(val)
+        return f"an {val}"
+    return f"a {val}"
 
 
 def collapse_whitespace(val):
@@ -263,7 +263,7 @@ def _get_nums():
     for ten in tens:
         nums.append(ten)
         for num in nums[1:10]:
-            nums.append(r"{}-{}".format(ten, num))
+            nums.append(f"{ten}-{num}")
     return nums
 
 

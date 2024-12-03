@@ -167,7 +167,7 @@ def str_class(inst: Any, attributes: list = None) -> str:
                 rows.append((attr, val))
                 attr = ""
     maxlen = max([len(row[0]) for row in rows])
-    return "\n".join(["{}: {}".format(a.ljust(maxlen), v) for a, v in rows])
+    return "\n".join([f"{a.ljust(maxlen)}: {v}" for a, v in rows])
 
 
 def repr_class(inst: Any, attributes: list[str] = None) -> str:
@@ -187,8 +187,8 @@ def repr_class(inst: Any, attributes: list[str] = None) -> str:
     """
     if attributes is None:
         attributes = inst.attributes
-    attrs = ["{}={}".format(a, getattr(inst, a)) for a in attributes]
-    return "{}({})".format(inst.__class__.__name__, ", ".join(attrs))
+    attrs = [f"{a}={repr(getattr(inst, a))}" for a in attributes]
+    return f"{inst.__class__.__name__}({", ".join(attrs)})"
 
 
 def custom_copy(inst: Any) -> Any:

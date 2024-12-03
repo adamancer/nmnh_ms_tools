@@ -69,12 +69,12 @@ class BibTeXMapper:
         """Converts custom record type to BibTeX entry type"""
         kind = kind.lower()
         try:
-            entry_type = self.entry_type_map[kind]
+            mask = self.entry_type_map[kind]
         except KeyError:
-            entry_type = kind
-            if entry_type.lower() not in self.entry_types:
-                warnings.warn(f"Unrecognized entry_type: {entry_type}")
-        return entry_type.format(modifier).lower()
+            mask = kind
+            if mask.lower() not in self.entry_types:
+                warnings.warn(f"Unrecognized entry_type: {mask}")
+        return mask.format(modifier).lower()
 
     def source_field(self, kind):
         """Returns the BibTeX field for the source/parent publication"""
@@ -135,5 +135,5 @@ class BibTeXMapper:
                 return "phdthesis"
             if stdval.startswith("m"):
                 return "mastersthesis"
-            raise ValueError("Could not map {} to thesis type".format(val))
+            raise ValueError(f"Could not map {repr(val)} to thesis type")
         return ""

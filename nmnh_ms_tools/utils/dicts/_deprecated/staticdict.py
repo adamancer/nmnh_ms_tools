@@ -15,7 +15,7 @@ class StaticDict(BaseDict):
         super().__init__(*args, **kwargs)
 
     def __str__(self):
-        return "{}({})".format(self._name, pp.pformat(self))
+        return f"{self._name}({pp.pformat(self)})"
 
     def __setitem__(self, key, val):
         try:
@@ -23,7 +23,7 @@ class StaticDict(BaseDict):
         except KeyError:
             super().__setitem__(key, val)
         else:
-            raise KeyError("{} already set".format(key))
+            raise KeyError(f"{repr(key)} already set")
 
     def __delitem__(self, key):
-        raise KeyError("Cannot delete key from StaticDict")
+        raise KeyError(f"Cannot delete {repr(key)} from StaticDict")

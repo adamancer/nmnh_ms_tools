@@ -114,7 +114,7 @@ class OceanQuery:
                     start = 0 if i < 100 else i - 100
                     end = i + 100
                     GeoMetry(tiles[i], crs="epsg:4326").draw(tiles[start:end])
-                    ocean = input("ocean (last={}): ".format(last))
+                    ocean = input(f"ocean (last={last}): ")
                     if not ocean:
                         ocean = last
                     last = ocean
@@ -124,8 +124,8 @@ class OceanQuery:
                 last = row.ocean
         # Map North and South halves of the Atlantic and Pacific
         for name in ("Atlantic", "Pacific"):
-            term = "%{}%".format(name)
-            pattern = r"^.*{}$".format(name)
+            term = f"%{name}%"
+            pattern = rf"^.*{name}$"
             for row in session.query(OceanTiles).filter(OceanTiles.ocean.like(term)):
                 geom = wkb.loads(row.geometry)
                 minx, miny, maxx, maxy = geom.bounds

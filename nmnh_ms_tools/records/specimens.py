@@ -128,7 +128,7 @@ class Specimen(Record):
         elif "CatNumber" in data:
             self._parse_emu(data)
         else:
-            raise ValueError("Could not parse {}".format(data))
+            raise ValueError(f"Could not parse {data}")
 
         # FIXME: Standardize department names more generally
         self.collection_code = self.collection_code.replace(
@@ -313,20 +313,22 @@ class Specimen(Record):
             # Compare taxonomy/classification
             if self.collection_code != "Mineral Sciences":
                 for val in self.higher_classification:
-                    if std.same_as(val, text, "any"):
+                    if self.std.same_as(val, text, "any"):
                         score.add("higherClassification", 2)
 
                 for val in self.scientific_name:
-                    if std.same_as(val, text, "any"):
+                    if self.std.same_as(val, text, "any"):
                         score.add("scientificName", 2)
 
                 val = self.vernacular_name
-                if std.same_as(val, text, "all"):
+                if self.std.same_as(val, text, "all"):
                     score.add("vernacularName", 3)
 
             if not self.higher_classification:
                 for val in self.scientific_name:
-                    if std.same_as(val, text, "any", replace_endings=["ic", "s", "y"]):
+                    if self.std.same_as(
+                        val, text, "any", replace_endings=["ic", "s", "y"]
+                    ):
                         score.add("scientificName", 2)
 
             # Compare stratigraphy
@@ -335,7 +337,7 @@ class Specimen(Record):
                 # Compare chronostratigraphy
                 for attr in ["group", "formation", "member"]:
                     val = getattr(self, attr)
-                    if std.same_as(val, text, "any"):
+                    if self.std.same_as(val, text, "any"):
                         score.add("lithostratigraphy", 3)
 
                 # Compare chronostratigraphy
@@ -348,24 +350,24 @@ class Specimen(Record):
                     "latest_age_or_highest_stage",
                 ]:
                     val = getattr(self, attr)
-                    if std.same_as(val, text, "any"):
+                    if self.std.same_as(val, text, "any"):
                         score.add("chronostratigraphy", 1)
 
             # Compare type status
             if self.type_status:
-                pattern = r"\b{}s?\b".format(self.type_status)
+                pattern = rf"\b{self.type_status}s?\b"
                 if re.search(pattern, text, flags=re.I):
                     score.add("typeStatus", 0.51)
 
             # Compare country
             if self.country:
-                pattern = r"\b{}\b".format(re.escape(std.delimit(self.country)))
+                pattern = rf"\b{re.escape(self.std.delimit(self.country))}\b"
                 if re.search(pattern, delimited_text):
                     score.add("country", 0.51)
 
             # Compare state/province
             for state_prov in [s for s in self.state_province if s]:
-                pattern = r"\b{}\b".format(re.escape(std.delimit(state_prov)))
+                pattern = rf"\b{re.escape(self.std.delimit(state_prov))}\b"
                 if re.search(pattern, delimited_text):
                     score.add("stateProvince", 0.51)
 
@@ -382,7 +384,7 @@ class Specimen(Record):
             ]
             for attr in attrs:
                 for val in as_list(getattr(self._site, attr)):
-                    if val and std.same_as(val, text, "any"):
+                    if val and self.std.same_as(val, text, "any"):
                         score.add(to_camel(attr), 1)
 
             # Compare custom locality fields
@@ -393,14 +395,14 @@ class Specimen(Record):
             ]
             for attr in attrs:
                 for val in as_list(getattr(self._site, attr)):
-                    if val and std.same_as(val, text, "any"):
+                    if val and self.std.same_as(val, text, "any"):
                         score.add(to_camel(attr), 1)
 
             # Extract features from verbatim locality
             if self.verbatim_locality:
                 for loc in parse_localities(self.verbatim_locality):
                     for name in loc.names():
-                        pattern = "\b{}\b".format(re.escape(std.delimit(name)))
+                        pattern = rf"\b{re.escape(self.std.delimit(name))}\b"
                         if re.search(pattern, delimited_text):
                             score.add("verbatimLocality", 1)
                         break

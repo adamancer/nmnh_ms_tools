@@ -43,16 +43,16 @@ class JunctionParser(Parser):
             self.feature_kind = "road"
             self.specific = True
             return self
-        raise ValueError('Could not parse "{}"'.format(val))
+        raise ValueError(f"Could not parse {repr(val)}")
 
     def name(self):
         """Returns a string describing the parsed locality"""
         name = []
         if len(self.features) > 1:
-            return "Junction of {}".format(oxford_comma(self.features))
+            return f"Junction of {oxford_comma(self.features)}"
         elif len(self.features) == 1:
             return self.features[0]
-        raise ValueError('Could not derive name: "{}"'.format(repr(self)))
+        raise ValueError(f"Could not derive name: {repr(self)}")
 
 
 def get_road_pattern():
@@ -72,13 +72,13 @@ def is_road(val):
         return False
     is_highway = RE.search(r"\b{highway}\b", val)
     is_feature = RE.search(r"\b{feature}\b", val)
-    is_street = RE.search(r"\b({})\b".format("|".join(ROADS)), val, flags=re.I)
+    is_street = RE.search(rf"\b({"|".join(ROADS)})\b", val, flags=re.I)
     return is_highway or (is_feature and is_street and val.lower() not in ROADS)
 
 
 def get_road(val):
     """Matches descriptions on a road"""
-    pattern = r"^(?:(?:along|off|on|side of) )?{}$".format(get_road_pattern())
+    pattern = rf"^(?:(?:along|off|on|side of) )?{get_road_pattern()}$"
     match = RE.search(pattern, val)
     if match is not None and is_road(match.group(1)):
         return match.group(1)
@@ -86,17 +86,20 @@ def get_road(val):
 
 def get_junction(val):
     """Matches road intersections"""
-    pattern = r"\b(?:intersection|jct|junction) (?:(?:between|of|with) )?{}\b"
-    match = RE.search(pattern.format(get_roads_pattern()), val, flags=re.I)
+    match = RE.search(
+        rf"\b(?:intersection|jct|junction) (?:(?:between|of|with) )?{get_roads_pattern()}\b",
+        val,
+        flags=re.I,
+    )
     if match is not None:
         roads = [match.group(1), match.group(2)]
         if all([is_road(r) for r in roads]):
             return roads
     # Junctions referencing features defined elsewhere
     pattern = (
-        r"\b(?:beyond|it\'?s|past) (?:intersection|jct|junction)"
-        r" (?:between|of|with) ({})\b"
+        rf"\b(?:beyond|it\'?s|past) (?:intersection|jct|junction)"
+        rf" (?:between|of|with) ({get_road_pattern()})\b"
     )
-    match = RE.search(pattern.format(get_road_pattern()), val, flags=re.I)
+    match = RE.search(pattern, val, flags=re.I)
     if match is not None and is_road(match.group(1)):
         return ["{road}", match.group(1)]

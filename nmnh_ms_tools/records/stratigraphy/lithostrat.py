@@ -141,10 +141,10 @@ class LithoStrat(Record):
                 if primary.max_ma < children.max_ma:
                     primary.max_ma = children.max_ma
                 # Update sources based on complete list of units checked
-                mask = "https://macrostrat.org/api/units?strat_name_id={}"
-                macrostrat_ids = [m.macrostrat_id for m in matches]
-                for macrostrat_id in sorted(set(macrostrat_ids)):
-                    primary.sources.append(mask.format(macrostrat_id))
+                for macrostrat_id in sorted({m.macrostrat_id for m in matches}):
+                    primary.sources.append(
+                        f"https://macrostrat.org/api/units?strat_name_id={macrostrat_id}"
+                    )
                 return primary
         return
 

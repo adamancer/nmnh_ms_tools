@@ -106,7 +106,7 @@ def test_append_feature_type(test_input, expected):
     [
         (
             "20 km south of Iceland; Atlantic Ocean, North",
-            ["20 km S of Iceland", "North Atlantic Ocean"],
+            ["20 km S of Iceland", "N Atlantic Ocean"],
         ),
         ("37 km E of Riberalta on road to Guayaramerin", ["37 km E of Riberalta"]),
         (
@@ -306,7 +306,7 @@ def test_append_feature_type(test_input, expected):
         ),
         # ('West Coast District Municipality', []),
         ("West Coast Of Florida", ["W Florida"]),
-        ("Western Cape; Central Vishayas", ["Western {cape}", "Central Vishayas"]),
+        ("Western Cape; Central Vishayas", ["W {cape}", "Vishayas (Center)"]),
         ("Western point of Point Martin", ["W Point Martin"]),
         (
             "Wyville--Thomson Ridge; between the Faroe Islands and Scotland",
@@ -320,5 +320,5 @@ def test_parse_localities(test_input, expected):
         for feature in parsed:
             if not isinstance(feature, list):
                 feature = [feature]
-            features.extend([str(f).lower().strip('"') for f in feature])
+            features.extend([str(f).lower().strip() for f in feature])
     assert set(features) == set([f.lower() for f in expected])

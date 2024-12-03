@@ -195,10 +195,10 @@ class MatchGeoNames(MatchPipe):
                     cloned = site.copy()
                     cloned.sources = site.sources
                     cached.append(cloned)
-                logger.debug("Resolved from cache: {}".format(key))
+                logger.debug(f"Resolved from cache: {key}")
                 return cached
             except ValueError:
-                logger.error("Could not restore cached records: {}".format(key))
+                logger.error(f"Could not restore cached records: {key}")
             except KeyError:
                 pass
         logger.debug(f"Searching for {key[:256]}...")
@@ -218,10 +218,8 @@ class MatchGeoNames(MatchPipe):
         # Log result
         if len(codes) > 20:
             codes = codes[:20] + ["..."]
-        # mask = 'Search for {} (name={}, codes={}, kwargs={}) matched {} records: {}'
-        # logger.debug(mask.format(st_name, name, codes, kwargs, len(records), gids))
         gids = [s.location_id for s in records]
-        logger.debug("Search yielded {:,} records: {}".format(len(gids), gids))
+        logger.debug(f"Search yielded {len(gids):,} records: {gids}")
         if use_cache:
             self.cache[key] = records
         return records
@@ -257,8 +255,9 @@ class MatchGeoNames(MatchPipe):
                 names = sorted(set(site.site_names + site.synonyms))
                 if len(names) > 10:
                     names = names[:9] + ["..."]
-                mask = '{}: Name mismatch: "{}" not in {}'
-                logging.debug(mask.format(site.location_id, name, names))
+                logging.debug(
+                    f"{site.location_id}: Name mismatch: {repr(name)} not in {names}"
+                )
                 continue
             # Filter sites from the wrong country or admin division
             try:
@@ -277,20 +276,6 @@ class MatchGeoNames(MatchPipe):
             for attr in ["admin_code_2", "admin_code_1", "country_code"]:
                 val = getattr(self.std_site, attr)  # already standardized
                 site.compare_attr(val, self.std(getattr(site, attr)), attr)
-            """
-            attrs = ['admin_code_2', 'admin_code_1', 'country_code']
-            if self.very_large_feature() or min_size == 100:
-                attrs = []
-            elif min_size == 50:
-                attrs = ['country_code']
-            for attr in attrs:
-                val = getattr(self.std_site, attr)  # already standardized
-                site.compare_attr(val, self.std(getattr(site, attr)), attr)
-            if -1 in site.filter.values():
-                mask = '{}: Admin mismatch: {}'
-                logging.debug(mask.format(site.location_id, site.filter))
-                continue
-            """
 
             filtered.append(site)
 
@@ -398,7 +383,7 @@ class MatchGeoNames(MatchPipe):
                 try:
                     names.append([f.variants() for f in f][0])
                 except IndexError:
-                    raise IndexError("No variants: {}".format(feature))
+                    raise IndexError(f"No variants: {repr(feature)}")
                 try:
                     subsections.append(f[0].modifier)
                 except (AttributeError, IndexError):

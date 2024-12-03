@@ -65,5 +65,6 @@ if not os.path.exists(os.path.join(DATA_DIR, "downloads")):
     try:
         download()
     except Exception as exc:
-        print("Could not download %s" % list(HASHES.keys())[-1])
-        logger.error("Could not download %s" % list(HASHES.keys())[-1], exc_info=exc)
+        msg = f"Could not download {list(HASHES)[-1]}"
+        print(msg)
+        logger.error(msg, exc_info=exc)

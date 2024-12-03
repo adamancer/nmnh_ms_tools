@@ -372,7 +372,7 @@ class Reference(Record):
         # Combine month and year as date
         month = parsed.pop("month", "")
         year = parsed.pop("year", "")
-        parsed["date"] = "{} {}".format(month, year).strip()
+        parsed["date"] = (f"{month} {year}").strip()
         return parsed
 
     def _parse_ris(self, data: str) -> dict:

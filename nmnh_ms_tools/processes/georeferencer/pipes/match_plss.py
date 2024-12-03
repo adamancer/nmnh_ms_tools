@@ -49,18 +49,18 @@ class MatchPLSS(MatchPipe):
                     divs = " ".join(qtrs[1 : i + 1][::-1])
                 name = " ".join([divs, parsed.sec, parsed.twp, parsed.rng])
                 site = self.build_site(
-                    '"{}"'.format(name.strip()),
+                    f"{repr(name.strip())}",
                     site_kind="plss",
                     site_source=parsed.__class__.__name__,
                     geometry=box,
-                    locality='"{}"'.format(name.strip()),
+                    locality=f"{repr(name.strip())}",
                     sources=["BLM GIS webservices"],
                 )
                 site.field = self.field
                 # Update location ID with direction info
                 if divs:
                     with mutable(site):
-                        site.location_id = "{}_{}".format(site.location_id, divs)
+                        site.location_id = f"{site.location_id}_{divs}"
                 related_sites.append(site)
             with mutable(site):
                 site = related_sites.pop(-1)

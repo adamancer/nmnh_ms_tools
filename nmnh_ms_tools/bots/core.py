@@ -221,9 +221,7 @@ class Bot:
                     + list(args)
                     + [f"{k}={v}" for k, v in kwargs.items()]
                 )
-                logger.warning(
-                    "Retrying in {:,} seconds (request={})...".format(wait, req)
-                )
+                logger.warning(f"Retrying in {wait:,} seconds (request={req})...")
                 time.sleep(wait)
             else:
                 # Ensure that the response has the from_cache attribute
@@ -232,7 +230,7 @@ class Bot:
                 # Enforce the minimum wait only if response is from an external server
                 local = resp.url.startswith(("http://localhost", "http://127.0.0.1"))
                 if not local and not resp.from_cache:
-                    logger.info("Made new request: {}".format(resp.url))
+                    logger.info(f"Made new request: {resp.url}")
                     # Update wait based on rate limit
                     time.sleep(self.wait_from_rate_limit(resp))
                 # Validate the response, returning the response object if OK
@@ -370,8 +368,9 @@ class JSONResponse:
         except Exception:
             url = self._response.url
             text = self._response.text
-            mask = 'Could not cast to JSON: "{} ({})" ({})'
-            raise ValueError(mask.format(text, self._response.status_code, url))
+            raise ValueError(
+                f"Could not cast to JSON: {repr(text)} ({self._response.status_code}) ({url})"
+            )
 
     def one(self, default=None):
         """Returns record if exactly one found along results path"""
@@ -456,8 +455,9 @@ class JSONResponse:
                     for key in self._results_path:
                         new = new[key]
                     obj.update(new)
-        mask = "Wrapped {:,} records from {:,} responses with {}"
-        logger.debug(mask.format(len(self), len(responses), self.__class__.__name__))
+        logger.debug(
+            f"Wrapped {len(self):,} records from {len(responses):,} responses with {self.__class__.__name__}"
+        )
 
 
 class XMLResponse:

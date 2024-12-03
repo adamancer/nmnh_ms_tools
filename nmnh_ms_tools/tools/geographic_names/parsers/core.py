@@ -79,7 +79,7 @@ class Parser:
         """Resets all attributes to defaults"""
         for attr in self.attributes:
             if callable(getattr(self, attr)):
-                raise ValueError("Cannot delete a method: {}".format(attr))
+                raise ValueError(f"Cannot delete a method: {attr}")
             setattr(self, attr, None)
 
     def expand(self, site, interpreted=None):
@@ -91,22 +91,6 @@ class Parser:
         match = re.search(r"{([a-z\_]+)}", self.feature)
         if match is None:
             return self
-        """
-        # Match feature to adjacent phrase
-        rel = {k: v for k, v in site.to_dict().items() if self.verbatim in v}
-        for field, vals in rel.items():
-            vals = as_list(vals)
-            try:
-                feature = self.feature_parser(vals[0])
-                expanded = self.feature.format(**{key: feature})
-                mask = 'Expanded {} to "{}"'
-                logger.debug(mask.format(self.feature, expanded))
-                self.feature = expanded
-                return self
-            except:
-                pass
-        rel = {k: v for k, v in site.to_dict().items() if self.verbatim in v}
-        """
         # Match feature to specific field
         attrs = ["municipality", "island", "county", "state_province", "country"]
         key = match.group(1)
@@ -121,11 +105,8 @@ class Parser:
             if len(set(vals)) == 1:
                 feature = self.feature_parser(vals[0])
                 expanded = self.feature.format(**{key: feature})
-                mask = 'Expanded {} to "{}"'
-                logger.debug(mask.format(self.feature, expanded))
+                logger.debug(f"Expanded {self.feature} to {repr(expanded)}")
                 self.feature = expanded
                 return self
-        # Warn user if not possible to expand the term
-        raise ValueError("Could not expand {}".format(self.feature))
-        # self.feature = self.feature.replace('{', '').replace('}', '')
-        # return self
+        # Raise error if not possible to expand the term
+        raise ValueError(f"Could not expand {self.feature}")

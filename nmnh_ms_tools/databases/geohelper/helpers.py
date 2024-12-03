@@ -73,8 +73,7 @@ def get_preferred(name, country_code=None, admin_code_1=None, admin_code_2=None)
     query = [PreferredLocalities.site_name == name]
     # Add country to query
     if country_code:
-        country = "%{}%".format(as_str(country_code))
-        query.append(PreferredLocalities.country.like(country))
+        query.append(PreferredLocalities.country.like(f"%{as_str(country_code)}%"))
     else:
         query.append(PreferredLocalities.country == None)
     # Add state to query
@@ -208,7 +207,7 @@ def fill_natural_earth_combined_table():
                 except AttributeError:
                     rowdict[attr] = None
 
-            rowdict["ogc_fid"] = "{table}-{ogc_fid}".format(**rowdict)
+            rowdict["ogc_fid"] = f"{rowdict["table"]}-{rowdict["ogc_fid"]}"
             if rowdict["gn_id"] and str(rowdict["gn_id"]).startswith("-"):
                 rowdict["gn_id"] = None
             rows.append(rowdict)

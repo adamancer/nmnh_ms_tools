@@ -1012,7 +1012,7 @@ class GeoMetry:
                     "upper": 1.0,
                 }[modifier]
             except KeyError:
-                raise ValueError("Unrecognized modifier: {}".format(modifier))
+                raise ValueError(f"Unrecognized modifier: {modifier}")
 
             if multiplier == 1:
                 geom.modifier = modifier
@@ -1075,7 +1075,7 @@ class GeoMetry:
             trim_func = subhorizontal
             bounds = self.lat
         else:
-            raise ValueError("Bad direction: {}".format(direction))
+            raise ValueError(f"Bad direction: {direction}")
 
         # Split polygon into halves based on bounding coordinates
         coords = self.coords
@@ -1210,7 +1210,7 @@ class GeoMetry:
 
             # Set radius based on data in table
             try:
-                radius = "{LatRadiusNumeric_tab} {LatRadiusUnit_tab}".format(obj)
+                radius = f"{obj["LatRadiusNumeric_tab"]} {obj["LatRadiusUnit_tab"]}"
             except KeyError:
                 radius = obj.get("LatRadiusVerbatim_tab")
             if radius:
@@ -1344,7 +1344,7 @@ class GeoMetry:
             return self.parse(obj.geometry, crs=crs)
 
         # Give up
-        msg = "Parse failed: {} (unknown format)".format(obj)
+        msg = f"Parse failed: {obj} (unknown format)"
         logger.error(msg)
         raise ValueError(msg)
 

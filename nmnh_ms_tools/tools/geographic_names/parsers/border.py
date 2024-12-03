@@ -32,11 +32,11 @@ class BorderParser(Parser):
             self.feature_kind = "border"
             self.specific = False
             return self
-        raise ValueError('Could not parse "{}"'.format(val))
+        raise ValueError(f"Could not parse {repr(val)}")
 
     def name(self):
         """Returns a string describing the parsed locality"""
-        return "Border of {}".format(oxford_comma(self.features))
+        return f"Border of {oxford_comma(self.features)}"
 
 
 def get_feature_pattern():
@@ -52,8 +52,7 @@ def get_features_pattern():
 def is_border(val):
     """Tests if string appears to be a valid border description"""
     p1 = get_features_pattern()
-    mask = r"(^border (of|between)|border$|({}) ({})$)"
-    p2 = mask.format("|".join(ADMINS), "|".join(BORDERS))
+    p2 = rf"(^border (of|between)|border$|({"|".join(ADMINS)}) ({"|".join(BORDERS)})$)"
     return bool(re.search(p1, val, flags=re.I) and re.search(p2, val, flags=re.I))
 
 
@@ -81,8 +80,7 @@ def get_bordering(val):
                 border = re.sub(r"\bcounty\b", "Counties", border, flags=re.I)
             # Remove border, line, etc.
             admins = [a for a in ADMINS if a != "county"]
-            mask = r"(({}) )?({})$"
-            pattern = mask.format("|".join(admins), "|".join(BORDERS))
+            pattern = rf"(({"|".join(admins)}) )?({"|".join(BORDERS)})$"
             border = re.sub(pattern, "", border, flags=re.I).strip()
             # Find and expand features
             features = re.findall(get_feature_pattern(), border)

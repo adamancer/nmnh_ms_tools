@@ -39,8 +39,7 @@ class Taxon(BaseDict):
         else:
             raise ValueError("Could not parse " + repr(data))
         if self.errors:
-            mask = "Input file contained the following errors: {}"
-            raise IOError(mask.format(self.errors))
+            raise IOError(f"Input file contained the following errors: {self.errors}")
 
     def __getitem__(self, key):
         # Preferred is not stored if this taxon is the preferred name
@@ -172,7 +171,7 @@ class Taxon(BaseDict):
             or len(rec.get("ClaOtherRank_tab", [])) != 1
             or rec.get("ClaSpecies")
         ):
-            raise ValueError("Data integrity error: {}".format(rec))
+            raise ValueError(f"Data integrity error: {rec}")
         self["irn"] = int(rec["irn"])
         self["sci_name"] = rec["ClaScientificName"]
         self["rank"] = rec["ClaOtherRank_tab"][0]
@@ -252,18 +251,13 @@ class Taxon(BaseDict):
     def fix(self):
         """Fixes integrity errors for this taxon"""
         rec = {}
-        try:
-            self.parents()
-            parent = self.tree[self.parent.irn] if self.parent else None
-        except ValueError:
-            raise
-            print("Warning: No parents found for {}".format(self.name))
-            return {}
+        self.parents()
+        parent = self.tree[self.parent.irn] if self.parent else None
         # Check for missing official taxon
         try:
             self.official()
         except ValueError:
-            print("Warning: No official taxon for {}".format(self.name))
+            print(f"Warning: No official taxon for {self.name}")
             return {}
         # Check for infinite loops in preferred method
         try:
@@ -285,9 +279,9 @@ class Taxon(BaseDict):
             and self != preferred
             and preferred.irn != parent.irn
         ):
-            print("Species:   {name} (irn={irn})".format(**self))
-            print("Parent:    {name} (irn={irn})".format(**parent))
-            print("Preferred: {name} (irn={irn})".format(**preferred))
+            print(f"Species:   {self.name} (irn={self.irn})")
+            print(f"Parent:    {parent.name} (irn={parent.irn})")
+            print(f"Preferred: {preferred.name} (irn={preferred.irn})")
             print("---")
             rec["RanParentRef"] = preferred.irn
         # Set rank to synonym where appropriate
@@ -305,7 +299,7 @@ class Taxon(BaseDict):
             preferred = self.tree[preferred.current.irn]
             i += 1
             if i > 100:
-                raise ValueError("Infinite loop in preferred: %s", self.name)
+                raise ValueError(f"Infinite loop in preferred: {repr(self.name)}")
         return preferred
 
     def official(self):
@@ -318,7 +312,7 @@ class Taxon(BaseDict):
                     return parent
                 i += 1
                 if i > 100:
-                    raise ValueError("Infinite loop in official: %s", self.name)
+                    raise ValueError(f"Infinite loop in official: {repr(self.name)}")
         return taxon
 
     def parents(self, include_self=False, full_records=False):
@@ -331,7 +325,7 @@ class Taxon(BaseDict):
             parents.insert(0, taxon)
             i += 1
             if i > 100:
-                raise ValueError("Infinite loop in parents: %s", self.name)
+                raise ValueError(f"Infinite loop in parents: {repr(self.name)}")
         if include_self:
             parents.append(Taxon({"irn": self.irn, "sci_name": self.sci_name}))
         if full_records:
@@ -356,7 +350,7 @@ class Taxon(BaseDict):
         if taxon.rank == "variety":
             for parent in taxon.parents(full_records=True):
                 if parent.rank == "mineral":
-                    name = "{} (var. {})".format(parent.name, taxon.name)
+                    name = f"{parent.name} (var. {taxon.name})"
                     break
         if name.count(",") == 1 and not name[0].isnumeric():
             name = " ".join([s.strip() for s in name.split(",") if s][::-1])

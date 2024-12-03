@@ -18,8 +18,8 @@ class MatchResult:
 
     def __repr__(self):
         attributes = ["sites", "field", "terms_checked", "terms_matched"]
-        attrs = ["{}={}".format(a, getattr(self, a)) for a in attributes]
-        return "{}({})".format(self.__class__.__name__, ", ".join(attrs))
+        attrs = [f"{a}={getattr(self, a)}" for a in attributes]
+        return f"{self.__class__.__name__}({", ".join(attrs)})"
 
     def __iter__(self):
         return iter(self.sites)

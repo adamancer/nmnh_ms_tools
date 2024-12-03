@@ -159,19 +159,19 @@ class Topicker:
 
     def get_names(self, text, **kwargs):
         """Returns taxonomic names fouind in the given text"""
-        logger.debug('Seeking taxonomic names in "{}"'.format(text))
+        logger.debug(f"Seeking taxonomic names in {repr(text)}")
         sci_names = []
         text = self.clean_text(text)
         response = self.gnrd_bot.find_names(text)
         if response.status_code == 200:
             names = response.json().get("names", [])
             sci_names = self.clean_names([n["scientificName"] for n in names])
-        logger.debug("Found {} names: {}".format(len(sci_names), ", ".join(sci_names)))
+        logger.debug(f"Found {len(sci_names)} names: {', '.join(sci_names)}")
         return sorted({n for n in sci_names if n})
 
     def resolve_names(self, names, **kwargs):
         """Resolve taxonomic names"""
-        logger.debug('Resolving taxonomic names "{}"'.format(names))
+        logger.debug(f"Resolving taxonomic names {repr(names)}")
         sci_names = []
         params = {"with_context": True, "with_vernaculars": True}
         params.update(**kwargs)
@@ -182,12 +182,12 @@ class Topicker:
                     for row in results["results"]:
                         vernaculars = row.get("vernaculars", [])
             sci_names = self.clean_names([n["scientificName"] for n in names])
-        logger.debug("Found {} names: {}".format(len(sci_names), ", ".join(sci_names)))
+        logger.debug(f"Found {len(sci_names)} names: {', '.join(sci_names)}")
         return sci_names
 
     def get_tsns(self, name, **kwargs):
         """Returns TSNs matching the given name"""
-        logger.debug('Seeking TSNs for "{}"'.format(name))
+        logger.debug(f"Seeking TSNs for {repr(name)}")
         response = self.itis_bot.get_taxon(name, **kwargs)
         tsns = []
         if response.status_code == 200:
@@ -195,7 +195,7 @@ class Topicker:
             for child in response:
                 for tag in child.iter("{*}tsn"):
                     tsns.append(tag.text)
-        logger.debug("Found {} TSNs".format(len(tsns)))
+        logger.debug(f"Found {len(tsns)} TSNs")
         if len(tsns) > 100:
             logger.debug("Limited results to first 100 TSNs")
             tsns = tsns[:100]
@@ -203,7 +203,7 @@ class Topicker:
 
     def get_hierarchy(self, tsn, **kwargs):
         """Returns the taxonomic hierarchy for a given TSN"""
-        logger.debug("Retrieving hierarchy for {}".format(tsn))
+        logger.debug(f"Retrieving hierarchy for {tsn}")
         response = self.itis_bot.get_hierarchy(tsn, **kwargs)
         if response.status_code == 200:
             root = response
@@ -213,7 +213,6 @@ class Topicker:
                     rank = item.findtext("{*}rankName")
                     name = item.findtext("{*}taxonName")
                     if rank is not None:
-                        # logger.debug('{} == {}'.format(rank.upper(), name))
                         ranks[rank.lower()] = name.lower()
                 return ranks
 
@@ -225,7 +224,7 @@ class Topicker:
         if not [k for k in avail if k in hierarchy]:
             logger.debug("Not enough info to place the following taxon:")
             for rank in hierarchy:
-                logger.debug("{} == {}".format(rank.upper(), hierarchy[rank]))
+                logger.debug(f"{rank.upper()} == {hierarchy[rank]}")
             return
         # Assign to a division based on the mapping
         for mp in self.mappings:
@@ -233,13 +232,13 @@ class Topicker:
             if mp.value.startswith("!"):
                 eq = not eq
             if eq:
-                logger.debug("Mapped to {}".format(mp.dept))
+                logger.debug(f"Mapped to {mp.dept}")
                 return mp.dept
         else:
             # Log failures
             logger.debug("Could not classify the following taxon:")
             for rank in hierarchy:
-                logger.debug("{} == {}".format(rank.upper(), hierarchy[rank]))
+                logger.debug(f"{rank.upper()} == {hierarchy[rank]}")
 
     def match_dept_keywords(self, text, i=None, j=None):
         """Matches a list of keywords"""
@@ -249,13 +248,9 @@ class Topicker:
                 for word in words:
                     if re.match("^" + pattern + "$", word, flags=re.I):
                         if len(word) < 3:
-                            raise ValueError(
-                                "Bad pattern in {}: {}".format(dept, pattern)
-                            )
+                            raise ValueError(f"Bad pattern in {dept}: {pattern}")
                         logger.debug(
-                            "Matched {} on keyword {}={}".format(
-                                dept, pattern, word.lower()
-                            )
+                            f"Matched {dept} on keyword {pattern}={word.lower()}"
                         )
                         return dept, word.lower()
         return None, None
@@ -302,11 +297,11 @@ class Topicker:
         for key in ["class", "order", "family"]:
             for name in names:
                 if name == taxon.get(key, "").lower():
-                    logger.debug("Scored match at {0:.1f} points".format(1))
+                    logger.debug("Scored match at 1 points")
                     return 1
         taxon = [s.lower() for s in list(taxon.values())]
-        logger.debug("Names: {}".format("; ".join(names)))
-        logger.debug("Taxon: {}".format("; ".join(taxon)))
+        logger.debug(f"Names: {'; '.join(names)}")
+        logger.debug(f"Taxon: {'; '.join(taxon)}")
         score = 0
         for name in names:
             if name in taxon:
@@ -314,7 +309,7 @@ class Topicker:
             elif any([(name in s) for s in taxon]):
                 score += 0.5
         score = score / len(names)
-        logger.debug("Scored match at {0:.1f} points".format(score))
+        logger.debug(f"Scored match at {score:.1f} points")
         return score
 
     @staticmethod
@@ -330,7 +325,7 @@ class Topicker:
         ][0]
 
     def get_department(self, text, taxa=None, **kwargs):
-        logger.debug('Matching department in "{}"'.format(text))
+        logger.debug(f"Matching department in {repr(text)}")
         # Check keyword lists for non-biological collections, including paleo
         dept, match = self.match_dept_keywords(text, j=3)
         if dept:
@@ -342,7 +337,7 @@ class Topicker:
                 return mapping.dept
         for key, dept in list(self.hints.items()):
             if key.lower() in [s.lower() for s in words]:
-                logger.debug("Matched {}={} in hints".format(key, dept))
+                logger.debug(f"Matched {key}={dept} in hints")
                 return dept
         # Check taxa for department
         if taxa:
@@ -356,7 +351,7 @@ class Topicker:
         for name in [n for n in names if len(n) > 6]:
             score = 0
             tsns = self.get_tsns(name)
-            logger.debug("Found {:,} TSNs".format(len(tsns)))
+            logger.debug(f"Found {len(tsns):,} TSNs")
             for tsn in tsns:
                 hierarchy = self.get_hierarchy(tsn)
                 # Exclude matches if exact search term not found
@@ -385,7 +380,7 @@ class Topicker:
                     # No match, so try to determine the department
                     dept = self.map_to_department(hierarchy)
                     try:
-                        logger.debug("Dept: {}".format(self.depts[dept]))
+                        logger.debug(f"Dept: {self.depts[dept]}")
                     except KeyError:
                         pass
                     else:
@@ -394,7 +389,7 @@ class Topicker:
                             depts[dept] += score
                         except KeyError:
                             depts[dept] = score
-                        msg = "Cumulative score: {}={}".format(dept, depts[dept])
+                        msg = f"Cumulative score: {dept}={depts[dept]}"
                         logger.debug(msg)
                         if (
                             score >= 0.8
@@ -410,7 +405,7 @@ class Topicker:
                 break
         if depts:
             dept = self.guess_department(depts)
-            logger.debug("Matched to {}".format(self.depts[dept]))
+            logger.debug(f"Matched to {self.depts[dept]}")
             return dept
         # Check keyword lists for biological collections
         dept, match = self.match_dept_keywords(text, i=3)
@@ -429,8 +424,7 @@ class Topicker:
                     self.hints[name] = dept
                     with open("hints.json", "w") as f:
                         json.dump(self.hints, f, indent=4, sort_keys=True)
-                    msg = "Added {}={} to hints".format(name, dept)
-                    logger.debug(msg)
+                    logger.debug("Added {name}={hint} to hints")
 
     def get_department_from_taxa(self, taxa):
         if any(taxa):

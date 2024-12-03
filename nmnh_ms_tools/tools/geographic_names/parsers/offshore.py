@@ -40,16 +40,16 @@ class OffshoreParser(Parser):
             self.feature_kind = "offshore"
             self.specific = True
             return self
-        raise ValueError('Could not parse "{}"'.format(val))
+        raise ValueError(f"Could not parse {repr(val)}")
 
     def name(self):
         """Returns a string describing the parsed locality"""
-        return "Off of {}".format(self.feature)
+        return f"Off of {self.feature}"
 
 
 def get_offshore(val):
     """Matches offshore features"""
-    pattern = r"^(?:{}) (.*)$".format("|".join(OFFSHORE))
+    pattern = rf"^(?:{"|".join(OFFSHORE)}) (.*)$"
     match = re.match(pattern, val, flags=re.I)
     if match is not None:
         feature = match.group(1)

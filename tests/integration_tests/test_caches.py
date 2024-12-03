@@ -20,7 +20,7 @@ def test_locality_cache():
     cache.max_recent = 5
     records = []
     for i in range(0, 10):
-        records.append(([SimpleParser("Fake Name")], "leftovers {}".format(i)))
+        records.append(([SimpleParser("Fake Name")], f"leftovers {i}"))
     # Separating set/get item allows max_recent to kick in
     for i, rec in enumerate(records):
         cache[i] = rec
@@ -36,7 +36,7 @@ def test_record_cache():
     records = []
     for row in GeoNamesFeatures().session.query(AllCountries).limit(10):
         rec = Site(to_geonames_api(row))
-        rec.filter = {"name": "fake site {}".format(row.geoname_id)}
+        rec.filter = {"name": f"fake site {row.geoname_id}"}
         records.append([rec])
     # Separating set/get item allows max_recent to kick in
     for i, rec in enumerate(records):

@@ -6,7 +6,7 @@ import sys
 from .core import Bot, JSONResponse
 from ..config import CONFIG
 from ..databases.geonames import GeoNamesFeatures
-from ..utils import LazyAttr
+from ..utils import LazyAttr, to_num_str
 
 
 logger = logging.getLogger(__name__)
@@ -318,24 +318,24 @@ class GeoNamesBot(Bot):
         codes = [13, 22]
         if status in codes:
             self.delete_cached_url(url)
-            mask = "Retrying request: {} (code={}, http_code={})"
-            msg = mask.format(url, status, response.status_code)
-            logger.warning(msg)
+            logger.warning(
+                f"Retrying request: {url} (code={status}, http_code={response.status_code})"
+            )
             return False
         # Data errors (keep result, no retry)
         codes = [11, 12, 14, 15, 16, 17, 21, 23, 24, 25]
         if status in codes:
-            mask = "No results: {} (code={}, http_code={})"
-            msg = mask.format(url, status, response.status_code)
-            logger.warning(msg)
+            logger.warning(
+                f"No results: {url} (code={status}, http_code={response.status_code})"
+            )
             return True
         # Fatal error (delete result, stop script)
         codes = [10, 18, 19, 20]
         if status in codes:
             self.delete_cached_url(url)
-            mask = "Fatal error: {} (code={}, http_code={})"
-            msg = mask.format(url, status, response.status_code)
-            logger.error(msg)
+            logger.error(
+                f"Fatal error: {url} (code={status}, http_code={response.status_code})"
+            )
             sys.exit()
         return False
 
@@ -359,7 +359,7 @@ class GeoNamesBot(Bot):
         try:
             int(geoname_id)
         except TypeError:
-            raise TypeError("Invalid geoname_id: {}".format(geoname_id))
+            raise TypeError(f"Invalid geoname_id: {geoname_id}")
         url = "http://api.geonames.org/getJSON"
         return self._query_geonames(url, geonameId=geoname_id, style=style)
 
@@ -397,7 +397,7 @@ class GeoNamesBot(Bot):
         }
         invalid = sorted(set(params) - valid)
         if invalid:
-            raise ValueError("Illegal params: {}".format(invalid))
+            raise ValueError(f"Illegal params: {invalid}")
         if name is not None:
             params["name"] = name
         if len(set(params) & {"name", "name_equals", "name_startsWith", "q"}) != 1:
@@ -542,9 +542,8 @@ class GeoNamesBot(Bot):
                 lat = float(lat)
             if not isinstance(lng, float):
                 lng = float(lng)
-            mask = "{0:." + str(dec_places) + "f}"
-            lat = mask.format(lat)
-            lng = mask.format(lng)
+            lat = to_num_str(lat, dec_places)
+            lng = to_num_str(lng, dec_places)
         params = {"lat": lat, "lng": lng}
         params.update(kwargs)
         return self._query_geonames(url, **params)
@@ -556,7 +555,7 @@ class GeoNamesBot(Bot):
         try:
             return [self.geonames_db.get_country_code(c) for c in countries if c]
         except KeyError:
-            raise ValueError("Unknown country: {}".format(countries))
+            raise ValueError(f"Unknown country: {countries}")
 
 
 class GeoNamesResponse(JSONResponse):

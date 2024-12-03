@@ -373,7 +373,7 @@ class LocStandardizer(Standardizer):
                     options.append(func)
             if len(options) == 1:
                 return options[0]
-        raise ValueError('Could not guess feature type for "{}"'.format(val))
+        raise ValueError(f"Could not guess feature type for {repr(val)}")
 
     def validate(self, val):
         """Tests if result is valid"""
@@ -403,14 +403,14 @@ class LocStandardizer(Standardizer):
             "municipality",
             "river",
         ]:
-            spec_name = getattr(self, "std_{}".format(key))(st_name)
+            spec_name = getattr(self, f"std_{key}")(st_name)
             if spec_name != st_name:
                 variants[key] = spec_name
         return variants
 
 
 def std_directions(val, lower=False):
-    """Standardizes cardinal directions to drop periods and spaces"""
+    """Standardizes cardinal directions within a longer string"""
     orig = val
 
     # Standardize N. to N
@@ -433,14 +433,34 @@ def std_directions(val, lower=False):
         return (m.group(1) + m.group(2)).upper()
 
     val = re.sub(r"\b([NS])[ -]*([EW])\b", callback_ne, val, flags=re.I)
-    # Standardize patterns similar to N.45E., etc.
-    pattern = r"(\b[NS])[ -]*(\d+(?:\.\d+)?)[ -]*([EW]\b.)"
 
+    # Standardize patterns similar to N.45E., etc.
     def callback_n45e(m):
         return (m.group(1) + m.group(2) + m.group(3)).upper().rstrip(".")
 
+    pattern = r"(\b[NS])[ -]*(\d+(?:\.\d+)?)°?[ -]*([EW]\b.)"
     val = re.sub(pattern, callback_n45e, val, flags=re.I)
+
     return val.lower() if lower else val
+
+
+def compass_dir(val):
+    """Abbreviates a compass direction or bearing"""
+    orig = val
+    val = std_directions(val)
+    # Replace full names with abbreviations
+    for cdir in ("north", "south", "east", "west"):
+        val = re.sub(cdir, cdir[0], val, flags=re.I)
+
+    # Clean up spaces and punctuation
+    val = val.upper().replace(" ", "").replace("-", "")
+    val = re.sub(r"(\d)(?:°|deg\.?|degrees?)", r"\1", val, flags=re.I)
+
+    # Verify that the direction is valid
+    if not re.match(r"([NSEW]{1,3}|[NS]\d+(\.\d+)?[EW])$", val):
+        raise ValueError(f"Invalid compass direction: {repr(orig)}")
+
+    return val
 
 
 def read_abbreviations(fp=None):

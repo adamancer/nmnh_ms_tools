@@ -481,7 +481,6 @@ class SESARRecord(Record):
                 for row in csv.DictReader(f):
                     vocabs.add([row["value"]], name=row["name"])
 
-            mask = "https://api.geosamples.org/v1/vocabularies/{}/all"
             for endpoint in (
                 "classifications",
                 "countries",
@@ -489,7 +488,9 @@ class SESARRecord(Record):
                 "navtypes",
                 "sampletypes",
             ):
-                resp = self.bot.get(mask.format(endpoint))
+                resp = self.bot.get(
+                    f"https://api.geosamples.org/v1/vocabularies/{endpoint}/all"
+                )
                 terms = []
                 for key, val in resp.json().items():
                     if isinstance(val, str):

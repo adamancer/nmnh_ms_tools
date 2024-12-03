@@ -139,15 +139,16 @@ class CatNum(Record):
                 "116610-21",
                 "117213-5",
             }
-            catnum = "{}-{}".format(self.number, self.suffix)
+            catnum = f"{self.number}-{self.suffix}"
             if catnum in ambiguous:
                 if self._primary == "Clinopyroxene":
                     return "REF:CPX"
                 if self._primary == "Orthopyroxene":
                     return "REF:OPX"
                 if self._primary:
-                    mask = "Could not map {} (primary={})"
-                    raise ValueError(mask.format(catnum, self._primary))
+                    raise ValueError(
+                        f"Could not map {catnum} (primary={self._primary})"
+                    )
             return "REF"
 
         return self.division
@@ -176,7 +177,7 @@ class CatNum(Record):
     @property
     def prefixed_num(self):
         if self.number:
-            return PrefixedNum("{}{}".format(self.prefix, self.number))
+            return PrefixedNum(f"{self.prefix}{self.number}")
         raise ValueError("Could not create prefixed_num (number empty)")
 
     def slug(self):
@@ -212,7 +213,7 @@ class CatNum(Record):
             self.department = data.pop("department", None)
             self.division = data.pop("division", None)
         elif data:
-            raise ValueError("Cannot parse: {}".format(data))
+            raise ValueError(f"Cannot parse: {data}")
         # Set code and delim for meteorites
         if self.is_antarctic():
             self.code = ""
@@ -430,7 +431,7 @@ class CatNum(Record):
             if len(spec_nums) != 1:
                 raise ValueError
         except (AttributeError, IndexError, ValueError):
-            raise ValueError("Could not parse {}".format(data))
+            raise ValueError(f"Could not parse {data}")
         else:
             self._parse_spec_num(
                 parse_spec_num(spec_nums[self.parser.prepare(data)][0])
@@ -483,7 +484,7 @@ class CatNums(Records):
             if isinstance(args[0], (list, tuple)):
                 catnums = args[0]
             else:
-                raise ValueError("Could not coerce {}".format(args))
+                raise ValueError(f"Could not coerce {args}")
         elif len(args) > 1:
             catnums = args
         else:

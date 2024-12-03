@@ -8,6 +8,7 @@ from .feature import FeatureParser, is_generic_feature, get_feature_pattern, OF_
 from ....utils import (
     LazyAttr,
     LocStandardizer,
+    compass_dir,
     dedupe,
     std_case,
     validate_direction,
@@ -36,6 +37,7 @@ class ModifiedParser(Parser):
         self.long = False  # verbatim uses full direction
         self.adj = False  # verbatum uses adjective form of direction
         self.delimited = False  # verbatim uses comma-delimited direction
+        self.intrinsic = False  # direction appears to be part of feature name
         self.feature = None
         super().__init__(*args, **kwargs)
 
@@ -53,7 +55,7 @@ class ModifiedParser(Parser):
             valid = {"center", "inner", "lower", "near", "outer", "upper", None}
             assert mod in valid or validate_direction(mod)
         except (AssertionError, ValueError):
-            raise ValueError("Invalid modifier: {}".format(mod))
+            raise ValueError(f"Invalid modifier: {mod}")
         self._modifier = mod
 
     def name(self):
@@ -61,9 +63,9 @@ class ModifiedParser(Parser):
         if self.modifier is None:
             return self.feature
         mask = "{modifier} {feature}"
-        if self.adj:
+        if self.adj and self.intrinsic:
             mod = ucfirst(expand_direction(self.modifier, True))
-        elif self.long:
+        elif self.long and self.intrinsic:
             mod = ucfirst(expand_direction(self.modifier, False))
         else:
             mod = self.modifier
@@ -87,7 +89,7 @@ class ModifiedParser(Parser):
             elif self.long:
                 mods = [long_dir, "", adj_dir]
             mods = [ucfirst(mod) for mod in dedupe(mods)]
-            variants = ["{} {}".format(m, self.feature).strip() for m in mods]
+            variants = [(f"{m} {self.feature}").strip() for m in mods]
         # Prioritize verbatim if it occurs in list, otherwise append it
         try:
             variants.insert(0, variants.pop(variants.index(self.verbatim)))
@@ -115,8 +117,9 @@ class ModifiedParser(Parser):
 
         # Test if modified feature
         if not is_modified_feature(val, False):
-            mask = 'Could not parse "{}" (not a modified feature)'
-            raise ValueError(mask.format(val.strip('"')))
+            raise ValueError(
+                f"Could not parse {repr(val.strip('"'))} (not a modified feature)"
+            )
 
         # Interpret generic features as modifying terms elsewhere in record
         if is_generic_feature(val):
@@ -124,10 +127,12 @@ class ModifiedParser(Parser):
             # Force long adjective form of the direction
             self.long = True
             self.adj = True
+            self.intrinsic = True
         else:
             self.delimited = is_delimited(val)
             self.long = is_long(val)
             self.adj = is_adjective(val)
+            self.intrinsic = is_intrinsic(val)
 
         self._parse(self.std.std_directions(val))
         return self
@@ -142,7 +147,7 @@ class ModifiedParser(Parser):
                 return parsed
             except ValueError:
                 pass
-        raise ValueError("Modifier not found: {}".format(val))
+        raise ValueError(f"Modifier not found: {repr(val)}")
 
     def _extract_direction(self, val):
         """Extracts cardinal direction from string"""
@@ -154,22 +159,22 @@ class ModifiedParser(Parser):
             self.modifier = "".join([c for c in cdr if c.isalpha()]).upper()
             self.feature = self._extract_feature(val, dir_string)
             return self
-        raise ValueError("Direction not found: {}".format(val))
+        raise ValueError(f"Direction not found: {repr(val)}")
 
     def _extract_directional_string(self, val):
         """Extracts a string containing a compass direction"""
         dirs = ["North", "South", "East", "West"]
-        dirs = ["{}({})?".format(d[0], d[1:]) for d in dirs]
-        dirs = "({})".format("|".join(dirs))
+        dirs = [f"{d[0]}({d[1:]})?" for d in dirs]
+        dirs = f"({"|".join(dirs)})"
         p1 = r"\b{0}(-?{0}){{,2}}(ern(most)?)?".format(dirs)
-        p2_1 = r"( ({})( of)?)".format("|".join(OF_WORDS))
-        p2_2 = r"( ({})( to)?)".format("|".join(TO_WORDS))
-        p2 = r"({}|{})?\b".format(p2_1, p2_2)
+        p2_1 = rf"( ({"|".join(OF_WORDS)})( of)?)"
+        p2_2 = rf"( ({"|".join(OF_WORDS)})( to)?)"
+        p2 = rf"({p2_1}|{p2_2})?\b"
         pattern = re.compile(p1 + p2, flags=re.I)
         try:
             return pattern.search(val).group()
         except AttributeError:
-            raise ValueError("Direction not found: {}".format(val))
+            raise ValueError(f"Direction not found: {val}")
 
     def _extract_vicinity(self, val):
         """Extracts vicinity info"""
@@ -198,7 +203,7 @@ class ModifiedParser(Parser):
         try:
             return re.search(pattern, val, flags=re.I).group()
         except AttributeError:
-            raise ValueError("Vicinity not found: {}".format(val))
+            raise ValueError(f"Vicinity not found: {repr(val)}")
 
     def _extract_feature(self, val, mod_string):
         """Extracts feature name from string"""
@@ -206,7 +211,7 @@ class ModifiedParser(Parser):
         # Split full value on the modify string. Toss the results if multiple
         # values found (i.e., if the mod string is in the middle of the word
         # instead of the end.
-        pattern = r"\b{}\b".format(mod_string)
+        pattern = rf"\b{mod_string}\b"
         vals = [s for s in re.split(pattern, val) if s.strip(",;() ")]
         if len(vals) > 1:
             raise ValueError("Modifier in middle of string")
@@ -232,14 +237,14 @@ def is_modified_feature(val, test_intrinsic=True):
     # prioritized during the georeference. The test_intrinsic parameter
     # should probably always be False.
     if test_intrinsic and is_intrinsic(val):
-        logger.debug('Intrinsic modifier: "{}"'.format(val.strip('"')))
+        logger.debug(f"Intrinsic modifier: {repr(val.strip('"'))}")
         return False
 
     # Is the feature name ONLY directional terms (e.g., North West)?
     # NOTE: Hashed because these names are not captured by FeatureParser
     # pattern = r'^(north|south|east|west)([ -](north|south|east|west))*$'
     # if re.match(pattern, val, flags=re.I):
-    #    logger.debug('All directions: "{}"'.format(val.strip('"')))
+    #    logger.debug(f'All directions: {repr(val.strip('"'))}')
     #    return False
 
     # Does the feature name match the general format expected for a modified
@@ -255,20 +260,21 @@ def is_modified_feature(val, test_intrinsic=True):
         ):
             return True
 
-    # logger.debug('No modifier: "{}"'.format(val.strip('"')))
+    # logger.debug(f'No modifier: {repr(val.strip('"'))}')
     return False
 
 
 def is_intrinsic(val):
     """Tests if direction string appears to be an intrinic part of a name"""
     dirs = ["North", "South", "East", "West"]
-    dirs = ["{}({})?".format(d[0], d[1:]) for d in dirs]
-    dirs = "({})".format("|".join(dirs))
-    vicinity = r"({})".format("|".join(OF_WORDS))
+    dirs = [f"{d[0]}({d[1:]})?" for d in dirs]
+    dirs = f"({"|".join(dirs)})"
+    has_direction = re.search(rf"\b{dirs}\b", val, flags=re.I)
+    if not has_direction:
+        return False
+    vicinity = rf"({"|".join(OF_WORDS)})"
     mask = r"(^[NESW]{{1,3}}|{0}{{1,2}}ern(most)?|\bof|\bfrom|, {0}{{1,3}}|\b{1})\b"
-    has_direction = re.search(r"\b{}\b".format(dirs), val, flags=re.I)
-    is_intrinsic = not re.search(mask.format(dirs, vicinity), val, flags=re.I)
-    return has_direction and is_intrinsic
+    return not re.search(mask.format(dirs, vicinity), val, flags=re.I)
 
 
 def expand_direction(val, adj=False):
@@ -289,21 +295,26 @@ def expand_direction(val, adj=False):
     return std_case(expanded, val) if not val.isupper() else expanded
 
 
+def shorten_direction(val):
+    return compass_dir(val.sub("ern", ""))
+
+
 def is_adjective(val):
     """Tests if string contains the adjective form of a direction"""
-    mask = r"\b((north|south|east|west)ern(most)?|central)\b" r"(?! ({})( of\b|$))"
-    pattern = mask.format("|".join(OF_WORDS))
+    pattern = (
+        rf"\b((north|south|east|west)ern(most)?|central)\b"
+        rf"(?! ({" | ".join(OF_WORDS)})( of\b|$))"
+    )
     has_adjective = bool(re.search(pattern, val, flags=re.I))
     return has_adjective
 
 
 def is_long(val):
     """Tests if string contains the long form of a direction"""
-    mask = (
-        r"\b((north|south|east|west){{1,2}}(ern(most)?)?|central)\b"
-        r"(?! ({})( of\b|$))"
+    pattern = (
+        rf"\b((north|south|east|west){{1,2}}(ern(most)?)?|central)\b"
+        rf"(?! ({"|".join(OF_WORDS)})( of\b|$))"
     )
-    pattern = mask.format("|".join(OF_WORDS))
     has_long = bool(re.search(pattern, val, flags=re.I))
     return has_long
 
@@ -319,8 +330,8 @@ def is_delimited(val):
 
 def has_direction(val, direction):
     """Tests if string contains the given direction"""
-    pattern = r"\b{}".format(expand_direction(direction))
-    return bool(re.search(pattern, val, flags=re.I))
+    # NOTE: This is missing a closing word break
+    return bool(re.search(rf"\b{expand_direction(direction)}", val, flags=re.I))
 
 
 def get_modified_patterns(match_start=False, match_end=False, masks=None):
@@ -336,14 +347,14 @@ def get_modified_patterns(match_start=False, match_end=False, masks=None):
             r"{feature} (and )?(area|surroundings|vicinity)",
         ]
     dirs = ["North", "South", "East", "West"]
-    dirs = ["{}(?:{})?".format(d[0], d[1:]) for d in dirs]
-    dirs = r"(?:{})".format("|".join(dirs))
+    dirs = [f"{d[0]}(?:{d[1:]})?" for d in dirs]
+    dirs = rf"(?:{"|".join(dirs)})"
     dirs = r"(?:{0}(?:[- \.]*{0})?(?:ern(?:most)?)?)".format(dirs)
-    vicinity = r"(?:{})".format("|".join(OF_WORDS))
+    vicinity = rf"(?:{"|".join(OF_WORDS)})"
     parts = {
         "dirs": dirs,
         "feature": get_feature_pattern(),  # r'(\w+\.? ?){1,4}',
-        "mod": r" ?(?:(?:{})(?: of)? ?)".format("|".join(OF_WORDS)),
+        "mod": rf" ?(?:(?:{"|".join(OF_WORDS)})(?: of)? ?)",
         "vicinity": vicinity,
     }
     patterns = [m.format(**parts) for m in masks]

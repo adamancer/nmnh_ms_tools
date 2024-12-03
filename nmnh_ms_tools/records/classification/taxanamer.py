@@ -27,7 +27,7 @@ class TaxaNamer(TaxaTree):
             return name
         name = name.lower()
         for word in self.capex:
-            pattern = re.compile(r"\b{}\b".format(word), flags=re.I)
+            pattern = re.compile(rf"\b{word}\b", flags=re.I)
             matches = pattern.findall(name)
             if matches and word.isupper():
                 name = pattern.sub(matches[0].upper(), name)
@@ -37,16 +37,16 @@ class TaxaNamer(TaxaTree):
 
     def join(self, names, maxtaxa=3, conj="and"):
         """Joins a list of taxa into a string, a la oxford_comma"""
-        conj = " {} ".format(conj.strip())
+        conj = f" {conj.strip()} "
         if maxtaxa is not None and len(names) > maxtaxa:
             names = names[:maxtaxa]
         if len(names) <= 2:
             return conj.join(names)
         if conj.strip() in ["with"]:
             first = names.pop(0)
-            return "{} with {}".format(first, self.join(names, None, "and"))
+            return f"{first} with {self.join(names, None, "and")}"
         last = names.pop()
-        return "{},{}{}".format(", ".join(names), conj, last)
+        return f"{", ".join(names)},{conj}{last}"
 
     def name_item(self, taxa, setting=None, allow_varieties=False):
         """Generates name based using a list of taxa and an optional setting"""
@@ -56,7 +56,7 @@ class TaxaNamer(TaxaTree):
             taxalist.append(TaxaList([matches]).best_match(taxon, True))
         taxalist = taxalist.unique()
         if setting:
-            name = "{} {}".format(self.join(taxalist.names()[:2]), setting)
+            name = f"{self.join(taxalist.names()[:2])} {setting}"
         elif len(taxa) == 1 or len(set(taxalist.names())) == 1:
             name = taxalist[0].name if allow_varieties else taxalist[0].sci_name
         elif len(taxa) == 2 and taxalist[0].is_mineral() and taxalist[1].is_rock():

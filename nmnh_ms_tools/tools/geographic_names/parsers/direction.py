@@ -18,6 +18,7 @@ from ....utils import (
     num_dec_places,
     to_digit,
     validate_direction,
+    to_num_str,
 )
 
 
@@ -136,7 +137,7 @@ class DirectionParser(Parser):
             # Treat 0.0 same as 0.1
             if not dec.strip("0"):
                 dec = 1
-            prec = 1 / Fraction("0.{}".format(dec)).denominator
+            prec = 1 / Fraction(f"0.{dec}").denominator
             return prec / as_numeric(dist)
         # Distance is fraction
         if "/" in dist:
@@ -173,26 +174,25 @@ class DirectionParser(Parser):
         if feature.startswith(("Border of", "Junction of")):
             feature = lcfirst(feature)
         if dist and self.unit and self.bearing and self.feature:
-            return "{} {} {} of {}".format(dist, self.unit, self.bearing, feature)
+            return f"{dist} {self.unit} {self.bearing} of {feature}"
         elif not self.unit and not dist and self.bearing and self.feature:
-            return "{} of {}".format(self.bearing, feature)
-        raise ValueError('Could not derive name: "{}"'.format(repr(self)))
+            return f"{self.bearing} of {feature}"
+        raise ValueError(f"Could not derive name: {repr(self)}")
 
     def parse(self, text):
         """Parses a simple direction string (e.g., 1 km N of Tacoma)"""
 
         if re.search(r"\bbetween\b", text, flags=re.I):
-            raise ValueError('Could not parse "{}" (between)'.format(text))
+            raise ValueError(f"Could not parse {repr(text)} (between)")
 
         if re.search(r"\b(&|and) \d", text, flags=re.I):
-            mask = 'Could not parse "{}" (composite direction)'
-            raise ValueError(mask.format(text))
+            raise ValueError(f"Could not parse {repr(text)} (composite direction)")
 
         self.verbatim = text.strip()
         text = self.verbatim
         # Convert distances to digits
         units = "|".join(self._units).replace("{", "{{").replace("}", "}}")
-        mask = r"\b({{}})(?=[ -](?:{}))".format(units)
+        mask = rf"\b({{}})(?=[ -](?:{units}))"
         text = to_digit(text, mask=mask)
         # Strip parentheses
         if re.match(r"^\(.*?\)$", text):
@@ -212,10 +212,7 @@ class DirectionParser(Parser):
         units = "|".join(list(self._units.keys()))
         dirs = "|".join(list(self._bearings.keys()))
         dirs = r"(?:{0}){{1,2}}(?: ?\d* ?(?:{0}))?".format(dirs)
-        mask = r"{mod1}(?:{nums}{mod2} ?({units}) )?{mod3}({dirs})"
-        bearing = mask.format(
-            mod1=mod1, nums=nums, mod2=mod2, units=units, mod3=mod3, dirs=dirs
-        )
+        bearing = rf"{mod1}(?:{nums}{mod2} ?({units}) )?{mod3}({dirs})"
         feature = r"([^,\(]+)"
         # feature = get_any_feature_pattern()
         # feature = r'((?:mt\.? )?[a-z \-\']+?)'
@@ -230,23 +227,17 @@ class DirectionParser(Parser):
         mask = r"^(?:{})(?=(?:$|[,;\.\|]| \d| (?:N|S|E|W){{1,3}}\b))"
         pattern = mask.format("|".join(patterns).format(bearing, feature, mod))
         match = re.search(pattern, ascii_text, flags=re.I)
-        # Try to extract a complete pattern from a string that contains
-        # additional information
-        # if match is None:
-        #    mask = r'^(?:{})(?=(?:$|\.| \d| (?:N|S|E|W){{1,3}}\b))'
-        #    pattern = mask.format('|'.join(patterns).format(bearing, feature))
-        #    match = re.search(pattern, text, flags=re.I)
         if match is not None:
             self.matched = match.group(0).strip(". ")
             self.unconsumed = text[len(self.matched) :].strip(". ")
             if self.unconsumed:
-                mask = 'Could not parse: "{}" (failed to parse full string)'
-                raise ValueError(mask.format(self.verbatim))
+                raise ValueError(
+                    f"Could not parse: {repr(self.verbatim)} (failed to parse full string)"
+                )
             parts = []
             for i in range(1, 50):
                 try:
                     parts.append(match.group(i))
-                    # print('{}. {}'.format(i, parts[-1]))
                 except IndexError:
                     break
             groups = [parts[i : i + 5] for i in range(0, 20, 5)]
@@ -274,7 +265,7 @@ class DirectionParser(Parser):
                 if not (self.min_dist or self.max_dist) and not re.search(
                     pattern, self.verbatim, flags=re.I
                 ):
-                    raise ValueError('Could not parse "{}"'.format(text))
+                    raise ValueError(f"Could not parse {repr(text)}")
             elif any(groups[3]):
                 self.min_dist = parts[15]
                 self.max_dist = parts[16]
@@ -283,18 +274,19 @@ class DirectionParser(Parser):
                 self.feature = parts[19]
                 # Distance required to prevent matching modified feature names
                 if not self.min_dist:
-                    raise ValueError('Could not parse "{}"'.format(text))
+                    raise ValueError(f"Could not parse {repr(text)}")
             else:
-                raise ValueError('Could not parse "{}"'.format(text))
+                raise ValueError(f"Could not parse {repr(text)}")
             # Test that feature name looks OK
             parsed = MultiFeatureParser(self.feature, allow_generic=True)
             self.feature = get_feature_string(parsed)
         else:
-            raise ValueError('Could not parse "{}"'.format(text))
+            raise ValueError(f"Could not parse {repr(text)}")
         # Distance required for verbatim strings ending in compass directions
         if re.search(r"\b[NEWS]{1,3}$", self.verbatim) and not self.min_dist:
-            mask = 'Could not parse: "{}" (distance required)'
-            raise ValueError(mask.format(self.verbatim))
+            raise ValueError(
+                f"Could not parse: {repr(self.verbatim)} (distance required)"
+            )
         # Set max_dist to min_dist if not given
         if not self._max_dist:
             self.max_dist = self._min_dist
@@ -305,10 +297,11 @@ class DirectionParser(Parser):
         self.precision = self.set_precision([self._min_dist, self._max_dist])
         # Verify that required attributes have been populated
         if bool(self.min_dist) == bool(self.unit) and self.bearing and self.feature:
-            logger.debug('Parsed "{}"'.format(self.verbatim))
+            logger.debug(f"Parsed {repr(self.verbatim)}")
             return self
-        mask = 'Could not parse: "{}" (missing required attributes)'
-        raise ValueError(mask.format(self.verbatim))
+        raise ValueError(
+            f"Could not parse: {repr(self.verbatim)} (missing required attributes)"
+        )
 
     def dists(self):
         """Calculates min and max distances in original unit"""
@@ -356,8 +349,8 @@ class DirectionParser(Parser):
             dec_places = num_dec_places(dist)
             dist = as_numeric(dist)
             if not dec_places:
-                return "{:,}".format(int(dist))
-            return "{{:.{}f}}".format(dec_places).format(dist)
+                return f"{int(dist):,}"
+            return to_num_str(dist, dec_places)
         return
 
     def _format_unit(self, unit=None):
@@ -371,7 +364,7 @@ class DirectionParser(Parser):
             for pattern, preferred in self._units.items():
                 if re.match(pattern, unit, flags=re.I):
                     return preferred
-            raise KeyError("Unrecognized unit: {}".format(unit))
+            raise KeyError(f"Unrecognized unit: {repr(unit)}")
 
     def _format_bearing(self, bearing=None):
         """Formats bearing as N, NW, NNW for display"""
@@ -387,8 +380,7 @@ class DirectionParser(Parser):
             try:
                 self.validate_bearing(bearing)
             except ValueError:
-                mask = "Could not parse: {} (invalid bearing)"
-                raise ValueError(mask.format(self.verbatim))
+                raise ValueError(f"Could not parse: {self.verbatim} (invalid bearing)")
             return bearing
 
     def _format_feature(self, feature=None):

@@ -350,7 +350,7 @@ class GeoConfig:
         try:
             return self.get_feature_classes([fcode])[0]
         except IndexError:
-            raise KeyError("Unrecognized feature code: {}".format(fcode))
+            raise KeyError(f"Unrecognized feature code: {fcode}")
 
     def get_feature_radius(self, fcode):
         """Gets feature class for the given feature code"""

@@ -46,7 +46,7 @@ def get_first(dct, keys, required=True):
         except KeyError:
             pass
     if required:
-        raise ValueError("No value found in any of {}".format(keys))
+        raise ValueError(f"No value found in any of {keys}")
 
 
 def dictify(obj, cols=None, recurse=True):

@@ -59,7 +59,7 @@ class MatchPipe:
     @property
     def verbatim(self):
         if self._verbatim and str(self).startswith('"'):
-            return '"{}"'.format(self._verbatim)
+            return f'"{self._verbatim}"'
         return self._verbatim
 
     @verbatim.setter
@@ -199,8 +199,7 @@ class MatchPipe:
             if field["field"].rstrip("0123456789") in self.populated:
                 results.extend(self.process_one(field, **kwargs))
         if not self.populated:
-            mask = "No place names found in site: {}"
-            raise ValueError(mask.format(repr(site)))
+            raise ValueError(f"No place names found in site: {repr(site)}")
         return results
 
     def extract(self, site=None):

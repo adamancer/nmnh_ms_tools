@@ -341,8 +341,9 @@ class SpecNum:
         if delim is None:
             delim = self.delim
 
+        mask = "{} {}{}{}{}{}{}"
         return (
-            "{} {}{}{}{}{}{}".format(
+            mask.format(
                 self.code if include_code else "",
                 self.kind + " " if self.kind else "",
                 self.prefix,

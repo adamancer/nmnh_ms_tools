@@ -104,7 +104,7 @@ class MatchObject:
         if not self:
             return "No match"
         if not self.components:
-            return "Matched {}".format(self.source)
+            return f"Matched {self.source}"
 
         # Look for public fields that have been matched
         matched = []
@@ -280,5 +280,5 @@ def validate_dept(dept):
     if dept is not None:
         dept = depts.get(dept.rstrip("*"), dept)
         if dept.rstrip("*") not in list(depts.values()):
-            raise ValueError("Bad department: {}".format(dept))
+            raise ValueError(f"Bad department: {dept}")
     return dept

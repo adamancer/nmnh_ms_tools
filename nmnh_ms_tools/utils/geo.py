@@ -52,8 +52,6 @@ def get_azimuth(bearing):
     azimuth = v1 + (45 if d2 else 0) * s2 + (22.5 if d3 else 0) * s3 + deg * s2
     if azimuth < 0 or azimuth == 360:
         return 360 - azimuth
-    # mask = 'Calculated azimuth={} from bearing={}'
-    # logger.debug(mask.format(azimuth, bearing))
     return azimuth
 
 
@@ -86,8 +84,9 @@ def get_dist_km_geolib(lat1, lon1, lat2, lon2):
     result = GEODESIC_GEOLIB.Inverse(lat1, lon1, lat2, lon2)
     dist_km = result["s12"] / 1000
     if np.isnan(dist_km):
-        mask = "Invalid distance: {:.2f}, {:.2f}, {:.2f}, {:.2f}"
-        raise ValueError(mask.format(lat1, lon1, lat2, lon2))
+        raise ValueError(
+            f"Invalid distance: {lat1:.2f}, {lon1:.2f}, {lat2:.2f}, {lon2:.2f}"
+        )
     return dist_km
 
 
@@ -108,8 +107,9 @@ def get_dist_km_haversine(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     dist_km = 6371000 * c / 1000
     if np.isnan(dist_km):
-        mask = "Invalid distance: {:.2f}, {:.2f}, {:.2f}, {:.2f}"
-        raise ValueError(mask.format(lat1, lon1, lat2, lon2))
+        raise ValueError(
+            f"Invalid distance: {lat1:.2f}, {lon1:.2f}, {lat2:.2f}, {lon2:.2f}"
+        )
     return dist_km
 
 
@@ -119,8 +119,9 @@ def get_dist_km_pyproj(lat1, lon1, lat2, lon2):
     result = GEODESIC_PYPROJ.inv(lon1, lat1, lon2, lat2)
     dist_km = result[2] / 1000
     if np.isnan(dist_km):
-        mask = "Invalid distance: {:.2f}, {:.2f}, {:.2f}, {:.2f}"
-        raise ValueError(mask.format(lat1, lon1, lat2, lon2))
+        raise ValueError(
+            f"Invalid distance: {lat1:.2f}, {lon1:.2f}, {lat2:.2f}, {lon2:.2f}"
+        )
     return dist_km
 
 
@@ -239,7 +240,7 @@ def sort_geoms(geoms, direction):
         return sorted(geoms, key=lambda s: as_list(s.centroid.lat)[0])
     elif direction in "EW":
         return sorted(geoms, key=lambda s: as_list(s.centroid.lon)[0])
-    raise ValueError("Bad direction: {}".format(direction))
+    raise ValueError(f"Bad direction: {direction}")
 
 
 def crosses_180(lons):

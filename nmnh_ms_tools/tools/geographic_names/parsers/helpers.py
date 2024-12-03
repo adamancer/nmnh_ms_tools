@@ -79,9 +79,6 @@ def clean_locality(val):
     # Remove extraneous whitespace and punctuation
     val = re.sub(r"\s+", " ", val)
     val = re.sub(r"( *[|,;:]+){1,}", merge_duplicate_punc, val).strip()
-
-    # input('{} => {}'.format(orig, val))
-
     return val
 
 
@@ -113,7 +110,7 @@ def debreviate(val):
         'sta': 'Station'
     }
     for find, repl in repls.items():
-        val = re.sub(r'\b{}\b'.format(find), repl, val, flags=re.I)
+        val = re.sub(rf'\b{find}\b', repl, val, flags=re.I)
     val = re.sub('department de', 'Departmento de', val, flags=re.I)
     val = re.sub('province de', 'Provincia de', val, flags=re.I)
     """
@@ -268,7 +265,7 @@ def parse_localities(val, parsers=None, split_phrases=True):
 
     localities = {}
     for phrase in phrases:
-        logger.debug("Parsing '{}'".format(phrase))
+        logger.debug(f"Parsing {repr(phrase)}")
         orig = phrase
         phrase = phrase.rstrip("?")
         # Get original indices and bounds
@@ -307,7 +304,7 @@ def parse_localities(val, parsers=None, split_phrases=True):
                 if not parsed.unconsumed and not _overlaps(
                     i, j, lbound, rbound, localities
                 ):
-                    logger.debug('"{}" parsed by {}'.format(phrase, parser))
+                    logger.debug(f"{repr(phrase)} parsed by {parser}")
                     if "?" in orig:
                         parsed = UncertainParser(parsed)
                     localities[(i, j, lbound, rbound)] = parsed
@@ -319,7 +316,7 @@ def parse_localities(val, parsers=None, split_phrases=True):
                     logger.debug("Parsing error: " + phrase, exc_info=e)
 
     if not localities:
-        logger.debug('Could not extract features from "{}"'.format(val))
+        logger.debug(f"Could not extract features from {repr(val)}")
         try:
             return [SimpleParser(val)]
         except Exception as e:
@@ -347,7 +344,7 @@ def parse_localities(val, parsers=None, split_phrases=True):
         assert verbatim in val, f"'{verbatim}' not found in '{val}'"
         ordered[val.index(verbatim)] = loc
     localities = [ordered[k] for k in sorted(ordered.keys())]
-    logger.debug('Extracted {} features from "{}"'.format(len(localities), val))
+    logger.debug(f"Extracted {len(localities)} features from {repr(val)}")
 
     # Remove non-localities
     return localities
@@ -361,7 +358,7 @@ def get_proper_names(val, *args, **kwargs):
 
     # Construct pattern to catch generic names at beginning/end of each value
     features = list(FEATURES) + OF_WORDS
-    features.extend(["{}s".format(f) for f in features])
+    features.extend([f"{f}s" for f in features])
     features = sorted(features, key=lambda w: -len(w))
     pattern = r"(^({0})\b|\b({0})$)".format("|".join(features))
 

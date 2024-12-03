@@ -100,12 +100,15 @@ with _ImportClock("utils"):
         frange,
         num_dec_places,
         similar,
+        to_num_str,
     )
     from .prefixed_num import PrefixedNum
     from .preps import Preparation
     from .standardizers import (
         LocStandardizer,
         Standardizer,
+        compass_dir,
+        std_directions,
         std_names,
     )
     from .strings import (

@@ -84,7 +84,7 @@ class Standardizer:
                     if kind in iterables and isinstance(val, iterables):
                         setattr(self, attr, kind(val))
                     else:
-                        raise TypeError("{} is {}".format(attr, val))
+                        raise TypeError(f"{attr} is {repr(val)}")
 
     def __call__(self, *args, **kwargs):
         return self.std(*args, **kwargs)
@@ -102,8 +102,7 @@ class Standardizer:
                     kwargs[key] = val
 
                 if not isinstance(val, kind):
-                    mask = "{}={} (type must be {})"
-                    raise TypeError(mask.format(key, val, kind))
+                    raise TypeError(f"{key}={repr(val)} (type must be {kind})")
         params = {k: getattr(self, k) for k in self.params}
         params.update(kwargs)
         return params
@@ -257,7 +256,7 @@ class Standardizer:
         if not val or pd.isna(val):
             return val
         if not isinstance(val, str) or val.isnumeric():
-            raise ValueError("Could not standardize '{}'".format(val))
+            raise ValueError(f"Could not standardize {repr(val)}")
         orig = val
         # Make basic changes to the string
         val = val.strip()

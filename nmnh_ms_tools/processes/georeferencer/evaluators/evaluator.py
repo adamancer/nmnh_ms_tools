@@ -188,7 +188,7 @@ class MatchEvaluator:
     def key(self, site, strip_num=True):
         """Returns field:name for the given site"""
         field = self.field(site.field) if strip_num else site.field
-        return "{}:{}".format(field, site.filter["name"])
+        return f"{field}:{site.filter['name']}"
 
     @staticmethod
     def field(field):
@@ -211,8 +211,9 @@ class MatchEvaluator:
                 for key, vals in pipe.leftovers.items():
                     self.leftovers.setdefault(self.field(key), []).extend(vals)
             except Exception as e:
-                msg = "Failed to process record: {}"
-                logger.error(msg.format(self.site.location_id), exc_info=e)
+                logger.error(
+                    f"Failed to process record: {self.site.location_id}", exc_info=e
+                )
                 raise
         self.leftovers = {k: set(v) for k, v in self.leftovers.items()}
         self.features = basepipe.extract(self.site)
@@ -242,14 +243,15 @@ class MatchEvaluator:
                         site.filter["name"] = preferred.split(":")[-1]
 
         # Check if too many sites given
-        logger.debug("{:,} sites remain after initial cull".format(len(sites)))
+        logger.debug(f"{len(sites):,} sites remain after initial cull")
         if len(sites) > MAX_SITES:
-            mask = "Too many candidates to encompass ({}/{})"
-            raise ValueError(mask.format(len(sites), MAX_SITES))
+            raise ValueError(
+                f"Too many candidates to encompass ({len(sites)}/{MAX_SITES})"
+            )
 
         # Cull related and duplicate sites
         sites = self.uninterpreted(self.ignore_related(sites))
-        logger.debug("Unique geometries: {}".format(self.names(sites)))
+        logger.debug(f"Unique geometries: {self.names(sites)}")
 
         # Cull matches on ancillary field definitions if primary was found.
         # For example, the township field in EMu sometimes contains sites
@@ -266,22 +268,22 @@ class MatchEvaluator:
         # ancillary = self.find_ancillary(sites)
         # self.interpret(ancillary, 'rejected (ancillary match)')
         # sites = self.uninterpreted(sites)
-        # logger.debug('Matched primary: {}'.format(self.names(sites)))
+        # logger.debug(f'Matched primary: {self.names(sites)}'
 
         # Extract large features like admin divisions, oceans, and seas
         terr = self.uninterpreted(self.validate_against_higher_geo(sites))
-        logger.debug("Matches terrestrial: {}".format(self.names(terr)))
+        logger.debug(f"Matches terrestrial: {self.names(terr)}")
         marine = self.uninterpreted(self.validate_against_marine(sites))
-        logger.debug("Matches marine: {}".format(self.names(marine)))
+        logger.debug(f"Matches marine: {self.names(marine)}")
         sites = terr + marine
 
         # Check sites against very large features
         sites = self.uninterpreted(self.validate_against_large(sites))
-        logger.debug("Intersects continent/ocean: {}".format(self.names(sites)))
+        logger.debug(f"Intersects continent/ocean: {self.names(sites)}")
 
         # Make some educated guesses about how to interpret multiple matches
         sites = self.uninterpreted(self.disentangle_names(sites))
-        logger.debug("Names disentangled: {}".format(self.names(sites)))
+        logger.debug(f"Names disentangled: {self.names(sites)}")
 
         # Remove duplicate geometries
         sites = self.uninterpreted(self.dedupe(sites))
@@ -294,9 +296,7 @@ class MatchEvaluator:
             if not encompassing or not encompassed or encompassed == sites:
                 encompassing, encompassed = self.encompassing(sites)
             if encompassing and encompassed and encompassed != sites:
-                logger.debug(
-                    "Found encompassing sites: {}".format(self.names(encompassing))
-                )
+                logger.debug(f"Found encompassing sites: {self.names(encompassing)}")
                 self.interpret(encompassing, "encompassing", True)
                 others = [s for s in self.uninterpreted() if s not in encompassed]
                 self.interpret(others, "rejected (disjoint)")
@@ -312,7 +312,7 @@ class MatchEvaluator:
                 self.interpret(site, "very large", True)
         sites = self.uninterpreted(sites)
         if sites:
-            logger.debug("Not continent or ocean: {}".format(self.names(sites)))
+            logger.debug(f"Not continent or ocean: {self.names(sites)}")
         else:
             sites = self.uninterpret(status="encompassing")
 
@@ -324,7 +324,7 @@ class MatchEvaluator:
         # candidates = sites + self.interpreted_as("very large")
         # sites = self.uninterpreted(self.find_intersecting(candidates))
         # sites = self.uninterpreted(self.find_intersecting(sites, None))
-        # logger.debug("Intersecting: {}".format(self.names(sites)))
+        # logger.debug(f"Intersecting: {self.names(sites)}")
         # sites = self.uninterpreted(self.discard_outliers(sites))
 
         sites = self.uninterpreted(sites)
@@ -365,7 +365,7 @@ class MatchEvaluator:
                     # else trigger this?
                     if str(e).startswith("Could not map admin names"):
                         raise
-                    logger.debug("Could not restrict: {}".format(site))
+                    logger.debug(f"Could not restrict: {site}")
 
             # Filter out sites that couldn't be restricted if a shared name was
             names = self.names(restricted_to_admin)
@@ -374,7 +374,7 @@ class MatchEvaluator:
                     if self.key(site) in names and site not in restricted_to_admin:
                         self.interpret([site], "rejected (disjoint)")
             sites = self.uninterpreted(sites)
-            logger.debug("Restricted to admin: {}".format(self.names(sites)))
+            logger.debug(f"Restricted to admin: {self.names(sites)}")
 
         # Look for most specific names
         names = self.most_specific_names(sites)
@@ -411,8 +411,7 @@ class MatchEvaluator:
             pass
 
         # Log basic info before trying to select the best match
-        mask = "Matched {} sites across {} names"
-        logger.debug(mask.format(len(specific), len(names)))
+        logger.debug(f"Matched {len(specific)} sites across {len(names)} names")
 
         # Exactly one small, specific site found
         if len(specific) == 1 and specific[0].radius_km < max_dist_km:
@@ -436,8 +435,9 @@ class MatchEvaluator:
                     self.explain(others, msg)
                     self.interpret(others, "rejected (interpreted elsewhere)")
                     return self.select(self.uninterpreted(current), geom)
-                mask = "Could not encompass current {} (radius={:.2f} km)"
-                logger.debug(mask.format(names[0], geom.radius_km))
+                logger.debug(
+                    f"Could not encompass current {names[0]} (radius={geom.radius_km:.2f} km)"
+                )
 
             # Limit results to populated places
             cities = self.find_major_cities(specific)
@@ -453,8 +453,9 @@ class MatchEvaluator:
                     self.explain(others, msg)
                     self.interpret(others, "rejected (interpreted elsewhere)")
                     return self.select(self.uninterpreted(cities), geom)
-                mask = "Could not encompass cities {} (radius={:.2f} km)"
-                logger.debug(mask.format(names[0], geom.radius_km))
+                logger.debug(
+                    f"Could not encompass cities {names[0]} (radius={geom.radius_km:.2f} km)"
+                )
 
             # Failing that, encompass all matching names
             geom, valid = self.encompass_name(specific)
@@ -473,8 +474,9 @@ class MatchEvaluator:
                 ignored = [s for s in specific if s not in selected]
                 self.interpret(ignored, "rejected (interpreted elsewhere)")
                 return self.select(selected, geom)
-            mask = "Could not encompass names {} (radius={:.2f} km)"
-            logger.debug(mask.format(names, geom.radius_km))
+            logger.debug(
+                f"Could not encompass names {names} (radius={geom.radius_km:.2f} km)"
+            )
 
         # Check for marine sites. Combinations of terrestrial and marine
         # features are excluded from certain checks.
@@ -607,7 +609,7 @@ class MatchEvaluator:
         estimated = self.estimate_minimum_uncertainty()
         if estimated > max_dist_km:
             self.reset()
-            logger.debug("Retrying with radius={} km".format(estimated))
+            logger.debug(f"Retrying with radius={estimated} km")
             return self.encompass(max_dist_km=estimated)
         raise ValueError(f"Could not encompass sites within {max_dist_km} km")
 
@@ -679,7 +681,7 @@ class MatchEvaluator:
             xtn = geom.intersection(other)
             if not xtn.is_empty:
                 if name:
-                    logging.debug("Checking intersection with {}".format(name))
+                    logging.debug(f"Checking intersection with {name}")
                 # Do not constrain small features on the edges of large polygons
                 if xtn.geom_type != "Polygon" or xtn.area / geom.area > 0.1:
                     # Constrain to all sites matched on field
@@ -692,7 +694,7 @@ class MatchEvaluator:
             # Capture failed intersections. Not necessarily an error
             # because directions, etc. might fall outside of the
             # specified political geography
-            logger.warning("Could not constrain to {} ({exc})".format(name))
+            logger.warning(f"Could not constrain to {name} ({exc})")
         return geom
 
     def disentangle_names(self, sites=None, aggressive=True):
@@ -758,14 +760,15 @@ class MatchEvaluator:
                     self.interpret(others, "rejected (interpreted elsewhere)")
                     continue
             elif len(group) > 1:
-                mask = 'Sites matching "{}" are not mutually intersecting'
-                logger.debug(mask.format(group[0].filter["name"]))
-
+                logger.debug(
+                    f"Sites matching {repr(group[0].filter['name'])}"
+                    f" are not mutually intersecting"
+                )
                 # Check for ancillary matches
                 ancillary = self.find_ancillary(group)
                 if ancillary:
                     self.interpret(ancillary, "rejected (ancillary match)")
-                    logger.debug("Matched primary: {}".format(self.names(group)))
+                    logger.debug(f"Matched primary: {self.names(group)}")
         return self.uninterpreted(sites)
 
     def find_current_names(self, sites=None):
@@ -801,7 +804,7 @@ class MatchEvaluator:
             # report that the result is constrained to the ocean/sea
             resized = geom.resize(CONT_SHELF_WIDTH_KM)
             if resized in (geom, geom.envelope):
-                logger.debug("Resize failed: {:.1f} km".format(geom.radius_km))
+                logger.debug("Resize failed: {geom.radius_km:.1f} km")
                 return geom
             # Map intersection of geometry with ocean
             tiles = self.ocean.query(resized.to_crs(4326), ocean=ocean)
@@ -1022,7 +1025,7 @@ class MatchEvaluator:
             else:
                 start_index = 1
 
-            for key in ["ADM{}".format(i) for i in range(start_index, 7)]:
+            for key in [f"ADM{i}" for i in range(start_index, 7)]:
                 try:
                     divs = admin[key]
                 except KeyError:
@@ -1073,7 +1076,7 @@ class MatchEvaluator:
             self.smallest_encompassing = (field, polygon)
 
             # Check which sites occur within the given divisions
-            logger.debug("Testing intersection with {}".format(field))
+            logger.debug(f"Testing intersection with {field}")
             in_bounds = []
 
             sites = terr + marine
@@ -1120,54 +1123,57 @@ class MatchEvaluator:
                 # the methods diverge if the reference site does not
                 # contain a sea or ocean.
                 elif not marine or not site_.is_marine():
-                    mask = '"{}" does not intersect the specified {}'
-                    logger.debug(mask.format(site_.summarize(), field))
+                    logger.debug(
+                        f"{repr(site_.summarize())} does not intersect the specified {field}"
+                    )
                     self.interpret(site_, "rejected (disjoint on higher geo)")
                 else:
                     in_bounds.append(site_)
 
-            """
-            in_bounds = []
-            for site in terr + marine:
-                # Test political geography against both primary and related
-                # sites to account for directions, etc. where the base site is
-                # within bound but the direction is not.
-                for site_ in [site] + site.related_sites:
-                    if site_.centroid.intersects(polygon):
-                        in_bounds.append(site_)
-                        self.admin_match_type[site_.location_id] = 'centroid'
-                        break
-                    if site_.convex_hull.resize(RESIZE, how="rel").intersects(polygon):
-                        in_bounds.append(site_)
-                        self.admin_match_type[site_.location_id] = 'polygon'
-                        break
-                    if (site_.location_id.isnumeric()
-                        and field in {'country', 'state_province', 'county'}
-                        and self.matches_admin(site_)):
-                            in_bounds.append(site_)
-                            self.admin_match_type[site_.location_id] = 'centroid'
-                            break
-                else:
-                    # Marine sites are also checked further elsewhere, so
-                    # they aren't rejected here. The conditional checks both
-                    # the marine container and the is_marine() method becuase
-                    # the methods diverge if the reference site does not
-                    # contain a sea or ocean.
-                    if not marine or not site.is_marine():
-                        mask = '"{}" does not intersect the specified {}'
-                        logger.debug(mask.format(site.summarize(), field))
-                        self.interpret(site, 'rejected (disjoint on higher geo)')
-        """
+            # in_bounds = []
+            # for site in terr + marine:
+            #    # Test political geography against both primary and related
+            #    # sites to account for directions, etc. where the base site is
+            #    # within bound but the direction is not.
+            #    for site_ in [site] + site.related_sites:
+            #        if site_.centroid.intersects(polygon):
+            #            in_bounds.append(site_)
+            #            self.admin_match_type[site_.location_id] = "centroid"
+            #            break
+            #        if site_.convex_hull.resize(RESIZE, how="rel").intersects(polygon):
+            #            in_bounds.append(site_)
+            #            self.admin_match_type[site_.location_id] = "polygon"
+            #            break
+            #        if (
+            #            site_.location_id.isnumeric()
+            #            and field in {"country", "state_province", "county"}
+            #            and self.matches_admin(site_)
+            #        ):
+            #            in_bounds.append(site_)
+            #            self.admin_match_type[site_.location_id] = "centroid"
+            #            break
+            #    else:
+            #        # Marine sites are also checked further elsewhere, so
+            #        # they aren't rejected here. The conditional checks both
+            #        # the marine container and the is_marine() method becuase
+            #        # the methods diverge if the reference site does not
+            #        # contain a sea or ocean.
+            #        if not marine or not site.is_marine():
+            #            logger.debug(
+            #                f"{repr(site.summarize())} does not intersect the specified {field}"
+            #            )
+            #            self.interpret(site, "rejected (disjoint on higher geo)")
 
         # Extract and interpret admin divisions
         for site in in_bounds:
             if site.field is None:
-                mask = "Field attribute missing (from_cache={}): {}"
                 try:
                     from_cache = site.from_cache
                 except AttributeError:
                     from_cache = False
-                logger.warning(mask.format(from_cache, site))
+                logger.warning(
+                    f"Field attribute missing (from_cache={from_cache}): {site}"
+                )
                 site.field = "locality"
 
         plain = [s for s in in_bounds if s.field[-1].isalpha()]
@@ -1203,16 +1209,18 @@ class MatchEvaluator:
                 in_bounds.append(site)
                 last_parent = site.resize(RESIZE, how="rel")
             else:
-                mask = '"{}" does not intersect {}'
-                logger.debug(mask.format(site.summarize(), in_bounds[-1].name))
+                logger.debug(
+                    f"{repr(site.summarize())} does not intersect {in_bounds[-1].name}"
+                )
                 self.interpret(site, "rejected (disjoint on higher geo)")
         # Check that terrestrial localities are in the ballpark of at
         # least one valid marine feature if original site is marine
         marine = sorted(self.uninterpreted(marine), key=lambda s: -s.radius_km)
         for site in terr:
             if not site.intersects(marine[0]):
-                mask = '"{}" does not intersect {}'
-                logger.debug(mask.format(site.summarize(), marine[0].name))
+                logger.debug(
+                    f"{repr(site.summarize())} does not intersect {marine[0].name}"
+                )
                 self.interpret(site, "rejected (disjoint on higher geo)")
         # Interpret large bodies, like oceans, if more specific features found
         if len(in_bounds) > 1:
@@ -1254,7 +1262,7 @@ class MatchEvaluator:
                         # Error nesting site admin polygons
                         logger.error(str(e), exc_info=e)
         if disjoint:
-            logger.debug("Disjoint on {}".format(codes))
+            logger.debug(f"Disjoint on {codes}")
             self.interpret(disjoint, "rejected (disjoint)")
         return [s for s in sites if s not in disjoint]
 
@@ -1343,7 +1351,7 @@ class MatchEvaluator:
             if k not in countries and abbreviate_direction(k) not in matched
         }
 
-        terms = ['{}="{}"'.format(v, k.strip('"')) for k, v in missed.items()]
+        terms = [f'{v}="{k.strip('"')}"' for k, v in missed.items()]
         return sorted(set(terms))
 
     def encompass_sites(self, sites=None):
@@ -1466,8 +1474,8 @@ class MatchEvaluator:
                         key = site.location_id
                         vals = intersections[key]
                         if set([key] + vals) == loc_ids:
-                            loc = "{} ({})".format(site.name, site.location_id)
-                            logger.debug("{} intersects all sites".format(loc))
+                            loc = f"{site.name} ({site.location_id})"
+                            logger.debug(f"{loc} intersects all sites")
                             self.interpret(site, "intersecting")
                             uninterpreted = self.uninterpreted(strong)
                             return self.find_intersecting(uninterpreted)
@@ -1605,7 +1613,7 @@ class MatchEvaluator:
         # Log names with many matches
         for name, group in groups.items():
             if len(group) >= 10:
-                logger.debug("{} matches {} records".format(name, len(group)))
+                logger.debug(f"{name} matches {len(group)} records")
         return groups
 
     def find_combinations(self, sites=None):
@@ -1629,12 +1637,11 @@ class MatchEvaluator:
     def interpret(self, sites, status, reject_similar=False):
         """Assigns an interpretation to a list of sites"""
         if status not in STATUSES:
-            raise KeyError("Invalid status: {}".format(status))
+            raise KeyError(f"Invalid status: {status}")
         if not isinstance(sites, (list, tuple)):
             sites = [sites]
         for site in sites:
-            mask = "Interpreted {} ({}) as {}"
-            logger.debug(mask.format(site.name, site.location_id, status))
+            logger.debug(f"Interpreted {site.name} ({site.location_id}) as {status}")
             self.interpreted[site.location_id] = status
         # Reject sites with same field:name as those interpreted here
         if reject_similar:
@@ -1645,7 +1652,7 @@ class MatchEvaluator:
         statuses = as_set(statuses)
         for status in statuses:
             if status not in STATUSES:
-                raise KeyError("Invalid status: {}".format(status))
+                raise KeyError(f"Invalid status: {status}")
         sites = [n for n, s in self.interpreted.items() if s in statuses]
         return self.expand(sites)
 
@@ -1662,7 +1669,7 @@ class MatchEvaluator:
     def explain(self, sites, explanation):
         """Assigns a keyword explanation"""
         for site in self.expand(sites):
-            logger.debug("{}: {}".format(explanation, site.summarize()))
+            logger.debug(f"{explanation}: {site.summarize()}")
             self.multiples.setdefault(site.filter["name"], []).append(explanation)
             for rel in site.related_sites:
                 self.multiples.setdefault(rel.filter["name"], []).append(explanation)
@@ -1743,7 +1750,7 @@ class MatchEvaluator:
 
         # Ignore matches from locality if name occurs specifically elsewhere
         keys = [self.key(s) for s in interpreted]
-        keys.extend(["locality:{}".format(k.split(":")[-1]) for k in keys])
+        keys.extend([f"locality:{k.split(":")[-1]}" for k in keys])
         rejectees = [s for s in sites if self.key(s) in set(keys)]
         self.interpret(rejectees, status)
 

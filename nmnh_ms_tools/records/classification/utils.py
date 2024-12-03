@@ -79,7 +79,7 @@ def get_tree(src=None):
 
         # Create import file with updates that can be made automatically
         if updates:
-            write_import(updates, "update_{}.xml".format(timestamp))
+            write_import(updates, f"update_{timestamp}.xml")
 
         # Test relationships if no other errors found
         if not errors:

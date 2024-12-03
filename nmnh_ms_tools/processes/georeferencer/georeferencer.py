@@ -125,8 +125,7 @@ class Georeferencer:
         if val in allowed:
             self._coord_type = val
         else:
-            mask = "coord_type must be one of {} ('{}' given)"
-            raise ValueError(mask.format(allowed, val))
+            raise ValueError(f"coord_type must be one of {allowed} ({repr(val)} given)")
 
     @property
     def place_type(self):
@@ -138,8 +137,7 @@ class Georeferencer:
         if val in allowed:
             self._place_type = val
         else:
-            mask = "place_type must be one of {} ('{}' given)"
-            raise ValueError(mask.format(allowed, val))
+            raise ValueError(f"place_type must be one of {allowed} ({repr(val)} given)")
 
     @property
     def records(self):
@@ -167,15 +165,15 @@ class Georeferencer:
         """Georeferences a set of records"""
         logger.info(f"Limit is {self.limit}")
         if self.skip:
-            logger.debug("Skipping first {:,} records...".format(self.skip))
+            logger.debug(f"Skipping first {self.skip:,} records...")
         for i, rec in enumerate(self.records):
             self._notified = False
             self._index = i
             self._loc_id = self.get_location_id(rec)
 
             if i and not i % 1000:
-                print("{:,} records processed".format(i))
-                logger.debug("{:,} records processed".format(i))
+                print(f"{i:,} records processed")
+                logger.debug(f"{i:,} records processed")
 
             if self.tests and self._loc_id not in self.tests:
                 continue
@@ -191,7 +189,7 @@ class Georeferencer:
             finally:
                 # Check if tests are exhausted
                 if self.tests:
-                    logger.debug("Index: {}".format(i + self.skip))
+                    logger.debug(f"Index: {i + self.skip}")
                     logger.debug(site)
                     self.tests.remove(self._loc_id)
                     if not self.tests or kill:
@@ -241,8 +239,7 @@ class Georeferencer:
             # Check for very long durations
             elapsed = (dt.datetime.now() - start_time).total_seconds()
             if elapsed > 30:
-                mask = "{}: Long duration (t={}s)"
-                logger.warning(mask.format(site.location_id, int(elapsed)))
+                logger.warning(f"{site.location_id}: Long duration (t={int(elapsed)}s)")
         except Exception as e:
             try:
                 self.handle_exception(e, site, evaluator)
@@ -259,9 +256,9 @@ class Georeferencer:
         within_est = evaluator.radius_km <= estimated
         # Save result as KML
         try:
-            fn = "{:.1f}km_{}".format(dist_km, site.location_id)
+            fn = f"{dist_km:.1f}km_{site.location_id}"
         except TypeError:
-            fn = "{}".format(site.location_id)
+            fn = str(site.location_id)
         evaluator.kml(fn, refsite=site)
 
         result = dict(
@@ -284,7 +281,7 @@ class Georeferencer:
         self.notify("Succeeded")
         return result
 
-    def read_gbif(self, encoding="utf-8-sig", delimiter="\t"):
+    def read_gbif(self, encoding="utf-8-sig"):
         """Reads Darwin Core CSV"""
         with open(self.path, encoding=encoding, newline="") as f:
             # GBIF files are comma-delimited utf-8 but homemade files may
@@ -296,11 +293,11 @@ class Georeferencer:
             keys = [to_attribute(k) for k in next(rows)]
             for i, row in enumerate(rows):
                 if i and self.report and not i % self.report:
-                    logger.debug("{:,} rows processed".format(i))
+                    logger.debug(f"{i:,} rows processed")
                 if self.skip and i < self.skip:
                     continue
                 if self.limit and len(self) >= self.limit:
-                    logger.debug("Checked {:,} total records".format(i))
+                    logger.debug(f"Checked {i:,} total records")
                     break
                 rowdict = dict(zip(keys, row))
                 yield rowdict
@@ -379,8 +376,7 @@ class Georeferencer:
             if country:
                 args = [rec[k] for k in keys]
                 if not Site.adm.get(*args):
-                    mask = "Could not map admin names: {}"
-                    raise ValueError(mask.format(json.dumps(args)))
+                    raise ValueError(f"Could not map admin names: {json.dumps(args)}")
 
     def handle_exception(self, exc, site, evaluator=None):
         """Handles exceptions raised while georeferencing"""
@@ -424,19 +420,20 @@ class Georeferencer:
                 self.admin_failed[key] += 1
             except KeyError:
                 self.admin_failed[key] = 1
-            # mask = 'Georeference failed: {} (failed to map admin={})'
-            # logger.warning(mask.format(site.location_id, names))
+            logger.warning(
+                f"Georeference failed: {site.location_id} (failed to map admin={names})"
+            )
         elif "Could not encompass sites" in str(
             exc
         ) or "Too many candidates to encompass" in str(exc):
             # Note failure but specifics not needed
-            # msg = 'Georeference failed: {} (no match)'.format(site.location_id)
-            # logger.warning(msg)
+            logger.warning(f"Georeference failed: {site.location_id} (no match)")
             pass
         else:
             # Unknown error, so include the traceback in the log
-            msg = "Georeference failed: {} (error)".format(site.location_id)
-            logger.error(msg, exc_info=exc)
+            logger.error(
+                f"Georeference failed: {site.location_id} (error)", exc_info=exc
+            )
             if self.raise_on_error:
                 try:
                     raise exc
@@ -487,12 +484,12 @@ class Georeferencer:
             elif key in {"within_unc", "within_est"}:
                 count = summary["has_coords"]
                 if count:
-                    summary[key] = "{:.1f}%".format(100 * vals / count)
+                    summary[key] = f"{100 * vals / count:.1f}%"
                 else:
                     summary[key] = "-"
             elif key == "found":
                 count = len(self.evaluated)
-                summary[key] = "{:.1f}%".format(100 * vals / count)
+                summary[key] = f"{100 * vals / count:.1f}%"
         return summary
 
     def archive(self, path="archived", min_results=100):
@@ -508,7 +505,7 @@ class Georeferencer:
         if len(self) >= min_results and self.tests is None:
             # Get job params
             timestamp = dt.datetime.now().strftime("%Y%m%dT%H%M%S")
-            archive = "{}_{}_{}".format(timestamp, self.slug, len(self))
+            archive = f"{timestamp}_{self.slug}_{len(self)}"
             try:
                 os.makedirs(os.path.join(path, archive))
             except OSError:
@@ -640,18 +637,18 @@ class Georeferencer:
     @staticmethod
     def _prep(val):
         """Conditionally formats a string"""
-        return "{:.1f}".format(val) if isinstance(val, float) else str(val)
+        return f"{val:.1f}" if isinstance(val, float) else str(val)
 
     @staticmethod
     def _mean(vals):
         """Calculates the mean and standard deviation for a set of values"""
-        return "{:.1f} ± {:.1f} km".format(np.mean(vals), np.std(vals))
+        return f"{np.mean(vals):.1f} ± {np.std(vals):.1f} km"
 
     @staticmethod
     def _median(vals):
         """Calculates the median and interquartile range for a set of values"""
         iqr = np.percentile(vals, 75) - np.percentile(vals, 25)
-        return "{:.1f} ± {:.1f} km".format(np.median(vals), iqr / 2)
+        return f"{np.median(vals):.1f} ± {iqr / 2:.1f} km"
 
 
 # Define deferred class attributes

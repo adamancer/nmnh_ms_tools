@@ -91,7 +91,7 @@ class MultiFeatureParser(Parser):
         """Parses string that may contain more than one feature"""
         # Not intended for delimited strings
         if re.search(r"[:;,\|]", val) and not is_modified_feature(val, False):
-            raise ValueError('Could not parse: "{}" (delimited)'.format(val))
+            raise ValueError(f"Could not parse: {repr(val)} (delimited)")
         val = val.strip()
         self.verbatim = val
         try:
@@ -130,8 +130,7 @@ class MultiFeatureParser(Parser):
                 pass
 
         if not any(self.features):
-            mask = 'Could not parse: "{}" (invalid multifeature)'
-            raise ValueError(mask.format(val))
+            raise ValueError(f"Could not parse: {repr(val)} (invalid multifeature)")
 
     def parse_features(self, vals):
         """Parses features from a list of names"""
@@ -155,13 +154,9 @@ class MultiFeatureParser(Parser):
                 else:
                     # Parser can reject initials and still return a valid match
                     if not re.match(r"^[A-Z]([\. ]+[A-Z])*[\. ]*$", val):
-                        # mask = 'Name discarded: "{}" from {} (initials)'
-                        # logger.info(mask.format(val, self.verbatim))
-                        mask = "Could not parse: {} (invalid feature)"
-                        raise ValueError(mask.format(vals))
+                        raise ValueError(f"Could not parse: {vals} (invalid feature)")
         if not features:
-            mask = "Could not parse: {} (invalid features)"
-            raise ValueError(mask.format(vals))
+            raise ValueError(f"Could not parse: {vals} (invalid features)")
         if not self.specific:
             self.specific = any([f.specific for f in features])
         return features
@@ -182,8 +177,7 @@ class MultiFeatureParser(Parser):
         count = sum([counts[k] for k in kinds])
         names = []
         if 0.4 <= count / len(words) <= 0.6:
-            pattern = r"\b({})\b".format("|".join(kinds))
-            words = re.split(pattern, val, flags=re.I)
+            words = re.split(rf"\b({"|".join(kinds)})\b", val, flags=re.I)
             name = []
             for word in words:
                 if word:
@@ -205,8 +199,9 @@ class MultiFeatureParser(Parser):
             except ValueError:
                 pass
             else:
-                mask = 'Conjunction probably part of border/junction: "{}"'
-                raise ValueError(mask.format(val))
+                raise ValueError(
+                    f"Conjunction probably part of border/junction: {repr(val)}"
+                )
 
         # If only one name found, try splitting on "of" instead of an
         # and-like delimiter. This is a rare case and only applies to
@@ -221,13 +216,12 @@ class MultiFeatureParser(Parser):
                 or " " not in names[-1]
                 or names[0].lower().endswith(tuple(OF_WORDS))
             ):
-                mask = '"of" probably part of name: "{}"'
-                raise ValueError(mask.format(val))
+                raise ValueError(f"'of' probably part of name: {repr(val)}")
 
         # Do not consider leading or trailing conjunctions
         names = [s.strip() for s in names]
         if not all(names):
-            raise ValueError('Leading or trailing conjunction: "{}"'.format(val))
+            raise ValueError(f"Leading or trailing conjunction: {repr(val)}")
 
         return self.parse_features(append_feature_type(names))
 
@@ -239,13 +233,12 @@ class MultiFeatureParser(Parser):
             before, after = [s.strip() for s in val.split(parens[0])]
             name = parens[0].strip("()[]= ")
             if before and after:
-                mask = "{{}} {}".format(after)
                 if "=" in parens[0]:
                     # Keep both names if explicitly synonymous
-                    names = [mask.format(n) for n in (before, name)]
+                    names = [f"{n} {after}" for n in (before, name)]
                 else:
                     # Drop the parenthetical is not explicitly a synonym
-                    names = [mask.format(before)]
+                    names = [f"{before} {after}"]
             elif before:
                 names = [before, name]
 

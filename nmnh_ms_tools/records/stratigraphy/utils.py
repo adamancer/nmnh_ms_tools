@@ -141,7 +141,7 @@ def split_strat(val, class_=None):
         pattern = r"(, ({0}))(/({0}))?".format("|".join(MODIFIERS))
         if not re.search(pattern, val, flags=re.I):
             delims.append(",")
-        pattern = r"(?:{})".format("|".join(delims))
+        pattern = rf"(?:{"|".join(delims)})"
         vals = re.split(pattern, val, flags=re.I)
 
     # If not delimited, try to split using keywords
@@ -193,7 +193,7 @@ def std(name):
     """Standardizes a stratigraphic name"""
     words = {"cr": "creek", "mt": "mount", "mtn": "mountain", "r": "river"}
     for find, repl in words.items():
-        pattern = r"\b{}(\.|\b)".format(find.capitalize())
+        pattern = rf"\b{find.capitalize()}(\.|\b)"
         name = re.sub(pattern, repl.capitalize(), name)
     return name
 
@@ -202,10 +202,10 @@ def long_name(name):
     """Returns the long form of the unit name"""
     name = std(name)
     for find, repl in LITHOSTRAT_ABBRS.items():
-        pattern = r"\b({})(?=\b|\.)".format(find)
+        pattern = rf"\b({find})(?=\b|\.)"
         name = re.sub(pattern, repl, name, flags=re.I)
     for find, repl in LITHOLOGIES.items():
-        pattern = r"\b({})\b".format(find)
+        pattern = rf"\b({find})\b"
         name = re.sub(pattern, repl, name, flags=re.I)
     return titlecase(name)
 
@@ -214,9 +214,9 @@ def short_name(name):
     """Returns the short form of the unit name"""
     name = std(name)
     for repl, find in LITHOSTRAT_ABBRS.items():
-        name = re.sub(r"\b({})\b".format(find), repl, name, flags=re.I)
+        name = re.sub(rf"\b({find})\b", repl, name, flags=re.I)
     for repl, find in LITHOLOGIES.items():
-        name = re.sub(r"\b({})\b".format(find), repl, name, flags=re.I)
+        name = re.sub(rf"\b({find})\b", repl, name, flags=re.I)
     # Fix combinations (e.g., Emily Iron Formation Member)
     pattern = r"({0}) ({0})".format("|".join(LITHOSTRAT_ABBRS.keys()))
     match = re.search(pattern, name)
@@ -243,8 +243,7 @@ def std_modifiers(unit, use_age_modifiers=False):
         std = unit
         for key in sorted(modifiers, key=len, reverse=True):
             val = modifiers[key]
-            pattern = r"\b{}\b".format(key)
-            match = re.search(pattern, std, flags=re.I)
+            match = re.search(rf"\b{key}\b", std, flags=re.I)
             if match is not None:
                 repl = std_case(val, match.group(0))
                 std = re.sub(pattern, repl, std, flags=re.I)
@@ -254,5 +253,5 @@ def std_modifiers(unit, use_age_modifiers=False):
 
 def base_name(unit):
     """Returns the unmodified name from a stratigraphic unit"""
-    pattern = r"\b({})\b".format("|".join(MODIFIERS))
+    pattern = rf"\b({"|".join(MODIFIERS)})\b"
     return re.sub(pattern, "", unit, flags=re.I).replace("()", "").strip(" -")

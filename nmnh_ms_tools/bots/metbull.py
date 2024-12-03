@@ -111,7 +111,7 @@ class MetBullResponse(JSONResponse):
                 del rowdict["(lat,long)"]
                 meteorites.append(rowdict)
 
-            logger.debug("{:,} meteorites parsed".format(len(meteorites)))
+            logger.debug(f"{len(meteorites):,} meteorites parsed")
 
             self._cached_json[key] = meteorites[:]
             return meteorites

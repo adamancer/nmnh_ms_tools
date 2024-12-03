@@ -27,7 +27,7 @@ def use_observed_uncertainties(percentile=68):
             pct90 = np.percentile(dists_km, 95)  # probably misses
             dists_km = [d for d in dists_km if pct10 <= d <= pct90]
             unc = np.percentile(dists_km, percentile)
-            mask = "Updated {} from {:.1f} to {:.1f} km (n={})"
-            msg = mask.format(site_kind, old, unc, int(len(dists_km)))
-            logger.debug(msg)
+            logger.debug(
+                f"Updated {site_kind} from {old:.1f} to {unc:.1f} km (n={len(dists_km)})"
+            )
             GEOCONFIG.codes[site_kind]["SizeIndex"] = unc

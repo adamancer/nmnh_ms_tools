@@ -8,12 +8,12 @@ def as_numeric(val):
     if isinstance(val, (float, int)):
         return val
     if not val:
-        raise ValueError("Cannot convert '{}' to float or int".format(val))
+        raise ValueError(f"Cannot convert {repr(val)} to float or int")
     # Remove thousands separators
     val = val.replace(",", "")
     # Add coefficient of 0 to fractions
     if val and "/" in val and not " " in val:
-        val = "0 {}".format(val)
+        val = f"0 {val}"
     # Convert value to float or int
     try:
         coefficient, fraction = val.split(" ")
@@ -72,6 +72,13 @@ def num_dec_places(val, max_dec_places=5):
         return len(dec) if len(dec) < max_dec_places else max_dec_places
     except ValueError:
         return 0
+
+
+def to_num_str(val, dec_places=None):
+    """Converts number to a string with the specified number of decimal places"""
+    if dec_places:
+        return "{{:.{}f}}".format(dec_places).format(val)
+    return str(val)
 
 
 def similar(num, other, threshold=0.01):

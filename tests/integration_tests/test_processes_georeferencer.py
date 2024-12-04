@@ -6,8 +6,8 @@ import pytest
 
 from nmnh_ms_tools.config import TEST_DIR
 from nmnh_ms_tools.records import Site
-from nmnh_ms_tools.processes.georeferencer import Georeferencer
-from nmnh_ms_tools.processes.georeferencer.pipes import (
+from nmnh_ms_tools.tools.georeferencer import Georeferencer
+from nmnh_ms_tools.tools.georeferencer.pipes import (
     MatchGeoNames,
     MatchOffshore,
     MatchPLSS,
@@ -28,7 +28,7 @@ with open(fp, "r", encoding="utf-8-sig", newline="") as f:
 
 @pytest.fixture
 def geo(mocker):
-    mocker.patch("nmnh_ms_tools.processes.georeferencer.Georeferencer.configure_log")
+    mocker.patch("nmnh_ms_tools.tools.georeferencer.Georeferencer.configure_log")
     geo = Georeferencer()
     geo.id_key = r"\btest(_[a-z]+)+\b"
     geo.raise_on_error = True
@@ -36,7 +36,7 @@ def geo(mocker):
 
 
 def test_from_file(mocker):
-    mocker.patch("nmnh_ms_tools.processes.georeferencer.Georeferencer.configure_log")
+    mocker.patch("nmnh_ms_tools.tools.georeferencer.Georeferencer.configure_log")
     fp = os.path.join(TEST_DIR, "test_georeferencer.csv")
     geo = Georeferencer(fp, pipes=[MatchGeoNames()], skip=1, limit=1)
     geo.id_key = r"\btest(_[a-z]+)+\b"
@@ -45,7 +45,7 @@ def test_from_file(mocker):
 
 
 def test_from_file_with_tests(mocker):
-    mocker.patch("nmnh_ms_tools.processes.georeferencer.Georeferencer.configure_log")
+    mocker.patch("nmnh_ms_tools.tools.georeferencer.Georeferencer.configure_log")
     fp = os.path.join(TEST_DIR, "test_georeferencer.csv")
     geo = Georeferencer(fp, pipes=[MatchGeoNames()])
     geo.id_key = r"\btest(_[a-z]+)+\b"

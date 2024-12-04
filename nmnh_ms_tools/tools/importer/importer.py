@@ -24,7 +24,6 @@ from .actions import run_action, to_emu
 from .attachments import Attachment, CollectionEvent, Location
 from .validator import Validator
 from ...databases.gvp import GVPVolcanoes
-from ...processes.georeferencer import Georeferencer
 from ...records import (
     CatNum,
     Person,
@@ -34,6 +33,7 @@ from ...records import (
     parse_catnums,
     parse_names,
 )
+from ...tools.georeferencer import Georeferencer
 from ...utils import (
     BaseDict,
     LazyAttr,
@@ -1784,7 +1784,7 @@ def _read_ancillary():
 
 
 # Define deferred class attributes
-LazyAttr(ImportRecord, "job", "job.yml", raise_on_error=False)
+LazyAttr(ImportRecord, "job", Job)
 LazyAttr(ImportRecord, "geo", Georeferencer)
 LazyAttr(ImportRecord, "gvp", GVPVolcanoes)
 LazyAttr(ImportRecord, "tree", get_tree)

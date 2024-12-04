@@ -6,7 +6,7 @@ import pytest
 
 from nmnh_ms_tools.databases.geonames import GeoNamesFeatures
 from nmnh_ms_tools.records import Site
-from nmnh_ms_tools.processes.georeferencer.evaluators import MatchEvaluator
+from nmnh_ms_tools.tools.georeferencer.evaluators import MatchEvaluator
 
 
 class Helpers:

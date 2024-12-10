@@ -11,6 +11,7 @@ class BaseDict(dict):
         # Child classes can set keymap to None to disable key formatting
         if not hasattr(self, "keymap"):
             self.keymap = {}
+        self._deferred = {}
         self.update(*args, **kwargs)
 
     def __str__(self):
@@ -27,7 +28,7 @@ class BaseDict(dict):
         self.keymap = state["keymap"]
         self._coerce_dicts_to = state["_coerce_dicts_to"]
         self.update(self._deferred)
-        del self._deferred
+        self._deferred.clear()
 
     def __getitem__(self, key):
         return super().__getitem__(self.format_key(key))
@@ -49,15 +50,29 @@ class BaseDict(dict):
                 self._deferred = {key: val}
 
     def __delitem__(self, key):
-        super().__delitem__(self.format_key(key))
+        if self.keymap is not None:
+            key = self.format_key(key)
+            self.keymap.pop(key, None)
+        super().__delitem__(key)
 
     def __iter__(self):
         if self.keymap is not None:
             return iter(self.keymap.values())
         return super().__iter__()
 
+    def __contains__(self, key):
+        return super().__contains__(self.format_key(key))
+
     def format_key(self, key):
         return key
+
+    def setdefault(self, key, default=None):
+        """Explicitly route setdefault through class.__setitem__"""
+        try:
+            return self[key]
+        except KeyError:
+            self[key] = default
+            return self[key]
 
     def get(self, key, default=None):
         """Explicitly route get through class.__getitem__"""
@@ -67,7 +82,10 @@ class BaseDict(dict):
             return default
 
     def pop(self, key, *args):
-        return super().pop(self.format_key(key), *args)
+        if self.keymap is not None:
+            key = self.format_key(key)
+            self.keymap.pop(key, None)
+        return super().pop(key, *args)
 
     def update(self, *args, **kwargs):
         """Explicitly routes update through class.__setitem__"""

@@ -31,9 +31,9 @@ class Parser:
 
     @parse_order.setter
     def parse_order(self, vals):
-        if self._parse_order and set(vals) != set(self._parse_order):
+        if self._parse_order and set(vals) - set(self._parse_order):
             raise ValueError(
-                f"parse_order must include the following values: {self._parse_order}"
+                f"parse_order can only include the following values: {self._parse_order}"
             )
         self._parse_order = vals
 

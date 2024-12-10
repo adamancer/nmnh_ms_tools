@@ -1,6 +1,7 @@
 """Manage attachments to other modules during imports"""
 
 from copy import deepcopy
+from warnings import warn
 
 from xmu import is_tab
 
@@ -25,13 +26,15 @@ class Attachment:
             return {"irn": self.rec}
         if "irn" in self.rec:
             return self.rec
-        # Map to irn
+        # Map value to irn
         try:
             irn = self.__class__.irns[str(self)]
-            if irn:
-                return {"irn": int(irn)}
+            return {"irn": int(irn)} if irn else {}
         except KeyError:
             self.__class__.irns[str(self)] = None
+            if isinstance(self.rec, str):
+                warn(f"Unmapped string attachment: {repr(self.rec)}")
+                return {}
         rec = deepcopy(self.rec)
         if not self.fields:
             return rec

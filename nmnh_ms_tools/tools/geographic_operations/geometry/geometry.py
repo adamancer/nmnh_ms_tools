@@ -23,7 +23,7 @@ from shapely.geometry import (
 )
 from shapely.ops import nearest_points, split
 
-from xmu import EMuLatitude, EMuLongitude, EMuRow
+from xmu import EMuLatitude, EMuLongitude, EMuRecord, EMuRow
 
 from ....databases.cache import CacheDict
 from ....utils import (
@@ -1185,6 +1185,22 @@ class GeoMetry:
                 logger.debug("Parsed geometry from WKT")
                 return wkt.loads(obj), crs
 
+        # Extract row of coordinate data from EMuRecord
+        if isinstance(obj, EMuRecord):
+            # Get collection event data if from catalog
+            obj = obj.get("BioEventSiteRef", obj)
+
+            # Select row from lat/long grid
+            grid = obj.grid("LatLatitude_nesttab").add_columns().pad()
+            if not grid:
+                raise ValueError("EMuRecord does not contain lat/long data: {rec}")
+            for row in obj.grid("LatLatitude_nesttab").add_columns().pad():
+                if row.get("LatPreferred_tab") == "Yes":
+                    obj = row
+                    break
+            else:
+                obj = grid[0]
+
         # Interpret row from EMu
         if isinstance(obj, EMuRow):
             try:
@@ -1205,15 +1221,20 @@ class GeoMetry:
                         "EMu exports must include either the original or verbatim coordinate fields"
                     )
 
-            # Get CRS from geodetic datum
-            crs = obj.get("LatDatum_tab", 4326)
+            # Get CRS from geodetic datumm forcing 4326 if none provided. CRS
+            # errors are typically small and the geometry cannot be created
+            # without specifying one, which interferes with certain validation
+            # routines for EMu imports.
+            crs = obj.get("LatDatum_tab")
+            if not crs or crs.lower() == "unknown":
+                crs = 4326
 
             # Set radius based on data in table
             try:
                 radius = f"{obj["LatRadiusNumeric_tab"]} {obj["LatRadiusUnit_tab"]}"
             except KeyError:
                 radius = obj.get("LatRadiusVerbatim_tab")
-            if radius:
+            if radius and radius not in ("None None"):
                 self._radius_km = parse_measurement(radius).convert_to("km").numeric
 
             # Route the lat-lons through the list parsing logic below

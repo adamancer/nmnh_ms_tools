@@ -8,7 +8,7 @@ import re
 from .core import Record, Records
 from ..tools.specimen_numbers.parsers import Parser
 from ..tools.specimen_numbers.specnum import SpecNum, parse_spec_num
-from ..utils import LazyAttr, PrefixedNum, to_attribute
+from ..utils import LazyAttr, PrefixedNum, mutable, to_attribute
 
 
 logger = logging.getLogger(__name__)
@@ -53,14 +53,15 @@ class CatNum(Record):
         else:
             super().__init__(kwargs)
         # Enforce formatting for some attributes
-        if self.code:
-            self.code = self.code.upper()
-        if self.prefix:
-            self.prefix = self.prefix.upper()
-        if self.suffix:
-            self.suffix = self.suffix.strip(self.delim + " ")
-            if len(self.suffix) == 1 and self.suffix.isupper():
-                self.delim = ""
+        with mutable(self):
+            if self.code:
+                self.code = self.code.upper()
+            if self.prefix:
+                self.prefix = self.prefix.upper()
+            if self.suffix:
+                self.suffix = self.suffix.strip(self.delim + " ")
+                if len(self.suffix) == 1 and self.suffix.isupper():
+                    self.delim = ""
 
     def __str__(self):
         return self.summarize()
@@ -428,14 +429,13 @@ class CatNum(Record):
 
         try:
             spec_nums = self.parser.extract(data)
-            if len(spec_nums) != 1:
+            key = list(spec_nums)[0]
+            if len(spec_nums) != 1 and len(spec_nums[key]) == 1:
                 raise ValueError
         except (AttributeError, IndexError, ValueError):
             raise ValueError(f"Could not parse {data}")
         else:
-            self._parse_spec_num(
-                parse_spec_num(spec_nums[self.parser.prepare(data)][0])
-            )
+            self._parse_spec_num(parse_spec_num(spec_nums[key][0]))
 
         # Is the suffix a division label?
         if re.match(r"\([A-Z]{3}(:[A-Z]{3})?\)", self.suffix):
@@ -610,5 +610,6 @@ def is_antarctic(val):
 
 
 # Define deferred class attributes
-LazyAttr(CatNum, "parser", Parser, clean=True, require_code=False)
-DEFAULT_PARSER = CatNum.parser
+LazyAttr(
+    CatNum, "parser", Parser, clean=True, require_code=False, parse_order=["spec_num"]
+)

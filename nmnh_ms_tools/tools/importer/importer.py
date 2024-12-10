@@ -6,6 +6,7 @@ from copy import deepcopy
 from itertools import zip_longest
 from functools import cached_property
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import numpy as np
 import pandas as pd
@@ -75,8 +76,12 @@ class Job(BaseDict):
             return yaml.safe_load(f)
 
     def save(self, path="job.yml"):
-        with open(path, "w", encoding="utf-8") as f:
-            yaml.dump(self.to_dict(), f, sort_keys=False, indent=4, allow_unicode=True)
+        """Saves the job file to path"""
+        with NamedTemporaryFile(mode="w", encoding="utf-8", delete=False) as tmp:
+            yaml.dump(
+                self.to_dict(), tmp, sort_keys=False, indent=4, allow_unicode=True
+            )
+        Path(tmp.name).replace(path)
 
     @cached_property
     def source_fields(self):
@@ -127,7 +132,9 @@ class Job(BaseDict):
         name = self["job"]["name"]
         rec = {
             "MulTitle": f"Batch import spreadsheet for the {name}",
-            "MulCreator_tab": [self["fields"]["cataloging"]["cataloged_by"]["default"]],
+            "MulCreator_tab": [
+                self["fields"]["cataloging"]["cataloged_by"]["kwargs"]["src"]
+            ],
             "MulDescription": (
                 f"Excel workbook used to import the {name}. The workbook submitted by the cataloger was"
                 f" edited by the data manager to improve the specificity, consistency, and accuracy"
@@ -254,6 +261,9 @@ class ImportRecord(EMuRecord):
         self.dynamic_props = {}
         self._source = None
 
+        self._catnum = None
+        self._cataloger = None
+
         # Read mapped attachments
         for module, cl in self.module_classes.items():
             irns = self.job.get("irns", {}).get(module, {})
@@ -262,19 +272,11 @@ class ImportRecord(EMuRecord):
 
     @property
     def catnum(self):
-        catnum = CatNum(self)
-        self.records.setdefault(str(catnum), []).append(self)
-        return catnum
+        return self._catnum
 
     @property
     def cataloger(self):
-        cataloger = self.job["fields"]["cataloging"]["cataloged_by"]["default"]
-        try:
-            return Person(cataloger)
-        except ValueError:
-            return Attachment(
-                cataloger, irns=self.job.get("irns", {}).get("eparties", {})
-            )
+        return self._cataloger
 
     @property
     def cataloged_date(self):
@@ -349,9 +351,9 @@ class ImportRecord(EMuRecord):
             else:
                 # Fill in continent
                 if evt.get("LocCountry") and not evt.get("LocContinent"):
-                    evt["LocContinent"] = (
-                        Site({"country": evt["LocCountry"]}).map_continent().continent
-                    )
+                    site = Site({"country": evt["LocCountry"]})
+                    site.map_admin()
+                    evt["LocContinent"] = site.continent
                 # Fill in collection event
                 if not self.fast:
                     self["BioEventSiteRef"] = CollectionEvent(
@@ -365,7 +367,7 @@ class ImportRecord(EMuRecord):
                 del self._source[key]
 
     def to_emu_record(self):
-        pass
+        return EMuRecord({k: v for k, v in self.items()}, module=self.module)
 
     def pop(self, *args):
         return self._source.pop(*args)
@@ -374,42 +376,61 @@ class ImportRecord(EMuRecord):
         return sorted({k for k, v in self.source.items() if v})
 
     def attach(self, src, dst):
-        """Maps a string"""
+        """Maps a string as an attachment"""
         module = self.schema.get_field_info(self.module, dst)["RefTable"]
         self[dst] = Attachment(
             self.pop(src, src), irns=self.job.get("irns", {}).get(module, {})
         ).to_emu()
 
-    def map_age(self, src):
-        keys = [
-            "AgeGeologicAgeEra_tab",
-            "AgeGeologicAgeSystem_tab",
-            "AgeGeologicAgeSeries_tab",
-            "AgeGeologicAgeStage_tab",
-        ]
-        vals = self.pop(src).split(" > ")
-        for key, val in zip_longest(keys, vals):
-            self.setdefault(key, []).append(val)
+    def map_age(self, src_earliest, rank, src_latest=None):
+
+        src_earliest = self.pop(src_earliest, src_earliest)
+        if src_latest:
+            src_latest = self.pop(src_latest, src_latest)
+        else:
+            try:
+                src_earliest, src_latest = re.split("-+", src_earliest)
+            except ValueError:
+                src_latest = src_earliest
+
+        for key, val in {
+            "Earliest": src_earliest,
+            "Latest": src_latest,
+        }.items():
+            self[f"AgeGeologicAge{key}{rank.title()}"] = val.title()
 
     def map_associated_taxa(
-        self, src, named_part="Associated", texture_structure=None, comments=None
+        self,
+        src,
+        named_part="Associated",
+        texture_structure=None,
+        id_by=None,
+        comments=None,
     ):
         named_part = self.pop(named_part, named_part)
         if not named_part.startswith("Associated"):
             named_part = f"Associated {named_part}"
-        return self.map_taxa(src, named_part, texture_structure, comments)
+        return self.map_taxa(src, named_part, texture_structure, id_by, comments)
 
     def map_catalog_number(self, number, prefix="", suffix="", delim="-"):
         prefix = self.pop(prefix, prefix)
         number = self.pop(number)
         suffix = self.pop(suffix, suffix)
         verbatim = f"{prefix}{number}{delim}{suffix}".rstrip(delim)
-        catnum = CatNum(verbatim).to_emu()
+
+        self._catnum = CatNum(verbatim)
+        self.records.setdefault(str(self._catnum), []).append(self)
         try:
-            for key, val in catnum.items():
+            for key, val in self._catnum.to_emu().items():
                 self.setdefault(key, val)
         except TypeError:
-            raise ValueError(f"Could not coerce value to catalog number: '{verbatim}'")
+            raise ValueError(
+                f"Could not coerce value to catalog number: {repr(verbatim)}"
+            )
+
+    def map_cataloger(self, src):
+        self._cataloger = Person(self.pop(src, src))
+        self["CatCatalogedByRef"] = self._cataloger.to_emu()
 
     def map_coordinates(self, *args, **kwargs):
         args = [self.pop(a, a) for a in args]
@@ -507,8 +528,23 @@ class ImportRecord(EMuRecord):
                 evt._set_path(key, verbatim)
 
     def map_dynamic_properties(
-        self, src, dst="", key=None, mask='"{}"', raise_on_error=False
+        self, src, dst="", key=None, mask="{}", raise_on_error=False
     ):
+        """Maps data with no obvious home to a YAML note
+
+        You can pass a single field or a dict. Here is an example of what the latter
+        case looks like in the job file:
+
+        ```yaml
+        other:
+            dynamic_props:
+                method: map_dynamic_properties
+                kwargs:
+                    src:
+                        col name 1: YAML name 1
+                        col name 2: YAML name 2
+        ```
+        """
         if isinstance(src, dict):
             for src, key in src.items():
                 # Catch KeyError so iteration isn't disrupted by a bad field name
@@ -713,12 +749,17 @@ class ImportRecord(EMuRecord):
             raise KeyError(f"'{src}' not found in source")
 
     def map_primary_taxa(
-        self, src, named_part="Primary", texture_structure=None, comments=None
+        self,
+        src,
+        named_part="Primary",
+        texture_structure=None,
+        id_by=None,
+        comments=None,
     ):
         named_part = self.pop(named_part, named_part)
         if not named_part.startswith("Primary"):
             named_part = f"Primary {named_part}"
-        return self.map_taxa(src, named_part, texture_structure, comments)
+        return self.map_taxa(src, named_part, texture_structure, id_by, comments)
 
     def map_related(self, src, relationship):
         val = self.pop(src)
@@ -813,12 +854,18 @@ class ImportRecord(EMuRecord):
         self["LocLocationRef_tab"] = [loc]
 
     def map_taxa(
-        self, src, named_part="Associated", texture_structure=None, comments=None
+        self,
+        src,
+        named_part="Associated",
+        texture_structure=None,
+        id_by=None,
+        comments=None,
     ):
 
         # Record whether arguments are fields or verbatim
         part_is_field = named_part in self._source
         texture_is_field = texture_structure in self._source
+        id_is_field = id_by in self._source
         comment_is_field = comments in self._source
 
         # Split values
@@ -828,6 +875,7 @@ class ImportRecord(EMuRecord):
                 break
         parts = split(self.pop(named_part, named_part))
         textures = split(self.pop(texture_structure, texture_structure), "|")
+        ids_by = split(self.pop(id_by, id_by))
         comments = split(self.pop(comments, comments))
 
         if taxa:
@@ -836,6 +884,7 @@ class ImportRecord(EMuRecord):
             taxa = [t[0] for t in taxa]
             parts = [p[0] for p in parts]
             textures = [t[0] for t in textures]
+            ids_by = [i[0] for i in ids_by]
             comments = [c[0] for c in comments]
 
             # Repeat value in associated fields if verbatim
@@ -846,16 +895,21 @@ class ImportRecord(EMuRecord):
                     )
                 else:
                     parts = parts * len(taxa)
-            if not texture_is_field and len(parts) == 1:
+            if not texture_is_field and len(textures) == 1:
                 textures = textures * len(taxa)
-            if not comment_is_field and len(parts) == 1:
+            if not id_is_field and len(ids_by) == 1:
+                ids_by = ids_by * len(taxa)
+            if not comment_is_field and len(comments) == 1:
                 comments = comments * len(taxa)
 
             parts += [None] * (len(taxa) - len(parts))
             textures += [None] * (len(taxa) - len(textures))
+            ids_by += [None] * (len(taxa) - len(ids_by))
             comments += [None] * (len(taxa) - len(comments))
 
-            for taxon, part, texture, comment in zip(taxa, parts, textures, comments):
+            for taxon, part, texture, id_by, comment in zip(
+                taxa, parts, textures, ids_by, comments
+            ):
 
                 # Handle parentheticals
                 if taxon.endswith(")"):
@@ -874,13 +928,13 @@ class ImportRecord(EMuRecord):
                         else:
                             textures.append(paren)
 
+                    # Textures can be specified as parentheticals in names or as a
+                    # keyword passed to this function. Those sources are combined here.
+                    if texture:
+                        textures.append(texture)
+
                     if textures:
-                        if texture:
-                            raise ValueError(
-                                f"Taxon includes texture, but texture was already"
-                                f" provided: {taxon}, texture={texture}"
-                            )
-                        texture = "; ".join(textures)
+                        texture = "; ".join(sorted({t.lower() for t in textures}))
 
                 taxon = self.tree.place(taxon).to_emu()
                 if "irn" in taxon:
@@ -888,6 +942,9 @@ class ImportRecord(EMuRecord):
                 self.setdefault("IdeTaxonRef_tab", []).append(taxon)
                 self.setdefault("IdeNamedPart_tab", []).append(part)
                 self.setdefault("IdeTextureStructure_tab", []).append(texture)
+                self.setdefault("IdeIdentifiedByRef_tab", []).append(
+                    Person(id_by).to_emu() if id_by else None
+                )
                 self.setdefault("IdeComments_tab", []).append(comment)
 
     def map_volcano(self, src_name=None, src_num=None, src_feature=None):
@@ -1014,6 +1071,16 @@ class ImportRecord(EMuRecord):
         ignore = {s.lower() for s in self.job.get("ignore", [])}
         data = {k: v for k, v in data.items() if k.lower() not in ignore}
 
+        # Map dict-like data as dicts
+        for key, val in data.items():
+            lines = val.splitlines()
+            if len(lines) > 1:
+                dct = {}
+                for line in val.splitlines():
+                    key_, val_ = line.split(":", 1)
+                    dct[key_] = val_
+                data[key] = dct
+
         # Test receipt even if not writing it
         if self.test:
             return generate_receipt(data, str(self.catnum))
@@ -1036,7 +1103,7 @@ class ImportRecord(EMuRecord):
         receipt = wrap_receipt(
             data,
             path,
-            str(self.catnum),
+            self.catnum,
             str(self.cataloger),
             overwrite=not self.test,  # always overwrite if not a test
         )
@@ -1626,7 +1693,11 @@ def split(vals, delim="|;", trim=True):
 def generate_receipt(row, catnum):
 
     # Clear empty, non-zero keys
-    row = {k: v.strip() for k, v in row.items() if (v or v == 0)}
+    row = {
+        k: v.strip() if isinstance(v, str) else v
+        for k, v in row.items()
+        if (v or v == 0)
+    }
 
     # Create YAML receipt
     receipt = f"# Verbatim data for {catnum} from cataloging spreadsheet\n"
@@ -1649,6 +1720,7 @@ def generate_receipt(row, catnum):
 
     # Check for additional quoted vales
     if ": '" in receipt:
+        print(row)
         orig = yaml.dump(row, sort_keys=False, allow_unicode=True, width=1e6)
         warnings.warn(f"Quoted values in receipt: {receipt} ({orig})")
 
@@ -1677,7 +1749,7 @@ def write_receipt(row, path, catnum, overwrite=False):
 
     # Append filename if path is a directory
     if os.path.isdir(path):
-        path = os.path.join(path, f"{to_attribute(catnum)}.yml")
+        path = os.path.join(path, f"{CatNum(catnum).slug()}.yml")
 
     # Ensure that directory exists
     try:
@@ -1721,7 +1793,7 @@ def wrap_receipt(row, path, catnum, cataloger, overwrite=False):
     path = write_receipt(row, path, catnum=catnum, overwrite=overwrite)
     return {
         "MulTitle": f"{catnum} source data",
-        "MulCreator_tab": [cataloger],
+        "MulCreator_tab": cataloger.split(" and "),
         "MulDescription": f"Verbatim data for {catnum} from cataloging spreadsheet",
         "Multimedia": os.path.realpath(path),
         "DetSource": "Mineral Sciences, NMNH",

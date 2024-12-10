@@ -292,15 +292,16 @@ class NameIndex(TaxaIndex):
     """Constructs an index of taxon names"""
 
     path = CONFIG["data"]["name_index"]
+    tree = None
 
-    def __init__(self, tree):
+    def __init__(self):
         super().__init__()
         try:
             self.from_json(self.path)
         except (IOError, OSError):
             print(f"Building {self.path.split("_")[0]} index...")
             count = 0
-            for obj in (tree.obj, tree.new):
+            for obj in (self.obj, self.new):
                 for taxon in obj.values():
                     self.add_taxon(taxon)
                     count += 1
@@ -323,15 +324,16 @@ class StemIndex(TaxaIndex):
     """Constructs an index of stemmed taxon names"""
 
     path = CONFIG["data"]["name_index"]
+    tree = None
 
-    def __init__(self, tree):
+    def __init__(self):
         super().__init__()
         try:
             self.from_json(self.path)
         except (IOError, OSError):
             print(f"Building {self.path.split("_")[0]} index...")
             count = 0
-            for obj in (tree.obj, tree.new):
+            for obj in (self.obj, self.new):
                 for taxon in obj.values():
                     self.add_taxon(taxon)
                     count += 1
@@ -353,5 +355,7 @@ class StemIndex(TaxaIndex):
 
 
 # Define deferred class attributes
+LazyAttr(NameIndex, "tree", lambda: Taxon.tree)
+LazyAttr(StemIndex, "tree", lambda: Taxon.tree)
 LazyAttr(TaxaTree, "name_index", NameIndex)
 LazyAttr(TaxaTree, "stem_index", StemIndex)

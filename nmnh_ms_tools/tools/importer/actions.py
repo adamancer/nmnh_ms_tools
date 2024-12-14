@@ -1,6 +1,6 @@
 from functools import cache
 
-from ...records import Person, Reference
+from ...records import Person, Reference2 as Reference
 from ...utils import ucfirst
 
 

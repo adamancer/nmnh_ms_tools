@@ -47,9 +47,9 @@ for prefix in ["milli", "centi", "", "kilo"]:
 class Measurement:
 
     def __init__(self, val=None, unit="", conj=" to "):
+
         self.verbatim = val
         self.conj = conj
-
         self.from_val = ""
         self.from_mod = ""
         self.to_val = ""
@@ -63,6 +63,10 @@ class Measurement:
                     self._parse(val, unit)
                 except KeyError:
                     raise ValueError(f"Could not parse measurement: {self.verbatim}")
+
+                # Add the unit to the verbatim string if no unit is present in val
+                if unit and not re.match(r"[a-z]\.?$", str(self.verbatim), flags=re.I):
+                    self.verbatim = f"{self.verbatim} {unit}".strip()
 
     def __setattr__(self, attr, val):
         set_immutable(self, attr, val)
@@ -123,8 +127,24 @@ class Measurement:
         val = re.sub(r"\.0+$", "", self.from_val)
         return float(val) if "." in val else int(val)
 
+    @cached_property
+    def value(self):
+        """Returns the value of the measurement"""
+        return self.conj.join(list({self.from_val: None, self.to_val: None}))
+
+    @cached_property
+    def mean(self):
+        """Returns the mean of the measurment"""
+        if self.from_val == self.to_val:
+            return self.from_val
+        return (float(self.from_val) + float(self.to_val)) / 2
+
     def copy(self):
         return custom_copy(self)
+
+    def is_metric(self):
+        """Checks if unit is metric"""
+        return re.match("^[kcmμn]?[mg]$", self.short_unit)
 
     def _parse(self, val, unit):
         if isinstance(val, Measurement):
@@ -165,8 +185,14 @@ class Measurement:
         from_mod = vals[0][0] if vals[0][0] in "<>~" else ""
         to_mod = vals[-1][0] if vals[-1][0] in "<>~" else ""
 
+        # Ensure that full unit is used
+        try:
+            unit = UNITS[unit.rstrip(".")]
+        except KeyError:
+            if unit and unit not in SHORT_UNITS:
+                raise ValueError(f"Invalid unit: {repr(unit)}")
         if unit and units and unit not in units:
-            raise ValueError(f"Inconsistent units: {repr(val)} (repr({unit}))")
+            raise ValueError(f"Inconsistent units: {repr(vals)}, ({repr({unit})})")
 
         if len(set(units)) == 1:
             unit = units[0]
@@ -206,6 +232,7 @@ class Measurement:
                 "cm": 100,
                 "m": 1,
                 "mm": 0.001,
+                "ft": 0.3048,
                 "mi": 1609.344,
                 "yd": 0.9144,
             },
@@ -240,7 +267,12 @@ class Measurement:
 
         val = "-".join([from_val, to_val]) if from_val != to_val else from_val
         val = re.sub(r"\.0+", "", val)
-        return parse_measurement(val, unit, conj=self.conj)
+        meas = parse_measurement(val, unit, conj=self.conj)
+
+        # Retain the original verbatim string
+        with mutable(meas):
+            meas.verbatim = self.verbatim
+        return meas
 
 
 def parse_measurement(val, unit="", conj=" to "):
@@ -269,6 +301,8 @@ def parse_measurements(val_from, val_to=None, unit="", conj=" to "):
     Returns:
         tuple as (from_value, to_value, unit, text, verbatim)
     """
+    verbatim_from = val_from
+    verbatim_to = val_to
     val_from = parse_measurement(val_from, unit=unit)
     if val_to:
         val_to = parse_measurement(val_to, unit=unit)
@@ -276,16 +310,16 @@ def parse_measurements(val_from, val_to=None, unit="", conj=" to "):
             # Check if one or both values are ranges
             if val_from.from_val != val_from.to_val or val_to.from_val != val_to.to_val:
                 raise ValueError(
-                    f"Inconsistent measurements: {val_from.verbatim}, {val_to.verbatim}"
+                    f"Inconsistent measurements: {repr(val_from.verbatim)}, {repr(val_to.verbatim)}"
                 )
 
             # Check units
             if len({m.unit for m in (val_from, val_to) if m.unit}) > 1:
                 raise ValueError(
-                    f"Inconsistent units: {val_from.verbatim}, {val_to.verbatim}"
+                    f"Inconsistent units: {repr(val_from.verbatim)}, {repr(val_to.verbatim)}"
                 )
 
             return parse_measurement(
-                f"{val_from.verbatim} to {val_to.verbatim}", unit=unit, conj=conj
+                f"{verbatim_from} to {verbatim_to}", unit=unit, conj=conj
             )
     return val_from

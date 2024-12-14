@@ -31,26 +31,6 @@ def test_get_azimuth(test_input, expected):
 )
 def test_get_dist_km(lat1, lon1, lat2, lon2, expected):
     assert get_dist_km(lat1, lon1, lat2, lon2) == pytest.approx(expected, rel=1e-2)
-    assert get_dist_km_geolib(lat1, lon1, lat2, lon2) == pytest.approx(
-        expected, rel=1e-2
-    )
-    assert get_dist_km_haversine(lat1, lon1, lat2, lon2) == pytest.approx(
-        expected, rel=1e-2
-    )
-    assert get_dist_km_pyproj(lat1, lon1, lat2, lon2) == pytest.approx(
-        expected, rel=1e-2
-    )
-
-
-@pytest.mark.parametrize(
-    "lat1,lon1,lat2,lon2,expected",
-    [
-        (46.999, -120.577, 47.068, -120.671, 10.477),
-        (47, -121, 47, -121, 0),
-    ],
-)
-def test_get_dist_km(lat1, lon1, lat2, lon2, expected):
-    assert get_dist_km(lat1, lon1, lat2, lon2) == pytest.approx(expected, rel=1e-2)
 
 
 @pytest.mark.parametrize(

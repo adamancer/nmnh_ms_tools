@@ -37,18 +37,31 @@ def as_tuple(val, delims="|;"):
     return tuple(as_list(val, delims=delims))
 
 
-def dedupe(lst, lower=True):
+def dedupe(lst: list, lower: bool = True) -> list:
     """Dedupes a list while maintaining order and case
 
-    Args:
-        list (list): a list of strings
+    Parameters
+    ----------
+    lst : list
+        list of values to dedupe
+    lower : bool, default=True
+        whether to convert strings to lowercase when deduping
 
-    Returns:
+    Returns
+    -------
+    list
         Deduplicated copy of the original list
     """
-    prep = lambda v: v.lower() if lower and isinstance(v, str) else v
-    lst_ = [prep(v) for v in lst]
-    return [val for i, val in enumerate(lst) if not prep(val) in lst_[:i]]
+    prep = lambda v: v.casefold() if lower and isinstance(v, str) else v
+    try:
+        dct = {}
+        for val in lst:
+            dct.setdefault(prep(val), val)
+        return list(dct.values())
+    except TypeError:
+        # Fallback for non-hashable list items
+        lst_ = [prep(v) for v in lst]
+        return [val for i, val in enumerate(lst) if prep(val) not in lst_[:i]]
 
 
 def oxford_comma(lst, lowercase=False, delim=", ", conj="and"):

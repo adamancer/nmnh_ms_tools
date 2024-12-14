@@ -3,5 +3,5 @@
 from .. import _ImportClock
 
 with _ImportClock("config"):
-    from .config import CONFIG, CONFIG_DIR, DATA_DIR, GEOCONFIG, TEST_DIR
+    from .config import CONFIG, CONFIG_DIR, FILE_DIR, DATA_DIR, GEOCONFIG, TEST_DIR
     from .downloader import download

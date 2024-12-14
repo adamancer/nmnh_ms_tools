@@ -526,6 +526,9 @@ T,FORD,,1,,,ford,a shallow part of a stream which can be crossed on foot or by l
 T,FSR,,1,,,fissure,a crack associated with volcanism
 T,GAP,,8,,,gap,"a low place in a ridge, not used for transportation"
 T,GRGE,,8,,,gorge(s),"a short, narrow, steep-sided section of a stream valley"
+T,GVPVOLC,,8,,,volcano,**CUSTOM FEATURE CODE**
+T,GVPPROV,,128,,,volcanic province,**CUSTOM FEATURE CODE**
+T,GVPSUB,,8,,,volcanic subfeature,**CUSTOM FEATURE CODE**
 T,HDLD,,8,,,headland,a high projection of land extending into a large body of water beyond the line of the coast
 T,HLL,,8,1.414705375,,hill,a rounded elevation of limited extent rising above the surrounding land with local relief of less than 300m
 T,HLLS,,16,,,hills,rounded elevations of limited extent rising above the surrounding land with local relief of less than 300m
@@ -591,8 +594,6 @@ T,VALG,,8,,,hanging valley,a valley the floor of which is notably higher than th
 T,VALS,,16,,,valleys,elongated depressions usually traversed by a stream
 T,VALX,,4,,,section of valley,
 T,VLC,,8,,,volcano,a conical elevation composed of volcanic materials with a crater at the top
-T,VLF,,32,,,volcanic field,**CUSTOM FEATURE CODE**
-T,VLS,,8,,,volcanic shield,**CUSTOM FEATURE CODE**
 U,APNU,,512,,,apron,"a gentle slope, with a generally smooth surface, particularly found around groups of islands and seamounts"
 U,ARCU,,128,,,arch,a low bulge around the southeastern end of the island of Hawaii
 U,ARRU,,128,,,arrugado,an area of subdued corrugations off Baja California

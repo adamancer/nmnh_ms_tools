@@ -1,15 +1,29 @@
 """Defines functions to help using dicts"""
 
+from warnings import warn
+
 from ..lists import as_list, dedupe, iterable
 
 
-def combine(*args):
-    """Combines a list of dicts, retaining all unique values"""
+def combine(*args, append_repeats=True):
+    """Combines a list of dicts"""
     args = list(args)
-    combined = {k: as_list(v) for k, v in args[0].items()}
+    combined = {k: v for k, v in args[0].items() if v}
+    if append_repeats:
+        combined = {k: as_list(v) for k, v in args[0].items()}
     for other in args[1:]:
         for key, val in other.items():
-            combined.setdefault(key, []).extend(as_list(val))
+            if append_repeats:
+                combined.setdefault(key, []).extend(as_list(val))
+            else:
+                try:
+                    # Warn if non-empty key has different value in later dict
+                    if combined[key] and val != combined[key]:
+                        warn(
+                            f"Value conflict: {key} ({repr(val)} != {repr(combined[key])})"
+                        )
+                except KeyError:
+                    combined[key] = val
     return {k: dedupe(v) for k, v in combined.items()}
 
 

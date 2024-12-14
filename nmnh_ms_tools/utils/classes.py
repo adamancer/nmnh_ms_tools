@@ -1,5 +1,6 @@
 """Defines methods used across internal classes"""
 
+import logging
 from contextlib import contextmanager
 from pathlib import Path
 from collections.abc import Callable
@@ -9,6 +10,8 @@ import pandas as pd
 from shapely.geometry.base import BaseGeometry
 
 from .files import read_csv, read_json, read_tsv, read_yaml
+
+logger = logging.getLogger(__name__)
 
 
 class LazyAttr:
@@ -32,6 +35,7 @@ class LazyAttr:
         self._lazyattr = attr
         self._lazyargs = args
         self._lazykwargs = kwargs
+        self._lazycached = None
 
         # Infer function for simple file reads
         if not callable(action):
@@ -70,57 +74,72 @@ class LazyAttr:
             setattr(self._lazyobj, self._lazyattr, self)
 
     def __call__(self, *args, **kwargs):
-        return self.lazyload()(*args, **kwargs)
+        return self.lazyload("__call__")(*args, **kwargs)
 
     def __getattr__(self, attr):
-        return getattr(self.lazyload(), attr)
+        return getattr(self.lazyload("__getattr__"), attr)
 
     def __setattr__(self, attr, val):
-        if attr in {"_lazyobj", "_lazyattr", "_lazyfunc", "_lazyargs", "_lazykwargs"}:
+        if attr in {
+            "_lazyobj",
+            "_lazyattr",
+            "_lazyfunc",
+            "_lazyargs",
+            "_lazykwargs",
+            "_lazycached",
+        }:
             super().__setattr__(attr, val)
         else:
-            return setattr(self.lazyload(), attr, val)
+            return setattr(self.lazyload("__setattr__"), attr, val)
 
     def __delattr__(self, attr):
-        delattr(self.lazyload(), attr)
+        delattr(self.lazyload("__delattr__"), attr)
 
     def __getitem__(self, key):
-        return self.lazyload()[key]
+        return self.lazyload("__getitem__")[key]
 
     def __setitem__(self, key, val):
-        self.lazyload()[key] = val
+        self.lazyload("__setitem__")[key] = val
 
     def __deltitem__(self, key):
-        del self.lazyload()[key]
+        del self.lazyload("__delitem__")[key]
 
     def __contains__(self, val):
-        return val in self.lazyload()
+        return val in self.lazyload("__contains__")
 
     def __iter__(self):
-        return iter(self.lazyload())
+        return iter(self.lazyload("__iter__"))
 
     def __bool__(self):
-        return bool(self.lazyload())
+        return bool(self.lazyload("__bool__"))
 
     def __float__(self):
-        return float(self.lazyload())
+        return float(self.lazyload("__float__"))
 
     def __int__(self):
-        return int(self.lazyload())
+        return int(self.lazyload("__int__"))
 
     def __str__(self):
-        return str(self.lazyload())
+        return str(self.lazyload("__str__"))
 
     def __repr__(self):
-        return repr(self.lazyload())
+        return repr(self.lazyload("__repr__"))
 
-    def lazyload(self):
+    def lazyload(self, src):
         """Lazy loads data using function and sets the associated attribute"""
-        setattr(
-            self._lazyobj,
-            self._lazyattr,
-            self._lazyfunc(*self._lazyargs, **self._lazykwargs),
-        )
+
+        # HACK: Cache result of lazyload. Some ipython processes result in the
+        # lazy-loaded attributes not being updated as expect. This caches
+        # the result so that the action is only run once even when this happens.
+        if self._lazycached is None:
+            logger.debug(
+                f"Setting {self._lazyobj.__name__}.{self._lazyattr} ="
+                f" {self._lazyfunc.__name__}(args={self._lazyargs},"
+                f" kwargs={self._lazykwargs}) (triggered from {src})"
+            )
+            self._lazycached = self._lazyfunc(*self._lazyargs, **self._lazykwargs)
+
+        setattr(self._lazyobj, self._lazyattr, self._lazycached)
         return getattr(self._lazyobj, self._lazyattr)
 
 

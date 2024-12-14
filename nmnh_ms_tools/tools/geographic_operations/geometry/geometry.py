@@ -8,7 +8,7 @@ from math import isclose
 
 import geopandas as gpd
 import numpy as np
-from shapely import union_all, wkb, wkt
+from shapely import union_all, wkb, wkt, to_wkt, to_wkb
 from shapely.affinity import translate
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry import (
@@ -150,7 +150,7 @@ class GeoMetry:
             f"<GeoMetry name={repr(self.name)}"
             f" crs={repr(str(self.crs))}"
             f" radius_km={self.radius_km:.1f}"
-            f" geom={_truncate(self.geom.iloc[0])}>"
+            f" geom={_truncate(self.wkt)}>"
         )
 
     def __repr__(self):
@@ -207,7 +207,11 @@ class GeoMetry:
         logger.debug("Calculating meridians")
         try:
             logger.debug("Getting meridians from x")
-            meridians = self.as_wgs84.x
+            # Previously this approach used the full set of x coordinates for each
+            # shape. This failed sporadically with shapes that cross the antimeridian,
+            # so switched to using representative point instead.
+            # meridians = self.as_wgs84.x
+            meridians = [self.representative_point(4326).x]
         except NotImplementedError:
             logger.debug("Getting meridians from subgeoms")
             meridians = []
@@ -253,10 +257,6 @@ class GeoMetry:
     @cached_property
     def convex_hull(self):
         return self.match(self.as_equal_area.geom.convex_hull)
-
-    @cached_property
-    def representative_point(self):
-        return self.geom.to_crs(4326).representative_point()[0]
 
     @cached_property
     def center(self):
@@ -413,7 +413,7 @@ class GeoMetry:
 
     @cached_property
     def wkt(self):
-        return self.geom.iloc[0].wkt
+        return to_wkt(self.geom.iloc[0], rounding_precision=6)
 
     @property
     def is_empty(self):
@@ -451,6 +451,12 @@ class GeoMetry:
             geom._radius_km = self._radius_km
 
         return geom
+
+    def representative_point(self, crs=None):
+        point = self.match(self.geom.representative_point()[0])
+        if crs is not None:
+            point = point.to_crs(crs)
+        return point
 
     def to_json(self):
         return {
@@ -505,7 +511,7 @@ class GeoMetry:
         return self.copy()
 
     def customize_proj_string(self, proj_string):
-        point = self.representative_point
+        point = self.representative_point(4326)
         return proj_string.format(lat=0, lon=get_meridian([point.x]))
 
     def equals_exact(self, other, tolerance=0.1):
@@ -974,7 +980,7 @@ class GeoMetry:
             dist *= 1000
             # Buffer and crop the geometry
             proj_string = self.equal_area_mask.format(
-                lat=0, lon=get_meridian([self.representative_point.x])
+                lat=0, lon=get_meridian([self.representative_point(4326).x])
             )
             geom = self.envelope.geom if self.geom_type == "Point" else self.geom
             geom = geom.to_crs(proj_string)

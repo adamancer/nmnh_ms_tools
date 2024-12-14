@@ -591,7 +591,7 @@ def parse_catnums(val, parser=None, require_code=True):
     if isinstance(val, dict):
         return CatNums([CatNum(val)])
     if parser is None:
-        parser = DEFAULT_PARSER
+        parser = CatNum.parser
     try:
         return CatNums([CatNum(c) for c in parser.parse(val)])
     except Exception as exc:

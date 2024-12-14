@@ -325,6 +325,26 @@ class Validator:
         return isinstance(obj, str) and re.match("^(" + "|".join(patterns) + ")$", obj)
 
 
+def validate(path: str, *args, **kwargs) -> None:
+    """Validates the EMu XML file at the given path
+
+    Writes a file called validation.csv with all invalid values (including
+    both invalid data and data in fields where no validation is defined.)
+
+    Parameters
+    ----------
+    path : str
+        path to EMu XML file
+    args, kwargs :
+        parameters to pass to `Validator.validate()`
+
+    Returns
+    -------
+    None
+    """
+    return Validator(path).validate(*args, **kwargs)
+
+
 def _prep_record(obj):
     """Recuresively removes empty items from an object"""
     if isinstance(obj, dict):

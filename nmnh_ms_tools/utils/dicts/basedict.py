@@ -52,7 +52,7 @@ class BaseDict(dict):
     def __delitem__(self, key):
         if self.keymap is not None:
             key = self.format_key(key)
-            self.keymap.pop(key, None)
+            del self.keymap[key]
         super().__delitem__(key)
 
     def __iter__(self):
@@ -81,10 +81,10 @@ class BaseDict(dict):
         except KeyError:
             return default
 
-    def pop(self, key, *args):
+    def pop(self, *args):
         if self.keymap is not None:
-            key = self.format_key(key)
-            self.keymap.pop(key, None)
+            key = self.format_key(args[0])
+            del self.keymap[key]
         return super().pop(key, *args)
 
     def update(self, *args, **kwargs):

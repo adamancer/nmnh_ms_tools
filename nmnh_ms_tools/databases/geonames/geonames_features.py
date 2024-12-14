@@ -749,7 +749,7 @@ def _read_country_code_to_continent():
             row = line.strip().split("\t")
             code_to_cont[row[0]] = row[8]
     # Map missing values that occur in the GeoNames database
-    code_to_cont["YU"] = "Europe"
+    code_to_cont["YU"] = "EU"
     return Lookup(code_to_cont)
 
 

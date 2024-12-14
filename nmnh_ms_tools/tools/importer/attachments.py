@@ -25,16 +25,17 @@ class Attachment:
         if isinstance(self.rec, int):
             return {"irn": self.rec}
         if "irn" in self.rec:
-            return self.rec
+            return {"irn": self.rec["irn"]}
         # Map value to irn
         try:
             irn = self.__class__.irns[str(self)]
-            return {"irn": int(irn)} if irn else {}
+            if irn:
+                return {"irn": int(irn)}
         except KeyError:
             self.__class__.irns[str(self)] = None
             if isinstance(self.rec, str):
                 warn(f"Unmapped string attachment: {repr(self.rec)}")
-                return {}
+        # Map data
         rec = deepcopy(self.rec)
         if not self.fields:
             return rec

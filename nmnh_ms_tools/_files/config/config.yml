@@ -82,9 +82,9 @@ processes:
           - CLDA
           - CONE
           - CRTR
-          - VLC
-          - VLF
-          - VLS
+          - GVP:Volcano
+          - GVP:Feature
+          - GVP:Province
       - field: volcano2
         codes:
           - HLL

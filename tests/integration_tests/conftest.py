@@ -92,61 +92,61 @@ init_georef_job_db(":memory:")
 @pytest.fixture(scope="session")
 def adamancerbot():
     bot = AdamancerBot()
-    bot.install_cache("bot.sqlite")
+    bot.install_cache(":memory:")
     return bot
 
 
 @pytest.fixture(scope="session")
 def geogallerybot():
     bot = GeoGalleryBot()
-    bot.install_cache("bot.sqlite")
+    bot.install_cache(":memory:")
     return bot
 
 
 @pytest.fixture(scope="session")
 def geonamesbot():
     bot = GeoNamesBot()
-    bot.install_cache("bot.sqlite")
+    bot.install_cache(":memory:")
     return bot
 
 
 @pytest.fixture(scope="session")
 def gnrdbot():
     bot = GNRDBot()
-    bot.install_cache("bot.sqlite")
+    bot.install_cache(":memory:")
     return bot
 
 
 @pytest.fixture(scope="session")
 def itisbot():
     bot = ITISBot()
-    bot.install_cache("bot.sqlite")
+    bot.install_cache(":memory:")
     return bot
 
 
 @pytest.fixture(scope="session")
 def macrostratbot():
     bot = MacrostratBot()
-    bot.install_cache("bot.sqlite")
+    bot.install_cache(":memory:")
     return bot
 
 
 @pytest.fixture(scope="session")
 def metbullbot():
     bot = MetBullBot()
-    bot.install_cache("bot.sqlite")
+    bot.install_cache(":memory:")
     return bot
 
 
 @pytest.fixture(scope="session")
 def plssbot():
     bot = PLSSBot()
-    bot.install_cache("bot.sqlite")
+    bot.install_cache(":memory:")
     return bot
 
 
 @pytest.fixture(scope="session")
 def xddbot():
     bot = xDDBot()
-    bot.install_cache("bot.sqlite")
+    bot.install_cache(":memory:")
     return bot

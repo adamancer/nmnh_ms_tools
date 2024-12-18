@@ -28,14 +28,13 @@ from .actions import run_action, to_emu
 from .attachments import Attachment, CollectionEvent, Location
 from ...databases.gvp import GVPVolcanoes
 from ...records import (
-    CatNum,
     Person,
     Reference,
     Site,
     get_tree,
-    parse_catnums,
     parse_names,
 )
+from ...records.catnums2 import CatNum, parse_catnum
 from ...tools.georeferencer import Georeferencer
 from ...utils import (
     BaseDict,
@@ -766,12 +765,19 @@ class ImportRecord(EMuRecord):
         return self.map_taxa(src, named_part, texture_structure, id_by, comments)
 
     def map_catalog_number(
-        self, number: str, prefix: str = "", suffix: str = "", delim: str = "-"
+        self,
+        code: str,
+        number: str,
+        prefix: str = "",
+        suffix: str = "",
+        delim: str = "-",
     ) -> None:
         """Parses and maps the catalog number from source
 
         Parameters
         ----------
+        code : str
+            the four-character museum code for the catalog number
         number : str
             the value or key in source containing the value for the catalog number.
             This can be either the numeric component of the catalog number but is
@@ -794,10 +800,11 @@ class ImportRecord(EMuRecord):
         ValueError
             if the catalog number cannot be parsed or converted to EMu
         """
+        code = self.pop(code, code)
         prefix = self.pop(prefix, prefix)
         number = self.pop(number)
         suffix = self.pop(suffix, suffix)
-        verbatim = f"{prefix}{number}{delim}{suffix}".rstrip(delim)
+        verbatim = f"{code} {prefix}{number}{delim}{suffix}".rstrip(delim)
 
         self._catnum = CatNum(verbatim)
         self.records.setdefault(str(self._catnum), []).append(self)
@@ -1429,15 +1436,26 @@ class ImportRecord(EMuRecord):
             for val, _ in split(val):
 
                 try:
-                    val = parse_catnums(val)[0]
-                    if val.prefix and val.prefix not in {"B", "C", "G", "M", "S", "R"}:
-                        raise IndexError
-                    if not val.code:
-                        val.code = "NMNH"
-                    kind = "NMNH catalog number"
-                    ref = val.to_emu()
+                    val = parse_catnum(val)
+                    if val.is_antarctic():
+                        kind = "NASA meteorite number"
+                        val = str(val)
+                        ref = None
+                    else:
+                        if val.prefix and val.prefix not in {
+                            "B",
+                            "C",
+                            "G",
+                            "M",
+                            "S",
+                            "R",
+                        }:
+                            raise IndexError
+                        if not val.code:
+                            val.code = "NMNH"
+                        kind = "NMNH catalog number"
+                        ref = val.to_emu()
                 except IndexError:
-                    val = val
                     kind = "Collector's field number"
                     ref = None
 

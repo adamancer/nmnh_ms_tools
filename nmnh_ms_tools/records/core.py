@@ -40,8 +40,6 @@ class Record:
 
     def __init__(self, data=None, **kwargs):
         # Generate defaults and attributes
-        if not self.terms:
-            raise ValueError("Required class attribute 'terms' not defined")
         attrs = [a for a in self.terms if a in dir(self)]
         self.defaults = {a: getattr(self, a) for a in attrs}
         self.attributes = attrs + self.properties

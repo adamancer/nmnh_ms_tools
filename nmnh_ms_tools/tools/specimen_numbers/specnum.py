@@ -3,7 +3,7 @@ import re
 
 from unidecode import unidecode
 
-from ...utils import custom_copy
+from ...utils import mutable, set_immutable
 
 logger = logging.getLogger(__name__)
 
@@ -12,33 +12,39 @@ class SpecNum:
 
     def __init__(self, code, kind, prefix, number, suffix, delim=None):
 
-        self._delim = None
-        self._code = code if code else ""
-        self._kind = kind if kind else ""
-        self._prefix = prefix if prefix else ""
-        self._number = int(number if number else "")
+        self.delim = None
+        self.code = code if code else ""
+        self.kind = kind if kind else ""
+        self.prefix = prefix if prefix else ""
+        self.number = str(number) if number else ""
 
-        # Call delim to finalize formatting of suffix
-        if delim is None:
-            delim = "-"
-            if suffix and suffix[0] in "-,./ ":
-                delim = suffix[0]
-                suffix = suffix.lstrip("-,./ ")
-            if (
-                suffix.isalpha()
-                and len(suffix) == 1
-                or re.match(r"[A-Za-z]-\d+", suffix)
-            ):
-                delim = ""
-        self._suffix = suffix if suffix else ""
-        self._delim = delim if delim and suffix else ""
+        with mutable(self):
+            # Call delim to finalize formatting of suffix
+            if delim is None:
+                delim = "-"
+                if suffix and suffix[0] in "-,./ ":
+                    delim = suffix[0]
+                    suffix = suffix.lstrip("-,./ ")
+                if (
+                    suffix.isalpha()
+                    and len(suffix) == 1
+                    or re.match(r"[A-Za-z]-\d+", suffix)
+                ):
+                    delim = ""
+
+            # Ensure that empty attributes are represented as empty strings
+            self.suffix = suffix if suffix else ""
+            self.delim = delim if delim and suffix else ""
 
         if not self.number:
             raise ValueError(f"Invalid number: {repr(self.number)}")
 
         # Look for catalog numbers that are too large
-        if self.number >= 1e7:
+        if int(self) >= 1e7:
             raise ValueError(f"Invalid number: {repr(self.number)}")
+
+    def __setattr__(self, attr, val):
+        return set_immutable(self, attr, val)
 
     def __str__(self):
         return self._str()
@@ -55,11 +61,20 @@ class SpecNum:
             ")"
         )
 
+    def __int__(self):
+        return int(self.number)
+
+    def __add__(self, val):
+        return self.modcopy(number=int(self) + val)
+
+    def __sub__(self, val):
+        return self.modcopy(number=int(self) - val)
+
     def __eq__(self, other):
         return (
             self.code == other.code
             and self.kind == other.kind
-            and self.number == other.number
+            and int(self) == int(other)
             and self.suffix.lstrip("0") == other.suffix.lstrip("0")
         )
 
@@ -72,36 +87,8 @@ class SpecNum:
             )
 
     @property
-    def kind(self):
-        return self._kind
-
-    @property
-    def code(self):
-        """An alphabetic code representing an institution"""
-        return self._code
-
-    @property
-    def prefix(self):
-        """An alphabetic prefix"""
-        return self._prefix
-
-    @property
-    def number(self):
-        """An integer"""
-        return self._number
-
-    @property
-    def suffix(self):
-        """An alphanumeric suffix that may include punctuation"""
-        return self._suffix
-
-    @property
     def parent(self):
         return self.modcopy(suffix="", delim=None)
-
-    @property
-    def delim(self):
-        return self._delim
 
     def key(self, **kwargs):
         """Returns the specimen number standardized as text
@@ -133,7 +120,7 @@ class SpecNum:
 
     def copy(self):
         """Copies the current SpecNum object"""
-        return custom_copy(self)
+        return self.modcopy()
 
     def modcopy(self, **kwargs):
         return self.__class__(
@@ -178,8 +165,8 @@ class SpecNum:
         other = parse_spec_num(other)
         same_code = self.code == other.code
         same_prefix = self.prefix == other.prefix
-        big_numbers = self.number > min_num and other.number > min_num
-        small_diff = max_diff is None or abs(self.number - other.number) < max_diff
+        big_numbers = int(self) > min_num and int(other) > min_num
+        small_diff = max_diff is None or abs(int(self) - int(other)) < max_diff
         no_suffix = not self.suffix and not other.suffix
         return (
             (same_code or match_empty_code)
@@ -216,7 +203,7 @@ class SpecNum:
         other = parse_spec_num(other)
         result = (
             self.is_similar_to(other, **kwargs)
-            and other.number - self.number <= max_diff
+            and abs(int(other) - int(self)) <= max_diff
         )
         return result if result else is_range(self.suffix)
 
@@ -273,7 +260,7 @@ class SpecNum:
         else:
             return spec_nums
 
-        start = str(self.number)
+        start = self.number
         end = start[: -len(self.suffix)] + self.suffix
         try:
             rng = expand_range(start, end, max_diff=max_diff)
@@ -285,12 +272,11 @@ class SpecNum:
                 spec_num = parse_spec_num(val)
                 spec_nums.append(
                     spec_num.modcopy(
-                        code=spec_num.code,
-                        kind=spec_num.kind,
-                        prefix=spec_num.prefix,
+                        code=self.code,
+                        kind=self.kind,
+                        prefix=self.prefix,
                     )
                 )
-            logger.debug("c")
             return spec_nums
 
         return [self]
@@ -316,13 +302,13 @@ class SpecNum:
             suffixes.
         """
         # Invalid is number is below stipulated value
-        if self.number < min_num or self.number > max_num:
+        if int(self) < min_num or int(self) > max_num:
             return False
 
         # Invalid if suffix is likely to be a separate number
         spec_nums = self.as_separate_numbers()
         if len(spec_nums) == 2 and (
-            is_range(*spec_nums) or spec_nums[1].number >= max_suffix
+            is_range(*spec_nums) or int(spec_nums[1]) >= max_suffix
         ):
             return False
 
@@ -401,6 +387,7 @@ def parse_spec_num(val, fallback=False):
 
 
 def parse_spec_num_fallback(val):
+    """Parses a specimen number using a simple regular expression"""
     orig = val
     if not re.match(r"^[A-Z]{3,4}", val):
         val = f"ZZZZ {val}"
@@ -525,8 +512,8 @@ def is_range(start, end=None, max_diff=100, **kwargs):
 
         return (
             start.is_similar_to(end, **kwargs)
-            and end.number > start.number
-            and (max_diff is None or end.number - start.number <= max_diff)
+            and int(end) > int(start)
+            and (max_diff is None or int(end) - int(start) <= max_diff)
         )
 
 

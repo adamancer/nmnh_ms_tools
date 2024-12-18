@@ -51,14 +51,21 @@ class Parser:
         self._hints.clear()
         self._hints = val
 
-    def parse_spec_nums(self, val):
-        """Parses a single representation of a catalog number or range"""
+    def parse_spec_num(self, val):
+        """Parses a single catalog number"""
         extracted = self.extract(val)
-        if len(extracted) == 1:
-            for key, vals in extracted.items():
-                if key == self.prepare(val):
-                    return [parse_spec_num(s) for s in vals]
+        if extracted:
+            key = list(extracted)[0]
+            if len(extracted) == 1 and len(extracted[key]) == 1 and key == val:
+                return parse_spec_num(extracted[key][0])
         raise ValueError(f"Could not parse {repr(val)}")
+
+    def parse_spec_nums(self, val):
+        """Parses all catalog numbers identified in a string"""
+        vals = []
+        for key, val in self.extract(val).items():
+            vals.extend(val)
+        return vals
 
     def extract_code(self, val):
         """Extracts the museum code from a catalog number"""
@@ -83,12 +90,23 @@ class Parser:
         if len(parens) > 1:
             parts = []
             for paren in parens:
-                parts.append(self.delimit_codes(paren.strip("() ")))
+                # Merge suffixes with previous part
+                if re.match(r"(\d+(-\d+)?|[A-Z](-[A-Z])?)", val.strip("()")):
+                    if parts:
+                        parts[-1] += paren
+                    else:
+                        parts.append(paren)
+                else:
+                    parts.append(self.delimit_codes(paren.strip("() ")))
             return "; ".join([p for p in parts if p])
 
         # Split on leading museum codes
         parts = re.findall(r"[A-Z]{4}.+?(?=[A-Z]{4}|$)", val)
-        return "; ".join([p.rstrip(",;| ") for p in parts])
+        if parts:
+            return "; ".join([p.rstrip(",;| ") for p in parts])
+
+        # Return the original value if no museum code is present
+        return val
 
     def prepare(self, val):
         if not re.search(r"\d", val):
@@ -97,14 +115,6 @@ class Parser:
         orig = val
         logger.debug(f"Original value is {repr(val)}")
         val = val.lstrip().rstrip("|;,/- ")
-
-        # Guess the primary delimiter
-        delim = ";"
-        if ";" not in val:
-            if "|" in val:
-                delim = "|"
-            elif "," in val or re.search(r"(\band\b|&)", val):
-                delim = ","
 
         # Standardize format of common elements
         val = re.sub(r"(num\.?|number|#)", "no.", val)
@@ -142,13 +152,12 @@ class Parser:
     def extract(self, val):
 
         orig = val
-        val = self.prepare(val)
 
         # Parse the cleaned value in its entirety as a fallback
         fallback = None
         if self.clean:
             try:
-                spec_num = parse_spec_num(val, fallback=True)
+                spec_num = parse_spec_num(self.prepare(val), fallback=True)
             except ValueError:
                 pass
             else:
@@ -157,23 +166,25 @@ class Parser:
 
         # Split on hard delimiters and evaluate soft delimiters
         vals = []
-        for val in re.split(r" *[;\|] *", val):
+        for val in re.split(r" *[;\|] *", self.delimit_codes(val)):
             vals.append(val)
-        logger.debug(f"Split {repr(val)} into {repr(vals)}")
+        logger.debug(f"Split {repr(orig)} into {repr(vals)}")
 
         extracted = {}
-        current_code = ""
-        for val in vals:
+        code = None
+        for verbatim in vals:
 
             # Drop values that don't include numbers
-            if not re.search(r"\d", val):
+            if not re.search(r"\d", verbatim):
                 continue
 
+            val = self.prepare(verbatim)
+
             # Extract the museum code for the current segment
-            code, val = self.extract_code(val)
-            if code:
-                current_code = code
-            elif self.require_code:
+            code_, val = self.extract_code(val)
+            if code_:
+                code = code_
+            if self.require_code and not code:
                 raise ValueError(f"No museum code: {val}")
 
             # Interpret runs of numbers separated by spaces
@@ -183,8 +194,11 @@ class Parser:
                     logger.debug(f"Squashed {repr(val)} as {repr(val_)}")
                     val = val_
 
+            # Remove spaces where a number follows a letter
+            val = re.sub(r"([A-Z]) (\d)", r"\1\2", val, flags=re.I)
+
             # Split on soft delimiters and group parts
-            parts = re.split(r"([,/& ]+)", val)
+            parts = re.split(r"([;,/& ]+)", val)
             parts_ = [(None, parts.pop(0))]
             while parts:
                 parts_.append((parts.pop(0), parts.pop(0)))
@@ -206,11 +220,9 @@ class Parser:
                 for spec_num in spec_nums:
                     if spec_num.is_valid(min_num=self.min_num, max_diff=self.max_diff):
                         spec_num = spec_num.modcopy(code=code)
-                        extracted.setdefault(val, []).append(str(spec_num))
-                        logger.debug(
-                            f"Extracted {repr(str(spec_num))} from {repr(val)}"
-                        )
+                        extracted.setdefault(verbatim, []).append(str(spec_num))
 
+        logger.debug(f"Extracted {extracted} from {repr(orig)}")
         return extracted
 
     def group(self, parts, join_with="; ", fix_spacing=False):
@@ -464,6 +476,7 @@ class Parser:
             if spec_num.is_valid(min_num=self.min_num, max_diff=self.max_diff):
                 return [spec_num]
         except ValueError:
+            raise
             pass
 
         raise ValueError(f"Not a specimen number: {repr(val)}")

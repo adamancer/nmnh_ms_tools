@@ -119,6 +119,7 @@ def job(output_dir):
                 "catalog_number": {
                     "method": "map_catalog_number",
                     "kwargs": {
+                        "code": "NMNH",
                         "prefix": "prefix",
                         "number": "number",
                         "suffix": "suffix",
@@ -485,6 +486,7 @@ def expected():
             },
             "CatDateCataloged": EMuDate("1970-01-01"),
             "CatDivision": "Petrology & Volcanology",
+            "CatMuseumAcronym": "NMNH",
             "CatNumber": 123456,
             "CatOtherNumbersType_tab": ["Collector's field number"],
             "CatOtherNumbersValue_tab": ["ABC-123"],
@@ -558,7 +560,7 @@ def expected():
             "NotNmnhType_tab": ["Comments"],
             "NotNmnhWeb_tab": ["No"],
             "RelNhDate0": [EMuDate("1970-01-01")],
-            "RelNhIDType_tab": ["Collector's field number"],
+            "RelNhIDType_tab": ["NMNH catalog number"],
             "RelNhIdentifyByRef_tab": [
                 {
                     "NamFirst": "Homer",
@@ -570,7 +572,14 @@ def expected():
                 }
             ],
             "RelNhURI_tab": ["NMNH 123456-78A"],
-            "RelObjectsRef_tab": [None],
+            "RelObjectsRef_tab": [
+                {
+                    "CatMuseumAcronym": "NMNH",
+                    "CatNumber": 123456,
+                    "CatPrefix": "",
+                    "CatSuffix": "78A",
+                }
+            ],
             "RelRelationship_tab": ["Child"],
             "ZooPreparationCount_tab": [2, None],
             "ZooPreparationRemarks_tab": ["", "See 123456-79. Multiple samples."],

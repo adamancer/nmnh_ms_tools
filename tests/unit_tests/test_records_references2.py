@@ -125,5 +125,5 @@ def test_ref_to_emu(ref):
         "RefSeries": "",
         "RefTitle": "Granulite-Facies Xenoliths in Rift Basalts of Northern Tanzania: Age, Composition and Origin of Archean Lower Crust",
         "RefVolume": "55",
-        "RefWebSiteIdentifier": "http://dx.doi.org/10.1093/petrology/egu024",
+        "RefWebSiteIdentifier": "http://doi.org/10.1093/petrology/egu024",
     }

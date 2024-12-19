@@ -235,10 +235,9 @@ class Reference(Record):
                 parsed = self._parse_ris(data)
                 is_bibtex = True
             else:
-                print(data)
+                raise ValueError(f"Could not parse {repr(data)}")
         else:
-            print(data)
-            return
+            raise ValueError(f"Could not parse {repr(data)}")
 
         # Bibtex records can be assigned directlty to attributes. Other records
         # need to be mapped from the intermediate format based on entry type.
@@ -326,17 +325,19 @@ class Reference(Record):
         rec["RefVolume"] = self.volume
         rec["RefIssue"] = self.number
         rec["RefPage"] = self.pages
-        rec["RefWebSiteIdentifier"] = self.url
+        rec["RefWebSiteIdentifier"] = self.url.replace("dx.doi", "doi")
 
         for person in self.author:
             person = person.to_emu()
-            person["SecRecordStatus"] = "Unlisted"
+            if "irn" not in person:
+                person["SecRecordStatus"] = "Unlisted"
             rec.setdefault("RefContributorsRef_tab", []).append(person)
             rec.setdefault("RefContributorsRole_tab", []).append("Author")
 
         for person in self.editor:
             person = person.to_emu()
-            person["SecRecordStatus"] = "Unlisted"
+            if "irn" not in person:
+                person["SecRecordStatus"] = "Unlisted"
             rec.setdefault("RefContributorsRef_tab", []).append(person)
             rec.setdefault("RefContributorsRole_tab", []).append("Editor")
 
@@ -351,6 +352,9 @@ class Reference(Record):
             if val:
                 rec.setdefault("RefOtherIdentifierSource_tab", []).append(kind)
                 rec.setdefault("RefOtherIdentifier_tab", []).append(val)
+
+        if not self.doi and "doi.org" in self.url:
+            self.doi = self.url
 
         if self.doi:
             rec["AdmGUIDType_tab"] = ["DOI"]

@@ -1,20 +1,27 @@
 import csv
+from pathlib import Path
 
 import pandas as pd
 import pytest
-import shutil
 import yaml
-from xmu import EMuDate, EMuFloat, EMuLatitude, EMuLongitude, EMuReader, EMuRecord
+from xmu import (
+    EMuDate,
+    EMuFloat,
+    EMuLatitude,
+    EMuLongitude,
+    EMuReader,
+    EMuRecord,
+)
 
 from nmnh_ms_tools.tools.importer import ImportRecord, Job
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def output_dir(tmpdir_factory):
-    return tmpdir_factory.mktemp("output")
+    return tmpdir_factory.mktemp("importer")
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def job(output_dir):
 
     # Create original file

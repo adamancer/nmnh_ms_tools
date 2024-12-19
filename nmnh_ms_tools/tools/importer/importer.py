@@ -44,6 +44,7 @@ from ...utils import (
     create_yaml_note,
     parse_measurement,
     parse_measurements,
+    to_attribute,
     ucfirst,
 )
 
@@ -598,7 +599,12 @@ class ImportRecord(EMuRecord):
             # Set defined values
             for field_info in self.job.get("fields", {}).values():
                 for field, props in field_info.items():
-                    self._map_props(props, field=field)
+                    try:
+                        self._map_props(props, field=field)
+                    except Exception as exc:
+                        raise ValueError(
+                            f"Could not map {props} (field={repr(field)})"
+                        ) from exc
 
             # Create note for dynamic properties
             for dst, data in self.dynamic_props.items():
@@ -1804,7 +1810,7 @@ class ImportRecord(EMuRecord):
             path = str(
                 Path(self.job["job"]["import_file"]).parent
                 / "receipts"
-                / f"{self.catnum.slug()}.txt"
+                / f"{to_attribute(str(self.catnum))}.txt"
             )
 
         # Add suffix to filename if path already exists. This allows duplicate
@@ -2363,7 +2369,7 @@ def write_receipt(
 
     # Append filename if path is a directory
     if os.path.isdir(path):
-        path = os.path.join(path, f"{catnum.slug()}.yml")
+        path = os.path.join(path, f"{to_attribute(str(catnum))}.yml")
 
     # Ensure that directory exists
     try:

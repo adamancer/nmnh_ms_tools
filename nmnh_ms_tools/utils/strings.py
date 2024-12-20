@@ -226,6 +226,41 @@ def truncate(val, length=32, suffix="..."):
     return val
 
 
+def seq_split(
+    val: str,
+    hard_delims: str = r"[;\|]",
+    soft_delims: str = r"[,]",
+    split_and: bool = True,
+) -> list[str]:
+    """Splits a string on hard, then soft delimiters if no hard delimiters found
+
+    Parameters
+    ----------
+    hard_delims : str
+        regex pattern with primary delimiters, like pipes, that are highly likely
+        to be a delimiter
+    soft_delims : str
+        regex pattern with secondary delimiters, like commas, that may or may not
+        be intended to delimit discrete items
+    split_and : bool
+        whether to split on "and"
+
+    Returns
+    -------
+    list[str]
+        parts of the original value
+    """
+    parts = re.split(hard_delims, val)
+    if len(parts) == 1:
+        parts = re.split(soft_delims, val)
+    if split_and:
+        parts_ = []
+        for part in parts:
+            parts_.extend(re.split(r" +(and|&) +", part.strip(), flags=re.I))
+        return parts_
+    return aprts
+
+
 def _get_nums():
     """Gets of a list of numbers from 0-99"""
     nums = [

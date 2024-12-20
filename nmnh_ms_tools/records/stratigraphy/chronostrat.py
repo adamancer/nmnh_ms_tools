@@ -8,7 +8,7 @@ import numpy as np
 
 from .core import StratRecord
 from .utils import CHRONOSTRAT_RANKS, parse_strat_package, split_strat, split_strat_dict
-from .unit import StratUnit, parse_strat_unit
+from .unit import StratUnit, parse_strat_units
 from ...bots.adamancer import AdamancerBot
 from ...config import DATA_DIR
 from ...utils import LazyAttr, dedupe, to_attribute
@@ -94,6 +94,8 @@ class ChronoStrat(StratRecord):
             dct = self._parse_names(data)
         elif isinstance(data, str):
             dct = self._parse_names(split_strat(data))
+        elif isinstance(data, self.__class__):
+            dct = data.to_dict()
         else:
             dct = self._parse_dwc(data)
 
@@ -259,7 +261,7 @@ class ChronoStrat(StratRecord):
             for key, val in unit.items():
                 if val:
                     if key in self.ranks:
-                        val = parse_strat_unit(val, hint=key)
+                        val = parse_strat_units(val, hint=key)
                         combined.setdefault(key, []).extend(val)
                     elif key in ("min_ma", "max_ma"):
                         combined.setdefault(key, []).append(val)

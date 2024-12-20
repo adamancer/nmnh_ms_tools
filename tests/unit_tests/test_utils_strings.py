@@ -11,6 +11,7 @@ from nmnh_ms_tools.utils.strings import (
     overlaps,
     plural,
     same_to_length,
+    seq_split,
     singular,
     slugify,
     std_case,
@@ -243,3 +244,22 @@ def test_to_digit(test_input, expected):
 )
 def test_truncate(test_input, suffix, expected):
     assert truncate(test_input, length=5, suffix=suffix) == expected
+
+
+@pytest.mark.parametrize(
+    "test_input,expected",
+    [
+        ("apples | oranges | pears", ["apples", "oranges", "pears"]),
+        ("apples; oranges; pears", ["apples", "oranges", "pears"]),
+        ("apples, oranges, pears", ["apples", "oranges", "pears"]),
+        ("apples and oranges and pears", ["apples", "oranges", "pears"]),
+        ("apples, oranges and pears", ["apples", "oranges", "pears"]),
+        ("apples, oranges, and pears", ["apples", "oranges", "pears"]),
+        ("apples & oranges & pears", ["apples", "oranges", "pears"]),
+        ("apples, oranges, & pears", ["apples", "oranges", "pears"]),
+        ("apples; oranges & pears", ["apples", "oranges", "pears"]),
+        ("apples; oranges, pears", ["apples", "oranges, pears"]),
+    ],
+)
+def test_seq_split(test_input, expected):
+    return seq_split(test_input) == expected

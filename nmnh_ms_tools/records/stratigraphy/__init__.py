@@ -3,5 +3,5 @@
 from .chronostrat import ChronoStrat, parse_chronostrat
 from .utils import CHRONOSTRAT_RANKS, LITHOSTRAT_RANKS
 from .lithostrat import LithoStrat, parse_lithostrat
-from .unit import StratUnit, parse_strat_unit
+from .unit import StratPackage, StratUnit, parse_strat_units
 from .utils import parse_strat_package, split_strat

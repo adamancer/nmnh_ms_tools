@@ -3,7 +3,7 @@
 import numpy as np
 
 from .utils import LITHOSTRAT_ABBRS, LITHOSTRAT_RANKS
-from .unit import StratUnit, parse_strat_unit
+from .unit import StratUnit, parse_strat_units
 from ..core import Record
 from ...bots.macrostrat import MacrostratBot
 from ...tools.geographic_operations.geometry import GeoMetry
@@ -67,7 +67,9 @@ class LithoStrat(Record):
 
     def parse(self, data):
         """Parses data from various sources to populate class"""
-        if "strat_name_id" in data:
+        if isinstance(data, str):
+            self._parse_string(data)
+        elif "strat_name_id" in data:
             self._parse_macrostrat(data)
         elif "min_ma" in data:
             self._parse_self(data)
@@ -178,7 +180,7 @@ class LithoStrat(Record):
         self.unit_id = data["unit_id"]
         for key in ["Gp", "Fm", "Mbr"]:
             kind = LITHOSTRAT_ABBRS[key.lower()].lower()
-            units = parse_strat_unit(data[key], hint=kind)
+            units = parse_strat_units(data[key], hint=kind)
             setattr(self, kind, units)
         # Update stratigraphic hierarchy with unit
         # Get additional info about age and locality
@@ -186,6 +188,10 @@ class LithoStrat(Record):
         self.max_ma = float(data["b_age"])
         self.current_latitude = float(data["clat"])
         self.current_longitude = float(data["clng"])
+
+    def _parse_string(self, data):
+        parsed = parse_strat_units(data)[0]
+        setattr(self, parsed.rank, parsed)
 
     @staticmethod
     def _simplify_macrostrat(data, keys=None):

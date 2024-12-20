@@ -121,6 +121,7 @@ with _ImportClock("utils"):
         overlaps,
         plural,
         same_to_length,
+        seq_split,
         singular,
         slugify,
         std_case,

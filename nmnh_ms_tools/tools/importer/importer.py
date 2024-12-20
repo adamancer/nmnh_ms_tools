@@ -1158,6 +1158,18 @@ class ImportRecord(EMuRecord):
                 verbatim = meas.verbatim
             evt._set_path("TerVerbatimElevation", verbatim)
 
+    def map_lithostrat(self, src: str):
+        pass
+
+    def map_litostrat_units(
+        self,
+        src_group: str = None,
+        src_formation: str = None,
+        src_member: str = None,
+        src_bed: str = None,
+    ):
+        pass
+
     def map_measurements(
         self,
         src_from: str,

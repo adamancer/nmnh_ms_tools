@@ -22,6 +22,7 @@ with _ImportClock("records"):
     from .stratigraphy import (
         ChronoStrat,
         LithoStrat,
+        StratPackage,
         StratUnit,
         parse_chronostrat,
         parse_lithostrat,

@@ -292,7 +292,7 @@ class StratUnit(Record):
 
     def _parse_kind(self) -> str:
         """Determines whether unit is chrono- or lithostrat"""
-        if self.rank in LITHOSTRAT_RANKS:
+        if self.rank in LITHOSTRAT_RANKS or self.rank == "other":
             return "lithostrat"
         if self._hint is not None:
             hint = self._hint.strip("[]")
@@ -434,10 +434,13 @@ class StratPackage(Record):
                 if unit.rank in LITHOSTRAT_RANKS[:4]:
                     name = unit.short_name.rstrip("?")
                     rec[f"AgeLithostrat{unit.rank.title()}"] = name
-                else:
+                elif unit.rank in LITHOSTRAT_RANKS[:6]:
                     rec.setdefault("AgeOtherTermsRank_tab", []).append(
                         unit.rank.title()
                     )
+                    rec.setdefault("AgeOtherTermsValue_tab", []).append(unit.short_name)
+                else:
+                    rec.setdefault("AgeOtherTermsRank_tab", []).append("Other")
                     rec.setdefault("AgeOtherTermsValue_tab", []).append(unit.short_name)
             rec["AgeLithostratLithology"] = self.lithology.lower()
             rec["AgeLithostratUncertain"] = "Yes" if self.uncertain else "No"

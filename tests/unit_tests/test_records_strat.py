@@ -114,7 +114,7 @@ def test_parse_units(test_input, expected):
             "Named Siltstone Formation | Unit 1A",
             {
                 "AgeLithostratFormation": "Named Fm",
-                "AgeOtherTermsRank_tab": ["Unit"],
+                "AgeOtherTermsRank_tab": ["Other"],
                 "AgeOtherTermsValue_tab": ["Unit 1A"],
                 "AgeLithostratLithology": "siltstone",
                 "AgeLithostratUncertain": "No",
@@ -125,7 +125,7 @@ def test_parse_units(test_input, expected):
             "Named Siltstone | Named Unit",
             {
                 "AgeLithostratFormation": "Named Fm",
-                "AgeOtherTermsRank_tab": ["Unit"],
+                "AgeOtherTermsRank_tab": ["Other"],
                 "AgeOtherTermsValue_tab": ["Named Unit"],
                 "AgeLithostratLithology": "siltstone",
                 "AgeLithostratUncertain": "No",

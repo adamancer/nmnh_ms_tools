@@ -6,7 +6,7 @@ import warnings
 from pathlib import Path
 
 from ..specimen_numbers import parse_spec_num
-from ...config import DATA_DIR
+from ...config import CONFIG
 from ...utils import (
     LazyAttr,
     hash_file,
@@ -334,7 +334,7 @@ class MediaFile:
 
 
 def _read_fields():
-    path = Path(DATA_DIR) / "metadata" / "metadata.yml"
+    path = Path(CONFIG["data"]["metadata"]) / "metadata.yml"
     return {k: MetadataField(**v) for k, v in read_yaml(path).items()}
 
 

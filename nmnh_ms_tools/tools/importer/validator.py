@@ -329,7 +329,7 @@ class Validator:
 
         if validation == "DOI":
             try:
-                return bool(Reference(obj).title)
+                return bool(Reference(obj))
             except ValueError:
                 return False
 

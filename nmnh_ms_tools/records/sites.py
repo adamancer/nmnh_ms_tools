@@ -614,27 +614,29 @@ class Site(Record):
                 names += 1
             if getattr(self, code):
                 codes += 1
-        attrs = list(attrs) if names > codes else list(attrs.values())
-        is_name = names > codes
+        if names or codes:
+            attrs = list(attrs) if names >= codes else list(attrs.values())
+            is_name = names >= codes
 
-        result = {}
-        val_to_id = {}
-        id_to_field = {}
+            admin = self.adm.get(*(getattr(self, a) for a in attrs), is_name=is_name)
 
-        # Map admin
-        if names + codes:
-            # Get all combinations of country/state_province/county
-            admin = []
-            for attr in attrs:
-                vals = as_list(getattr(self, attr))
-                if not vals:
-                    break
-                admin.append(vals)
+            # Pad admin divs to same length
+            maxlen = max([len(admin.get(k, [])) for k in attrs])
+            for key in attrs:
+                try:
+                    val = admin[key]
+                except KeyError:
+                    admin[key] = [None] * maxlen
+                else:
+                    if len(val) == 1:
+                        admin[key] += val * (maxlen - len(val))
+                    elif len(val) and len(val) != maxlen:
+                        raise ValueError(f"Admin divs cannot be reconciled: {admin}")
 
             # Get matching administrative divisions
             matches = {}
             results = []
-            for adm in product(*admin):
+            for adm in zip(*(admin[a] for a in attrs)):
                 result = self.adm.get(*adm, is_name=is_name)
                 for key in attrs:
                     try:
@@ -656,7 +658,10 @@ class Site(Record):
                 for key, val in result.items():
                     setattr(self, key, val)
 
-            # Map each geonames_id to the corresponding admin field (country, state_province, etc.)
+            # Map each geonames_id to the corresponding admin field (country,
+            # state_province, etc.)
+            val_to_id = {}
+            id_to_field = {}
             for (field, val), rows in matches.items():
                 for row in rows:
                     gn_id = str(row.geoname_id)

@@ -31,6 +31,7 @@ from ...records import (
     Person,
     Reference,
     Site,
+    StratPackage,
     get_tree,
     parse_names,
 )
@@ -1575,6 +1576,12 @@ class ImportRecord(EMuRecord):
 
         self["LocPermanentLocationRef"] = loc
         self["LocLocationRef_tab"] = [loc]
+
+    def map_strat(self, src):
+        val = self.pop(src)
+        if val:
+            for key, val in StratPackage(val).to_emu().items():
+                self[key] = val
 
     def map_taxa(
         self,

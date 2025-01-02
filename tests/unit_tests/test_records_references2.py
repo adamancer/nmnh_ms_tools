@@ -120,6 +120,7 @@ def test_ref_to_emu(ref):
         "RefPage": "1243–1286",
         "RefPublisherRef": {
             "NamOrganisation": "Oxford University Press (OUP)",
+            "NamPartyType": "Organization",
             "SecRecordStatus": "Unlisted",
         },
         "RefSeries": "",

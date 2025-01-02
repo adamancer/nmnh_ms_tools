@@ -10,7 +10,6 @@ with _ImportClock("utils"):
         custom_eq,
         get_attrs,
         mutable,
-        read_csv,
         repr_class,
         str_class,
         set_immutable,
@@ -51,6 +50,7 @@ with _ImportClock("utils"):
         read_csv,
         read_json,
         read_tsv,
+        read_yaml,
         skip_hashed,
     )
     from .geo import (

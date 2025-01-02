@@ -3,13 +3,12 @@
 import logging
 import re
 from datetime import datetime
-from pathlib import Path
 
 from xmu import EMuDate, EMuRecord
 
 from .formatters import CSEFormatter
 from ...bots import Bot
-from ...records import Record, parse_names
+from ...records import Person, Record, parse_names
 from ...utils import LazyAttr
 
 logger = logging.getLogger(__name__)
@@ -156,6 +155,9 @@ class Reference(Record):
                     vals.append(f"    {attr}=" + "{" + str(val) + "}")
         vals.append("}")
         return "\n".join(vals)
+
+    def __bool__(self):
+        return bool(self.title or self.year != "????" or self.doi)
 
     @property
     def citekey(self):
@@ -342,10 +344,10 @@ class Reference(Record):
             rec.setdefault("RefContributorsRole_tab", []).append("Editor")
 
         if self.publisher:
-            rec["RefPublisherRef"] = {
-                "NamOrganisation": self.publisher,
-                "SecRecordStatus": "Unlisted",
-            }
+            org = Person(organization=self.publisher).to_emu()
+            if "irn" not in org:
+                org["SecRecordStatus"] = "Unlisted"
+            rec["RefPublisherRef"] = org
 
         for kind in ("ISBN", "ISSN"):
             val = getattr(self, kind.lower())

@@ -24,6 +24,7 @@ with _ImportClock("utils"):
         parse_coordinate,
         round_to_uncertainty,
     )
+    from .dates import FiscalYear, fy, get_fy, add_years
     from .dicts import (
         AbbrDict,
         BaseDict,

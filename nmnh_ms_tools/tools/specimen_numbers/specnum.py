@@ -3,7 +3,7 @@ import re
 
 from unidecode import unidecode
 
-from ...utils import mutable, set_immutable
+from ...utils import del_immutable, mutable, set_immutable
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,10 @@ class SpecNum:
             raise ValueError(f"Invalid number: {repr(self.number)}")
 
     def __setattr__(self, attr, val):
-        return set_immutable(self, attr, val)
+        set_immutable(self, attr, val)
+
+    def __delattr__(self, attr):
+        del_immutable(self, attr)
 
     def __str__(self):
         return self._str()

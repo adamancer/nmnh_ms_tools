@@ -3,7 +3,7 @@
 import re
 from functools import cached_property
 
-from .classes import custom_copy, custom_eq, mutable, set_immutable
+from .classes import custom_copy, custom_eq, del_immutable, mutable, set_immutable
 
 
 UNITS = {
@@ -70,6 +70,9 @@ class Measurement:
 
     def __setattr__(self, attr, val):
         set_immutable(self, attr, val)
+
+    def __delattr__(self, attr):
+        del_immutable(self, attr)
 
     def __int__(self):
         if self.from_val != self.to_val:

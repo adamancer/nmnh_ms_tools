@@ -84,11 +84,11 @@ def test_invalid_number():
 
 def test_change_prefix():
     pnum = PrefixedNum("R1234")
-    with pytest.raises(AttributeError, match="Cannot modify existing attribute"):
+    with pytest.raises(AttributeError, match="Cannot modify immutable attribute"):
         pnum.prefix = "A"
 
 
 def test_change_number():
     pnum = PrefixedNum("R1234")
-    with pytest.raises(AttributeError, match="Cannot modify existing attribute"):
+    with pytest.raises(AttributeError, match="Cannot modify immutable attribute"):
         pnum.number += 1

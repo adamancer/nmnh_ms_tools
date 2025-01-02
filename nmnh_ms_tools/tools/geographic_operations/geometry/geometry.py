@@ -31,6 +31,7 @@ from ....utils import (
     as_list,
     custom_copy,
     custom_eq,
+    del_immutable,
     draw_polygon,
     get_dist_km,
     mutable,
@@ -144,6 +145,9 @@ class GeoMetry:
 
     def __setattr__(self, attr, val):
         set_immutable(self, attr, val)
+
+    def __delattr__(self, attr):
+        del_immutable(self, attr)
 
     def __str__(self):
         return (

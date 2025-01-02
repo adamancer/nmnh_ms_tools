@@ -17,6 +17,7 @@ from ..utils import (
     coerce,
     custom_copy,
     custom_eq,
+    del_immutable,
     get_attrs,
     get_common_items,
     mutable,
@@ -106,6 +107,9 @@ class Record:
         # example, to include a class-specific list of overwritable fields) do
         # not get stuck in a recursion.
         set_immutable(self, attr, val, cls=Record)
+
+    def __delattr__(self, attr):
+        del_immutable(self, attr)
 
     def __eq__(self, other):
         return self.same_as(other, strict=True)

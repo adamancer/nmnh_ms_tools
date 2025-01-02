@@ -303,8 +303,7 @@ def set_immutable(inst: Any, attr: str, val: Any, cls: type = None):
 
     Returns
     -------
-    bool
-        whether the objects are the same
+    None
     """
     if cls is None:
         cls = inst.__class__
@@ -320,7 +319,29 @@ def set_immutable(inst: Any, attr: str, val: Any, cls: type = None):
         except AttributeError:
             super(cls, inst).__setattr__(attr, val)
         else:
-            raise AttributeError(f"Cannot modify existing attribute: {repr(attr)}")
+            raise AttributeError(
+                f"Cannot modify immutable attribute {repr(attr)} on {inst.__class__.__name__} object"
+            )
+
+
+def del_immutable(inst: Any, attr: str):
+    """Raises an error when trying to delete an immutable attribute
+
+    Parameters
+    ----------
+    inst : Any
+        an object
+    attr : str
+        an attribute name
+
+    Raises
+    ------
+    AttributeError
+    """
+    if attr != "_mutable":
+        raise AttributeError(
+            f"Cannot delete immutable attribute {repr(attr)} from {inst.__class__.__name__} object"
+        )
 
 
 @contextmanager

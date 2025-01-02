@@ -8,6 +8,7 @@ with _ImportClock("utils"):
         LazyAttr,
         custom_copy,
         custom_eq,
+        del_immutable,
         get_attrs,
         mutable,
         repr_class,

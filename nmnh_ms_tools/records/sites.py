@@ -32,6 +32,7 @@ from ..utils import (
     as_str,
     combine,
     dedupe,
+    del_immutable,
     dictify,
     get_first,
     get_ocean_name,
@@ -365,6 +366,9 @@ class Site(Record):
         raise AttributeError(
             f"'{self.__class__.__name__}' object has no attribute '{attr}'"
         )
+
+    def __delattr__(self, attr):
+        del_immutable(self, attr)
 
     def __getstate__(self):
         state = self.__dict__.copy()

@@ -3,7 +3,7 @@
 import re
 from functools import total_ordering
 
-from .classes import custom_copy, custom_eq, mutable, set_immutable
+from .classes import custom_copy, custom_eq, del_immutable, mutable, set_immutable
 from .strings import as_str
 
 
@@ -63,7 +63,7 @@ class PrefixedNum:
         return self - other
 
     def __eq__(self, other):
-        return custom_eq(self, other)
+        return self.prefix == other.prefix and self.number == other.number
 
     def __lt__(self, other):
         if not isinstance(other, self.__class__):
@@ -74,6 +74,9 @@ class PrefixedNum:
 
     def __setattr__(self, attr, val):
         set_immutable(self, attr, val)
+
+    def __delattr__(self, attr):
+        del_immutable(self, attr)
 
     def copy(self):
         """Creates a copy of the object"""

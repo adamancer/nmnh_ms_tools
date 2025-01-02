@@ -9,7 +9,7 @@ from xmu import EMuRecord
 from .core import Record
 from ..tools.specimen_numbers.parsers import Parser
 from ..tools.specimen_numbers.specnum import SpecNum
-from ..utils import mutable, set_immutable
+from ..utils import del_immutable, mutable, set_immutable
 
 
 logger = logging.getLogger(__name__)
@@ -113,9 +113,6 @@ class CatNum(Record):
 
         super().__init__(data)
 
-    def __setattr__(self, attr, val):
-        return set_immutable(self, attr, val)
-
     def __getattr__(self, attr):
         if attr != "_spec_num":
             try:
@@ -125,6 +122,12 @@ class CatNum(Record):
         raise AttributeError(
             f"{repr(self.__class__.__name__)} object has no attribute {repr(attr)}"
         )
+
+    def __setattr__(self, attr, val):
+        set_immutable(self, attr, val)
+
+    def __delattr__(self, attr):
+        del_immutable(self, attr)
 
     @property
     def code(self):

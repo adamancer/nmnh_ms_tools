@@ -256,9 +256,9 @@ def seq_split(
     if split_and:
         parts_ = []
         for part in parts:
-            parts_.extend(re.split(r" +(and|&) +", part.strip(), flags=re.I))
-        return parts_
-    return aprts
+            parts_.extend(re.split(r"(?:^| +)(?:and|&) +", part.strip(), flags=re.I))
+        return [s for s in parts_ if s]
+    return parts
 
 
 def _get_nums():

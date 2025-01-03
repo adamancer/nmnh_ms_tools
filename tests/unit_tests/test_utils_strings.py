@@ -262,4 +262,4 @@ def test_truncate(test_input, suffix, expected):
     ],
 )
 def test_seq_split(test_input, expected):
-    return seq_split(test_input) == expected
+    assert seq_split(test_input) == expected

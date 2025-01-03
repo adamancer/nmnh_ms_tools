@@ -1,6 +1,13 @@
+# pragma: exclude file
+try:
+    from warnings import deprecated
+except ImportError:
+    from typing_extensions import deprecated
+
 from ..core import Record
 
 
+@deprecated("Use StratPackage instead")
 class StratRange(Record):
     terms = ["units"]
 

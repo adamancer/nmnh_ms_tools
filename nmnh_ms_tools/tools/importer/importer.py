@@ -28,14 +28,15 @@ from .actions import run_action, to_emu
 from .attachments import Attachment, CollectionEvent, Location
 from ...databases.gvp import GVPVolcanoes
 from ...records import (
+    CatNum,
     Person,
     Reference,
     Site,
     StratPackage,
     get_tree,
+    parse_catnum,
     parse_names,
 )
-from ...records.catnums2 import CatNum, parse_catnum
 from ...tools.georeferencer import Georeferencer
 from ...utils import (
     BaseDict,

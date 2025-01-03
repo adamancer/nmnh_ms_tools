@@ -63,12 +63,17 @@ with _ImportClock("utils"):
         draw_polygon,
         get_azimuth,
         get_dist_km,
+        get_dist_km_geolib,
+        get_dist_km_haversine,
+        get_dist_km_pyproj,
         pm_longitudes,
         slope,
         sort_geoms,
         subhorizontal,
         subvertical,
         translate,
+        translate_geolib,
+        translate_pyproj,
         translate_with_uncertainty,
         trim,
     )
@@ -106,6 +111,7 @@ with _ImportClock("utils"):
     )
     from .prefixed_num import PrefixedNum
     from .preps import Preparation
+    from .regex import RE
     from .standardizers import (
         LocStandardizer,
         Standardizer,
@@ -117,6 +123,7 @@ with _ImportClock("utils"):
         add_article,
         as_str,
         is_uncertain,
+        capitalize,
         collapse_whitespace,
         lcfirst,
         natsortable,

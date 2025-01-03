@@ -1,3 +1,9 @@
+# pragma: exclude file
+try:
+    from warnings import deprecated
+except ImportError:
+    from typing_extensions import deprecated
+
 """Definds methods to work with chronostratigraphic names"""
 
 import logging
@@ -17,6 +23,7 @@ from ...utils import LazyAttr, dedupe, to_attribute
 logger = logging.getLogger(__name__)
 
 
+@deprecated("Use StratPackage instead")
 class ChronoStrat(StratRecord):
     """Defines methods for storing a single chronostratigraphic unit"""
 
@@ -279,11 +286,12 @@ class ChronoStrat(StratRecord):
         return combined
 
 
+@deprecated("Use parse_strat_units instead")
 def parse_chronostrat(val):
     return parse_strat_package(val, ChronoStrat)
 
 
-def read_keywords(path):
+def _read_keywords(path):
     words = []
     with open(path, "r") as f:
         for line in f:
@@ -296,6 +304,6 @@ LazyAttr(ChronoStrat, "bot", AdamancerBot)
 LazyAttr(
     ChronoStrat,
     "keywords",
-    read_keywords,
+    _read_keywords,
     os.path.join(DATA_DIR, "chronostrat", "chronostrat.txt"),
 )

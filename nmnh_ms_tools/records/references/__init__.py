@@ -1,13 +1,13 @@
 """Defines methods for parsing and manipulating references"""
 
-from .bibtex import BibTeXMapper
-from .references import (
+from .references import Reference
+from .bibtex_old import BibTeXMapper
+from .references_old import (
     Citation,
     Citations,
-    Reference,
+    Reference as ReferenceOld,
     References,
     get_author_and_year,
     is_doi,
     std_doi,
 )
-from .references2 import Reference as Reference2

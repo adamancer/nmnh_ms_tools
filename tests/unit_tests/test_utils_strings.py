@@ -3,7 +3,7 @@
 import pytest
 
 
-from nmnh_ms_tools.utils.strings import (
+from nmnh_ms_tools.utils import (
     add_article,
     as_str,
     capitalize,

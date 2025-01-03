@@ -5,7 +5,7 @@ import re
 import pytest
 
 
-from nmnh_ms_tools.utils.clock import (
+from nmnh_ms_tools.utils import (
     clock,
     clock_snippet,
     report,

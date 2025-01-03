@@ -3,7 +3,7 @@
 import pytest
 
 
-from nmnh_ms_tools.utils.emu import create_markdown_note, create_note, create_yaml_note
+from nmnh_ms_tools.utils import create_markdown_note, create_yaml_note
 
 
 def test_create_markdown_note():

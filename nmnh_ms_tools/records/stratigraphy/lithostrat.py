@@ -1,3 +1,9 @@
+# pragma: exclude file
+try:
+    from warnings import deprecated
+except ImportError:
+    from typing_extensions import deprecated
+
 """Definds methods to work with lithostratigraphic names"""
 
 import numpy as np
@@ -10,6 +16,7 @@ from ...tools.geographic_operations.geometry import GeoMetry
 from ...utils import LazyAttr
 
 
+@deprecated("Use StratPackage instead")
 class LithoStrat(Record):
     """Defines methods for working with lithostratigraphic names"""
 
@@ -213,6 +220,7 @@ class LithoStrat(Record):
             setattr(self, key, val)
 
 
+@deprecated("Use parse_strat_units instead")
 def parse_lithostrat(val):
     return val
 

@@ -11,8 +11,8 @@ from unidecode import unidecode
 from .core import Parser
 from .feature import get_feature_string
 from .multifeature import MultiFeatureParser
-from ....utils.standardizers import LocStandardizer
 from ....utils import (
+    LocStandardizer,
     as_numeric,
     lcfirst,
     num_dec_places,

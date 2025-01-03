@@ -5,7 +5,7 @@ import re
 
 from .core import Parser
 from .feature import FeatureParser, append_feature_type
-from ....utils.lists import oxford_comma
+from ....utils import oxford_comma
 
 
 logger = logging.getLogger(__name__)

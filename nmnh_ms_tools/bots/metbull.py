@@ -1,3 +1,9 @@
+# pragma: exclude file
+try:
+    from warnings import deprecated
+except ImportError:
+    from typing_extensions import deprecated
+
 """Defines bot to interact with the MetBull website"""
 
 from datetime import datetime
@@ -13,6 +19,7 @@ from .core import Bot, JSONResponse
 logger = logging.getLogger(__name__)
 
 
+@deprecated("Endpoint does not like bots")
 class MetBullBot(Bot):
     """Defines methods to scrape data from the MetBull website"""
 
@@ -58,6 +65,7 @@ class MetBullBot(Bot):
         return int(match.group(2))
 
 
+@deprecated("Endpoint does not like bots")
 class MetBullResponse(JSONResponse):
     """Defines methods to parse MetBull HTML to JSON"""
 

@@ -20,8 +20,7 @@ from .plss import PLSSParser
 from .simple import SimpleParser
 from .uncertain import UncertainParser
 from ....config import DATA_DIR
-from ....utils.standardizers import LocStandardizer, std_directions
-from ....utils import as_str, clock, skip_hashed
+from ....utils import LocStandardizer, as_str, clock, skip_hashed, std_directions
 
 
 logger = logging.getLogger(__name__)

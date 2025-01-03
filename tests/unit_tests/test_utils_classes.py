@@ -3,7 +3,7 @@
 import pytest
 
 
-from nmnh_ms_tools.utils.classes import (
+from nmnh_ms_tools.utils import (
     del_immutable,
     set_immutable,
     str_class,

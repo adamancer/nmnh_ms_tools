@@ -9,8 +9,7 @@ from ....bots.geonames import CODES_COUNTRIES
 from ....config import CONFIG
 from ....databases.georef_job import Session, Localities, Uncertainties
 from ....tools.geographic_operations.kml import Kml
-from ....utils.standardizers import LocStandardizer
-from ....utils import LazyAttr, mutable, oxford_comma
+from ....utils import LazyAttr, LocStandardizer, mutable, oxford_comma
 
 
 logger = logging.getLogger(__name__)

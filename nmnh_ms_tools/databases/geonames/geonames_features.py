@@ -20,10 +20,10 @@ from .database import (
     AlternateNames,
 )
 from ...config import DATA_DIR
-from ...utils.standardizers import LocStandardizer
 from ...utils import (
     BaseDict,
     LazyAttr,
+    LocStandardizer,
     as_list,
     as_str,
     dedupe,

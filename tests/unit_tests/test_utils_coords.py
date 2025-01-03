@@ -4,7 +4,7 @@ import pytest
 from pytest import approx
 
 
-from nmnh_ms_tools.utils.coords import estimate_uncertainty, parse_coordinate
+from nmnh_ms_tools.utils import estimate_uncertainty, parse_coordinate
 
 
 @pytest.mark.parametrize(

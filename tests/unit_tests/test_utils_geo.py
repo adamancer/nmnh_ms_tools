@@ -2,7 +2,7 @@
 
 import pytest
 
-from nmnh_ms_tools.utils.geo import (
+from nmnh_ms_tools.utils import (
     get_azimuth,
     get_dist_km,
     get_dist_km_geolib,

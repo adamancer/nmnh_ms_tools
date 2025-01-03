@@ -2,7 +2,7 @@
 
 import pytest
 
-from nmnh_ms_tools.records.people import Person, combine_names, parse_names
+from nmnh_ms_tools.records import Person, combine_names, parse_names
 
 
 @pytest.mark.parametrize(

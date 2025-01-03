@@ -3,7 +3,7 @@
 import pytest
 
 
-from nmnh_ms_tools.utils.dicts import (
+from nmnh_ms_tools.utils import (
     IndexedDict,
     combine,
     get_common_items,

@@ -1,6 +1,6 @@
 """Tests classification tools"""
 
-from nmnh_ms_tools.records.classification import TaxaParser, get_tree
+from nmnh_ms_tools.records import TaxaParser, get_tree
 
 
 def test_parse_variety():

@@ -4,7 +4,7 @@ import logging
 
 from .core import Bot, JSONResponse
 
-# from ..records.people import Person
+from ..records import Person
 from ..utils import as_list
 
 

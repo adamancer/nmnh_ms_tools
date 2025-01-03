@@ -1,10 +1,8 @@
-"""Tests DirectionParser"""
+"""Tests implementation of GeoMetry in Site"""
 
 import pytest
 
-from shapely.geometry import Point
-
-from nmnh_ms_tools.records.sites import Site
+from nmnh_ms_tools.records import Site
 
 
 @pytest.fixture

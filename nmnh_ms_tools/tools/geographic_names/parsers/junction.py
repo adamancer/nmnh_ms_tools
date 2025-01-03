@@ -3,8 +3,7 @@
 import re
 
 from .core import Parser
-from ....utils import oxford_comma
-from ....utils.regex import RE
+from ....utils import RE, oxford_comma
 
 
 ROAD_TYPES = {

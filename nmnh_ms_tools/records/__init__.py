@@ -3,15 +3,23 @@
 from .. import _ImportClock
 
 with _ImportClock("records"):
-    from .catnums import CatNum, CatNums, parse_catnum, parse_catnums, is_antarctic
-    from .classification import get_tree
+    from .catnums import CatNum, parse_catnum, parse_catnums, is_antarctic
+    from .catnums_old import CatNums
+    from .classification import (
+        TaxaList,
+        TaxaNamer,
+        TaxaParser,
+        TaxaTree,
+        Taxon,
+        get_tree,
+    )
     from .core import Record, RecordEncoder, write_csv
-    from .people import Person, People, parse_names
+    from .people import Person, People, combine_names, parse_names
     from .references import (
         Citation,
         Citations,
         Reference,
-        Reference2,
+        ReferenceOld,
         References,
         get_author_and_year,
         is_doi,
@@ -19,11 +27,4 @@ with _ImportClock("records"):
     )
     from .sites import Site, SEAS, sites_to_geodataframe
     from .specimens import Specimen
-    from .stratigraphy import (
-        ChronoStrat,
-        LithoStrat,
-        StratPackage,
-        StratUnit,
-        parse_chronostrat,
-        parse_lithostrat,
-    )
+    from .stratigraphy import StratPackage, StratUnit, parse_strat_units

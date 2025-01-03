@@ -1,10 +1,17 @@
+# pragma: exclude file
+try:
+    from warnings import deprecated
+except ImportError:
+    from typing_extensions import deprecated
+
 """Defines methods for mapping BibTeX to EMu"""
 
 import warnings
 
-from ...utils.standardizers import Standardizer
+from ...utils import Standardizer
 
 
+@deprecated("Integrated into references.Reference")
 class BibTeXMapper:
     """Consolidates functions for mapping to/from BibTeX"""
 

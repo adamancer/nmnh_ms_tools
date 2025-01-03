@@ -3,7 +3,7 @@
 import pytest
 from xmu import EMuDate
 
-from nmnh_ms_tools.records.references.references2 import Reference
+from nmnh_ms_tools.records import Reference
 
 
 @pytest.fixture

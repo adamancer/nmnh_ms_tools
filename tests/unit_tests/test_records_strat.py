@@ -2,7 +2,7 @@
 
 import pytest
 
-from nmnh_ms_tools.records.stratigraphy import StratPackage, StratUnit
+from nmnh_ms_tools.records import StratPackage, StratUnit
 
 
 @pytest.mark.parametrize(

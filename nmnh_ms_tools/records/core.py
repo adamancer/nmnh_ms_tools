@@ -9,9 +9,9 @@ import re
 import warnings
 
 from ..config import DATA_DIR
-from ..utils.standardizers import Standardizer
 from ..utils import (
     LazyAttr,
+    Standardizer,
     as_list,
     as_str,
     coerce,

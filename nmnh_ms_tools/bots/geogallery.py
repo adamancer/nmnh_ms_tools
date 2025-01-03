@@ -1,3 +1,9 @@
+# pragma: exclude file
+try:
+    from warnings import deprecated
+except ImportError:
+    from typing_extensions import deprecated
+
 """Defines bot to interact with the GeoGallery portal"""
 
 import logging
@@ -9,6 +15,7 @@ from .core import Bot, JSONResponse
 logger = logging.getLogger(__name__)
 
 
+@deprecated("Endpoint no longer active")
 class GeoGalleryBot(Bot):
     """Defines methods to interact with https://geogallery.si.edu/portal"""
 
@@ -42,6 +49,7 @@ class GeoGalleryBot(Bot):
         return self.get(url, params=params)
 
 
+@deprecated("Endpoint no longer active")
 class GeoGalleryResponse(JSONResponse):
     """Defines path containing results in a GeoGallery API call"""
 

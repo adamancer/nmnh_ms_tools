@@ -21,9 +21,7 @@ from xmu import (
 
 from ...bots import Bot
 from ...config import CONFIG
-from ...records import Site, get_tree
-from ...records.catnums2 import CatNum, is_antarctic
-from ...records.references.references2 import Reference
+from ...records import CatNum, Reference, Site, get_tree, is_antarctic
 
 
 class Validator:

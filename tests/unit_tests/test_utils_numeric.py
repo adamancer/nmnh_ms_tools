@@ -3,7 +3,7 @@
 import pytest
 
 
-from nmnh_ms_tools.utils.numeric import (
+from nmnh_ms_tools.utils import (
     as_numeric,
     base_to_int,
     int_to_base,

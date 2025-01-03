@@ -3,7 +3,7 @@
 import pytest
 from xmu import EMuRecord
 
-from nmnh_ms_tools.records.catnums2 import is_antarctic, parse_catnum, parse_catnums
+from nmnh_ms_tools.records import is_antarctic, parse_catnum, parse_catnums
 
 
 @pytest.mark.parametrize(

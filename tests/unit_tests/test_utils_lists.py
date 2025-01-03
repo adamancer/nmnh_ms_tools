@@ -1,9 +1,6 @@
 """Tests dictionary helper functions"""
 
-import pytest
-
-
-from nmnh_ms_tools.utils.lists import as_list, as_set, dedupe, most_common, oxford_comma
+from nmnh_ms_tools.utils import as_list, as_set, dedupe, most_common, oxford_comma
 
 
 def test_dedupe_list_of_strings():

@@ -40,6 +40,7 @@ from ...records import (
 from ...tools.georeferencer import Georeferencer
 from ...utils import (
     BaseDict,
+    DateRange,
     LazyAttr,
     as_list,
     create_note,
@@ -51,8 +52,6 @@ from ...utils import (
 )
 
 logger = logging.getLogger(__name__)
-
-RANGE_DELIMS = [r"\b-+\b", r"\bto\b", r"\bthrough\b", r"\bthru\b"]
 
 
 class Job(BaseDict):
@@ -936,42 +935,33 @@ class ImportRecord(EMuRecord):
         -------
         None
         """
-        val_from = self.pop(src_from).replace(" 00:00:00", "")
-        val_to = self.pop(src_to, src_to)
-        if val_to:
-            val_to = val_to.replace(" 00:00:00", "")
-            vals = [val_from]
-            if val_to != val_from:
-                vals.append(val_to)
-            verbatim = " to ".join([v.strip() for v in vals])
-        elif val_from:
-            verbatim = val_from
-            val_to = val_from
-            for delim in RANGE_DELIMS:
-                try:
-                    vals = re.split(delim, val_from, flags=re.I)
-                    val_from, val_to = [EMuDate(v.strip()) for v in vals]
-                    break
-                except ValueError:
-                    pass
-        if val_from:
+        try:
+            dates = DateRange(self.pop(src_from), self.pop(src_to, src_to))
+        except ValueError:
+            pass
+        else:
+            val_from = dates.from_val
+            val_to = dates.to_val
+            verbatim = dates.verbatim
 
-            try:
-                self._set_path(dst_from, val_from)
-            except TypeError:
-                pass
+            if val_from:
 
-            if dst_to:
                 try:
-                    self._set_path(dst_to, val_to)
+                    self._set_path(dst_from, val_from)
                 except TypeError:
                     pass
 
-            if dst_verbatim:
-                try:
-                    self._set_path(dst_verbatim, verbatim)
-                except TypeError:
-                    pass
+                if dst_to:
+                    try:
+                        self._set_path(dst_to, val_to)
+                    except TypeError:
+                        pass
+
+                if dst_verbatim:
+                    try:
+                        self._set_path(dst_verbatim, verbatim)
+                    except TypeError:
+                        pass
 
     def map_depths(
         self,
@@ -1367,7 +1357,11 @@ class ImportRecord(EMuRecord):
                 self._set_path(key, val)
 
     def map_prep(
-        self, src: str, prep: str, remarks: str = None, remarks_only: bool = False
+        self,
+        src: str,
+        prep: str = None,
+        remarks: str = None,
+        remarks_only: bool = False,
     ) -> None:
         """Maps a single prep from a column containing the prep count
 
@@ -1377,8 +1371,9 @@ class ImportRecord(EMuRecord):
             the value or key in source containing the value for either the prep count
             or remarks about the prep. If the value is numeric, it is treated as a
             count. If not *and* remarks_only is True, it is treated as a remark.
-        prep : str
-            the name of the preparation
+        prep : str, optional
+            the name of the preparation. If omitted, uses the src column name with
+            any trailing s stripped.
         remarks : str, optional
             the value or key in source containing the value for remarks about the prep.
             If src also contains text, src and remarks will be combined.
@@ -1389,6 +1384,8 @@ class ImportRecord(EMuRecord):
         -------
         None
         """
+        if prep is None:
+            prep = src.rstrip("s").capitalize()
         remarks = self.pop(remarks, remarks)
         for key in as_list(src):
             try:
@@ -1567,11 +1564,11 @@ class ImportRecord(EMuRecord):
         # Zero-pad case and drawer numbers for MIN and PET
         if self.get("CatDivision") in ("Mineralogy", "Petrology & Volcanology"):
 
-            if loc["LocLevel3"] and loc["LocLevel3"].isnumeric():
-                loc["LocLevel3"] = loc["LocLevel3"].zfill(3)
+            if loc["LocLevel3"] and loc["LocLevel3"][0].isnumeric():
+                loc["LocLevel3"] = _pad_numeric(loc["LocLevel3"], 3)
 
-            if loc["LocLevel4"] and loc["LocLevel4"].isnumeric():
-                loc["LocLevel4"] = loc["LocLevel4"].zfill(2)
+            if loc["LocLevel4"] and loc["LocLevel4"][0].isnumeric():
+                loc["LocLevel4"] = _pad_numeric(loc["LocLevel4"], 2)
 
         loc = Location(loc).to_emu()
 
@@ -2506,6 +2503,16 @@ def _pad(lst: list, length: int) -> list:
     if len(lst) == 1 and length > 1:
         lst = [lst[0] for _ in range(length + 1)]
     return lst
+
+
+def _pad_numeric(val: str, length: int) -> str:
+    """Pads the leading numeric part of a string to the given length"""
+    if val:
+        parts = [s for s in re.split(r"(^\d+)", val) if s]
+        if parts[0].isnumeric():
+            parts[0] = parts[0].zfill(length)
+        return "".join(parts)
+    return val
 
 
 def _is_irn(val: str | int, min_val: int = 1000000, max_val: int = 30000000) -> bool:

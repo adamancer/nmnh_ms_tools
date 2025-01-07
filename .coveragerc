@@ -1,0 +1,7 @@
+[run]
+omit =
+    */xmu/*
+
+[report]
+exclude_also =
+    \A(?s:.*# pragma: exclude file.*)\Z

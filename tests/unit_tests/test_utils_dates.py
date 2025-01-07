@@ -3,7 +3,7 @@
 import pytest
 from datetime import date, datetime
 
-from nmnh_ms_tools.utils import add_years, fy, get_fy
+from nmnh_ms_tools.utils import DateRange, add_years, fy, get_fy
 
 
 def test_fy():
@@ -52,3 +52,19 @@ def test_in_fy(dt, fyear, expected):
 )
 def test_add_years(test_input, num_years, expected):
     assert add_years(test_input, num_years) == expected
+
+
+@pytest.mark.parametrize(
+    "test_input,expected",
+    [
+        ("1 Jan 1970", "1970-01-01"),
+        ("1970-01-01", "1970-01-01"),
+        ("Jan 1, 1970", "1970-01-01"),
+        ("January 1, 1970", "1970-01-01"),
+        ("1-2 Jan 1970", "1970-01-01 to 1970-01-02"),
+        ("1 Jan-1 Feb 1970", "1970-01-01 to 1970-02-01"),
+        ("Jan 1-Feb 1, 1970", "1970-01-01 to 1970-02-01"),
+    ],
+)
+def test_date_range(test_input, expected):
+    assert str(DateRange(test_input)) == expected

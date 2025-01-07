@@ -21,6 +21,13 @@ class Attachment:
         return str(self.rec)
 
     def to_emu(self):
+        """Maps the record in the attachment to EMu
+
+        Returns
+        -------
+        dict
+            the attachment formatted for EMu
+        """
         # Return irn-only record if an irn is supplied manually
         if isinstance(self.rec, int):
             return {"irn": self.rec}
@@ -58,6 +65,8 @@ class Location(Attachment):
 
 
 class CollectionEvent(Attachment):
+    """Manages attachments to ecollectionevents"""
+
     irns = {}
     fields = [
         # Locality (1)

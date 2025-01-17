@@ -8,7 +8,7 @@ from unidecode import unidecode
 
 from .taxaparser import TaxaParser
 from .taxalist import TaxaList
-from ...utils import BaseDict, slugify
+from ...utils import BaseDict, to_slug
 
 
 class Taxon(BaseDict):
@@ -443,7 +443,7 @@ class Taxon(BaseDict):
     @staticmethod
     def key(key):
         """Returns a standardized form of the name"""
-        return slugify(str(key)).replace("_", "") if key else ""
+        return to_slug(str(key)).replace("_", "") if key else ""
 
     def _find(self, val, index="name_index"):
         return self.tree.find(val, index)

@@ -338,7 +338,9 @@ def parse_names(val: str | list, delims: str = "|;,") -> list[Person]:
     """
     if not val:
         return []
-    if not isinstance(val, list):
+    if isinstance(val, list):
+        return [Person(n) for n in val]
+    else:
         # Remove "et al" for string, truncating the string where et al occurs.
         # Then do the same for numbers. Both actions are useful for trimming
         # garbage from names pulled from citation strings.
@@ -419,7 +421,7 @@ def combine_names(
     mask: str = "{first} {middle} {last}",
     initials: bool = True,
     max_names: int = 2,
-    delim: str = "; ",
+    delim: str = ", ",
     conj: str = "and",
 ):
     """Combines a list of names into a string
@@ -454,7 +456,7 @@ def combine_names(
         names = re.sub(
             r" +", " ", oxford_comma(names[:max_names], delim=delim, conj="")
         )
-        return f"{names} et al."
+        return f"{names}{delim}et al."
     return re.sub(r" +", " ", oxford_comma(names, delim=delim, conj=conj))
 
 

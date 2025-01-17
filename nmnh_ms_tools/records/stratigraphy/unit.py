@@ -112,7 +112,6 @@ class StratUnit(Record):
         self.rank = self._parse_rank(unit)
         self.lithology = self._parse_lithology(unit)
         self.unit_name = self._parse_name(unit)
-        self.kind = self._parse_kind()
         self.uncertain = self._parse_uncertainty(unit)
         # Apply hint if rank could not be parsed
         if self._hint and not self.rank:
@@ -120,6 +119,8 @@ class StratUnit(Record):
         # Default to formation if lithology but not rank is provided
         if self.lithology and not self.rank:
             self.rank = "formation"
+        # Determine kind after rank fallbacks
+        self.kind = self._parse_kind()
         # Check if modified name is an official ICS unit (e.g., Early Jurrasic)
         self.check_chronostrat_name()
 
@@ -327,10 +328,12 @@ class StratPackage(Record):
     ----------
     units : str | list[str] | StratUnit | list[StratUnit]
         the units in the package in a format understood by the class
+    remarks : str, optional
+        additional remarks about the stratigraphic package
 
     Properties
     ----------
-    units : list[StratUnit]
+    units : tuple[StratUnit]
         a list of stratigraphic units in the package
     kind : str
         the type of unit ('lithostrat' or 'chronostrat'). Not to be confused with rank.
@@ -338,6 +341,8 @@ class StratPackage(Record):
         the lithology of the most specific unit
     uncertain : bool
         whether the identificaiton of any unit is uncertain
+    remarks : str
+        additional remarks about the stratigraphic package
     """
 
     # Deferred class attributes are defined at the end of the file
@@ -347,18 +352,25 @@ class StratPackage(Record):
     # Normal class attributes
     terms = ["units"]
 
-    def __init__(self, units):
+    def __init__(self, units, remarks=None):
         # Set lists of original class attributes and reported properties
         self._class_attrs = set(dir(self))
-        self._properties = ["units"]
+        self._properties = ["units", "remarks"]
         super().__init__(units)
+        self.remarks = remarks
 
     def __str__(self):
         return self.name()
 
     def name(self) -> str:
         """A concatenated list of the units in order of specificity"""
-        return " > ".join([str(u) for u in self.units])
+        units = []
+        for vals in self.units_by_rank().values():
+            if len(vals) > 1:
+                units.append(f"({" | ".join([str(u) for u in vals])})")
+            else:
+                units.append(str(vals[0]))
+        return " > ".join(units)
 
     @property
     def kind(self):
@@ -382,6 +394,19 @@ class StratPackage(Record):
                 return True
         return False
 
+    def units_by_rank(self) -> dict:
+        """Groups units by rank
+
+        Returns
+        -------
+        dict
+            units ordered and grouped by rank
+        """
+        units = {}
+        for unit in self.units:
+            units.setdefault(unit.rank, []).append(unit)
+        return units
+
     def parse(self, data: str | list[str] | StratUnit | list[StratUnit]) -> None:
         """Parses a list of units from the provided data
 
@@ -395,15 +420,12 @@ class StratPackage(Record):
         None
         """
         self.verbatim = data
-        if isinstance(data, str):
+        if isinstance(data, (str, list, tuple)):
             data = parse_strat_units(data)
         elif isinstance(data, StratUnit):
             data = [data]
-        elif isinstance(data, list):
-            data = [u if isinstance(u, StratUnit) else StratUnit(u) for u in data]
         else:
             raise ValueError(f"Could not parse units from {repr(data)}")
-        self.units = data
         # Sort units
         order = {
             "supergroup": 0,
@@ -413,7 +435,8 @@ class StratPackage(Record):
             "member": 4,
             "bed": 5,
         }
-        self.units.sort(key=lambda u: order.get(u.rank, 6))
+        data.sort(key=lambda u: order.get(u.rank, 6))
+        self.units = tuple(data)
 
     def to_emu(self) -> EMuRecord:
         """Returns the package in EMu XML format
@@ -430,31 +453,44 @@ class StratPackage(Record):
         """
         rec = {}
         if self.kind == "lithostrat":
-            for unit in self.units:
-                if unit.rank in LITHOSTRAT_RANKS[:4]:
-                    name = unit.short_name.rstrip("?")
-                    rec[f"AgeLithostrat{unit.rank.title()}"] = name
-                elif unit.rank in LITHOSTRAT_RANKS[:6]:
-                    rec.setdefault("AgeOtherTermsRank_tab", []).append(
-                        unit.rank.title()
-                    )
-                    rec.setdefault("AgeOtherTermsValue_tab", []).append(unit.short_name)
-                else:
-                    rec.setdefault("AgeOtherTermsRank_tab", []).append("Other")
-                    rec.setdefault("AgeOtherTermsValue_tab", []).append(unit.short_name)
-            rec["AgeLithostratLithology"] = self.lithology.lower()
+            for rank, units in self.units_by_rank().items():
+                for unit in units:
+                    if rank in {"group", "formation", "member", "bed"}:
+                        name = unit.short_name.rstrip("?")
+                        field = f"AgeLithostrat{unit.rank.title()}"
+                        rec.setdefault(field, []).append(name)
+                    elif rank in LITHOSTRAT_RANKS:
+                        rec.setdefault("AgeOtherTermsRank_tab", []).append(
+                            unit.rank.title()
+                        )
+                        rec.setdefault("AgeOtherTermsValue_tab", []).append(
+                            unit.short_name
+                        )
+                    else:
+                        rec.setdefault("AgeOtherTermsRank_tab", []).append("Other")
+                        rec.setdefault("AgeOtherTermsValue_tab", []).append(
+                            unit.short_name
+                        )
+            # Convert lithostrat fields to strings
+            for key in rec:
+                if key.startswith(f"AgeLithostrat"):
+                    rec[key] = " | ".join(rec[key])
+            if self.lithology:
+                rec["AgeLithostratLithology"] = self.lithology.lower()
             rec["AgeLithostratUncertain"] = "Yes" if self.uncertain else "No"
             rec["AgeVerbatimStratigraphy"] = as_str(self.verbatim)
+            if self.remarks:
+                rec["AgeStratigraphyRemarks"] = self.remarks
             return EMuRecord(rec, module="ecatalogue")
         raise ValueError(f"Cannot convert {repr(self.kind)} to EMu")
 
 
 def parse_strat_units(val, hint=None):
-    """Parses a string containing stratigraphic info into a list of units
+    """Parses stratigraphic info into a list of units
 
     Parameters
     ----------
-    val : str | StratUnit
+    val : str | StratUnit | list[str]
         stratigraphic units
     hint : str, optional
         the kind of unit. Useful if it cannot be inferred from val.
@@ -471,12 +507,21 @@ def parse_strat_units(val, hint=None):
 
     # Remove parentheticals around uncertainty
     if isinstance(val, str):
-        val = val.replace("(?)", "?")
+        val = split_strat(val.replace("(?)", "?"))
+
+    # Check for delimiters in individual values
+    vals = val
+    if all((isinstance(s, str) for s in val)):
+        vals = []
+        for val_ in val:
+            vals.extend(re.split(r" *[\|;] *", val_))
 
     # Convert names to units
-    units = [StratUnit(val, hint=hint) for val in split_strat(val)]
+    units = [
+        StratUnit(u, hint=hint) if not isinstance(u, StratUnit) else u for u in vals
+    ]
 
-    # Propagate properties of the last unit up the list if needed
+    # Propagate properties of the last unit in the list if needed
     if units:
         last = units[-1]
         if last.kind and all([not u.kind for u in units[:-1]]):

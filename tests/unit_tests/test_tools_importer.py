@@ -32,7 +32,7 @@ def job(output_dir):
             "Number": "C123456-78",
             "Field Number": "ABC-123",
             "Primary Taxon": "Basalt (aphyric)",
-            "Associated Taxa": "Plagioclase (phenocrystic; tabular) | Olivine",
+            "Associated Taxa": "Plagioclase (phenocrystic; tabular) | Olivine (altered)",
             "Earliest Period": "Cambrian-Silurian",
             "Start Date": "Jan 1970",
             "End Date": "Feb 1970",
@@ -65,7 +65,7 @@ def job(output_dir):
             "Suffix": "78",
             "Field Number": "ABC-123",
             "Primary Taxon": "Basalt",
-            "Associated Taxa": "Plagioclase (tabular; phenocrystic) | Olivine",
+            "Associated Taxa": "Plagioclase (tabular; phenocrystic) | Olivine (altered)",
             "Texture/Structure": "aphyric",
             "Earliest Period": "Cambrian",
             "Latest Period": "Silurian",
@@ -308,7 +308,7 @@ def job(output_dir):
                 },
             },
         },
-        "ignore": ["Index"],
+        "ignore": ["Unmapped"],
     }
     with open(output_dir / "job.yml", "w") as f:
         yaml.dump(job, f, sort_keys=False, indent=4, allow_unicode=True)
@@ -504,6 +504,7 @@ def expected():
             "IdeNamedPart_tab": ["Primary", "Associated", "Associated"],
             "IdeTaxonRef_tab": [1001689, 1010730, 1009644],
             "IdeTextureStructure_tab": ["aphyric", "phenocrystic; tabular", ""],
+            "IdeComments_tab": ["", "", "altered"],
             "LocLocationRef_tab": [
                 {
                     "LocLevel1": "BLDG",
@@ -619,18 +620,18 @@ def test_map_data(mapped, expected):
     assert mapped[0] == expected
 
 
-@pytest.mark.skip("Failing due to error in catnums module")
+# @pytest.mark.skip("Failing due to error in catnums module")
 def test_receipt(mapped):
     for rec in mapped:
         with open(rec.add_receipt(), encoding="utf-8") as f:
             assert (
                 f.read()
-                == """# Verbatim data for C123456-78 from cataloging spreadsheet
+                == """# Verbatim data for NMNH C123456-78 from cataloging spreadsheet
 Division: Petrology & Volcanology
 Number: C123456-78
 Field Number: ABC-123
 Primary Taxon: Basalt (aphyric)
-Associated Taxa: Plagioclase (phenocrystic; tabular) | Olivine
+Associated Taxa: Plagioclase (phenocrystic; tabular) | Olivine (altered)
 Earliest Period: Cambrian-Silurian
 Start Date: Jan 1970
 End Date: Feb 1970
@@ -654,8 +655,9 @@ Case: 001
 Drawer: 01
 Subfeature: Columbia Crest
 References: Simpson, 2024
-Unmapped: Unmapped"""
+"""
             )
+            break
 
 
 def test_import_source_files(output_dir, job):

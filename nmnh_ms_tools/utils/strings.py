@@ -125,11 +125,11 @@ def collapse_whitespace(val):
 
 @functools.lru_cache()
 def to_attribute(val):
-    """Constructs a python_attribute string from the given value"""
+    """Constructs a python attribute string from the given value"""
     val = unidecode(val)
     val = re.sub(r'["\']', "", val)
     val = re.sub(r"[^A-z\d]+", "_", val)
-    val = re.sub(r"([A-Z])(?!(?:[A-Z_]|$))", r"_\1", val)
+    val = re.sub(r"([A-Z])(?!(?:[A-Za-z_]|$))", r"_\1", val)
     val = re.sub(r"(?<![A-Z_])([A-Z])", r"_\1", val)
     val = re.sub(r"(?<![\d_])([\d])", r"_\1", val)
     val = re.sub(r"_+", "_", val)
@@ -149,10 +149,21 @@ def to_pascal(val):
     return ucfirst(to_camel(val))
 
 
+def to_snake(val):
+    """Constructs snake_case string from the given value"""
+    return to_attribute(val)
+
+
 @functools.lru_cache()
 def to_dwc_camel(val):
     """Constructs a DwC case string from the given value"""
     return re.sub(r"Id$", "ID", to_camel(val))
+
+
+@functools.lru_cache()
+def to_slug(val, delim="-"):
+    """Formats value for use as a dict key, url, or filename"""
+    return to_attribute(val).replace("_", delim)
 
 
 @functools.lru_cache()
@@ -192,11 +203,6 @@ def overlaps(val, other, min_length=3):
     return False
 
 
-def slugify(val):
-    """Formats value for use as a dict key, url, or filename"""
-    return to_attribute(val)
-
-
 def std_case(val, std_to):
     """Standardizes casing of value to a reference string"""
     if std_to.isupper():
@@ -224,6 +230,39 @@ def truncate(val, length=32, suffix="..."):
     if len(val) > length:
         return val[: length - len(suffix)] + suffix
     return val
+
+
+def join_strings(*args: str, delim: str = None) -> str:
+    """Joins strings using the specified delimiter
+
+    Parameters
+    ----------
+    args : str
+        strings to join
+    delim : str, optional
+        delim used to join strings. If omitted, the delimiter will be inferred by
+        looking for common delimiters in each arg, falling back to a pipe if none
+        found.
+
+    Returns
+    -------
+    str
+        strings joined by delimiter
+    """
+    if delim is None:
+        for delim in "|;":
+            for arg in args:
+                if delim in arg:
+                    break
+        else:
+            delim = "|"
+
+    # Add spacing around delim
+    delim = delim.strip() + " "
+    if delim.starswith("|"):
+        delim = " " + delim
+
+    return delim.join([s.strip(delim) for s in args])
 
 
 def seq_split(

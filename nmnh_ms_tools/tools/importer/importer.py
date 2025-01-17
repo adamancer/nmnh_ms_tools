@@ -14,7 +14,6 @@ import numpy as np
 import pandas as pd
 import yaml
 from xmu import (
-    EMuDate,
     EMuRecord,
     EMuLatitude,
     EMuLongitude,
@@ -45,6 +44,7 @@ from ...utils import (
     as_list,
     create_note,
     create_yaml_note,
+    join_strings,
     parse_measurement,
     parse_measurements,
     to_attribute,
@@ -1150,18 +1150,6 @@ class ImportRecord(EMuRecord):
                 verbatim = meas.verbatim
             evt._set_path("TerVerbatimElevation", verbatim)
 
-    def map_lithostrat(self, src: str):
-        pass
-
-    def map_litostrat_units(
-        self,
-        src_group: str = None,
-        src_formation: str = None,
-        src_member: str = None,
-        src_bed: str = None,
-    ):
-        pass
-
     def map_measurements(
         self,
         src_from: str,
@@ -1575,11 +1563,24 @@ class ImportRecord(EMuRecord):
         self["LocPermanentLocationRef"] = loc
         self["LocLocationRef_tab"] = [loc]
 
-    def map_strat(self, src):
-        val = self.pop(src)
-        if val:
-            for key, val in StratPackage(val).to_emu().items():
-                self[key] = val
+    def map_strat(self, src: list[str]) -> None:
+        """Maps lithostrat package from a set of fields
+
+        Parameters
+        ----------
+        src : list[str]
+            list of fields containing stratigraphic data or default values
+
+        Returns
+        -------
+        None
+        """
+        units = [self.pop(src, src) for src in src]
+        units = [u for u in units if u]
+        units = units[0] if len(units) == 1 else units
+        if units:
+            for key, val in StratPackage(units).to_emu().items():
+                self._set_path(key, val)
 
     def map_taxa(
         self,
@@ -1657,6 +1658,8 @@ class ImportRecord(EMuRecord):
             ids_by += [None] * (len(taxa) - len(ids_by))
             comments += [None] * (len(taxa) - len(comments))
 
+            # Move non-texture terms to comments
+
             for taxon, part, texture, id_by, comment in zip(
                 taxa, parts, textures, ids_by, comments
             ):
@@ -1668,7 +1671,7 @@ class ImportRecord(EMuRecord):
                     for paren, _ in split(parens):
                         if paren in {"TAS"} or paren.startswith("var."):
                             taxon = f"{taxon} ({paren})"
-                        elif paren in {"vein", "xenolith"}:
+                        elif paren in {"host", "vein", "xenolith"}:
                             if not part in {"Primary", "Associated"}:
                                 raise ValueError(
                                     f"Taxon includes part, but part was already"
@@ -1685,6 +1688,17 @@ class ImportRecord(EMuRecord):
 
                     if textures:
                         texture = "; ".join(sorted({t.lower() for t in textures}))
+
+                # Move non-texture concepts into comments
+                if texture:
+                    texture, comment_ = _split_texture_comments(
+                        re.split("; *", texture)
+                    )
+                    if comment_:
+                        if not comment:
+                            comment = comment_
+                        else:
+                            comment = join_strings(comment, comment_)
 
                 taxon = self.tree.place(taxon).to_emu()
                 if "irn" in taxon:
@@ -1713,7 +1727,6 @@ class ImportRecord(EMuRecord):
         -------
         None
         """
-        vols = []
         missed = False
 
         # Use country to improve match quality
@@ -2192,7 +2205,10 @@ class ImportRecord(EMuRecord):
             try:
                 existing = split(obj[last])
                 # Defer to existing delimiter if present
-                delim_ = [v[1] for v in existing if v[1]][0]
+                try:
+                    delim_ = [v[1] for v in existing if v[1]][0]
+                except IndexError:
+                    delim_ = "; "
                 existing = [v[0] for v in existing]
                 obj[last] = (delim_ if delim_ else delim).join(existing + vals)
             except KeyError:
@@ -2523,6 +2539,22 @@ def _is_irn(val: str | int, min_val: int = 1000000, max_val: int = 30000000) -> 
         return False
     else:
         return min_val <= val <= max_val
+
+
+def _split_texture_comments(terms: str) -> tuple[str]:
+    """Splits non-texture terms from a list of terms"""
+    textures = []
+    comments = []
+    for term in terms:
+        if (
+            term in {"altered", "metasomatized", "weathered"}
+            or re.match("(after|with) ", term)
+            or re.search("ized$", term)
+        ):
+            comments.append(term)
+        else:
+            textures.append(term)
+    return "; ".join(textures), " | ".join(comments)
 
 
 def _read_ancillary() -> None:

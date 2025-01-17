@@ -95,4 +95,4 @@ def test_combine_names():
 
 def test_combine_names_max():
     names = "Simpson, HJ, Simpson, M, Simpson, B, Simpson, LM, and Simpson, M"
-    assert combine_names(names, delim=", ") == "H. J. Simpson, M. Simpson et al."
+    assert combine_names(names, delim=", ") == "H. J. Simpson, M. Simpson, et al."

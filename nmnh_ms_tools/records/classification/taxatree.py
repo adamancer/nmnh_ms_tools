@@ -10,7 +10,7 @@ from .taxalist import TaxaList
 from .taxaparser import TaxaParser
 from .taxon import Taxon
 from ...config import CONFIG
-from ...utils import LazyAttr, slugify
+from ...utils import LazyAttr, to_slug
 
 
 logger = logging.getLogger(__name__)
@@ -115,7 +115,7 @@ class TaxaIndex(MutableMapping):
 
     @staticmethod
     def key(key):
-        return slugify(str(key)).replace("_", "") if key else ""
+        return to_slug(str(key)).replace("_", "") if key else ""
 
 
 class TaxaTree(TaxaIndex):

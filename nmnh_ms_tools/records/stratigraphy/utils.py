@@ -14,14 +14,13 @@ AGE_RANKS = ["eon", "era", "period", "epoch", "age", "subage"]
 CHRONOSTRAT_RANKS = ["eonothem", "erathem", "system", "series", "stage", "substage"]
 
 LITHOSTRAT_RANKS = [
+    "supergroup",
     "group",
+    "subgroup",
     "formation",
     "member",
     "bed",
-    # Ranks with no specific field in EMu
-    "supergroup",
-    "subgroup",
-    # Unofficial ranks
+    # Informal ranks
     "layer",
     "series",
     "unit",
@@ -48,6 +47,7 @@ LITHOLOGIES = {
 
 for lithology in [
     "anhydrite",
+    "argillite",
     "basalt",
     "calcareous",
     "carbonate",
@@ -61,23 +61,39 @@ for lithology in [
     "marl",
     "mudstone",
     "oolite",
+    "quartzite",
     "sand",
     "siltstone",
-]:
+] + list(LITHOLOGIES.values()):
     LITHOLOGIES[lithology] = lithology
 
 
-MODIFIERS = [
-    "base",
-    "bottom",
-    "lower",
-    "middle",
-    "mid",
-    "upper",
-    "top",
-    "early",
-    "late",
-]
+MODIFIERS = {
+    # Position modifiers
+    "base": "base",
+    "bottom": "base",
+    "lowest": "lower",
+    "lower": "lower",
+    "low": "lower",
+    "middle": "middle",
+    "mid": "middle",
+    "center": "middle",
+    "upper": "upper",
+    "high": "upper",
+    "higher": "upper",
+    "highest": "upper",
+    "top": "top",
+    # Postion most-modifiers
+    "bottommost": "base",
+    "lowermost": "lower",
+    "uppermost": "upper",
+    "topmost": "top",
+    # Age modifiers
+    "early": "early",
+    "late": "late",
+}
+# Sort by longest to shortest key to facilitate search-and-replace below
+MODIFIERS = dict(sorted(MODIFIERS.items(), key=lambda kv: -len(kv[0])))
 
 
 def extract_modifier(name: str) -> tuple[str]:
@@ -93,12 +109,15 @@ def extract_modifier(name: str) -> tuple[str]:
     tuple[str]
         tuple with the unit name (without modifier) and the modifier
     """
-    mod = f"(?:{"|".join(MODIFIERS)})"
-    mod = f"({mod}(?:(?:-+| to ){mod})?)(?: (?:half|third|quarter|fifth))?"
-    pattern = rf"\(?({mod})( part)?( of)?( the)?\)?"
+    modpat = f"(?:(?:very) )?(?:{"|".join(MODIFIERS)})"
+    modpat = f"({modpat}(?:(?:-+| to ){modpat})?)(?: (?:half|third|quarter|fifth))?"
+    pattern = rf"\(?({modpat})( part)?( (?:in|of))?( the)?\)?"
     match = re.search(pattern, name, flags=re.I)
     if match:
-        return re.sub(pattern, "", name, flags=re.I).strip(", "), match.group(1)
+        mod = re.sub(r"^very\b", "", match.group(1).lower())
+        for find, repl in MODIFIERS.items():
+            mod = re.sub(rf"\b{find}\b", repl, mod)
+        return re.sub(pattern, "", name, flags=re.I).strip(", "), mod.strip()
     return name, ""
 
 

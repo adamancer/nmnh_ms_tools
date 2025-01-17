@@ -13,7 +13,7 @@ from nmnh_ms_tools.utils import (
     same_to_length,
     seq_split,
     singular,
-    slugify,
+    to_slug,
     std_case,
     to_attribute,
     to_camel,
@@ -125,7 +125,18 @@ def test_capitalize(test_input, expected):
 )
 def test_to_attribute(test_input, expected):
     assert to_attribute(test_input) == expected
-    assert slugify(test_input) == expected
+
+
+@pytest.mark.parametrize(
+    "test_input,expected",
+    [
+        ("apples and oranges", "apples-and-oranges"),
+        ("ApplesAndOranges", "apples-and-oranges"),
+        ("Apples & oranges", "apples-oranges"),
+    ],
+)
+def test_to_slug(test_input, expected):
+    assert to_slug(test_input) == expected
 
 
 @pytest.mark.parametrize(

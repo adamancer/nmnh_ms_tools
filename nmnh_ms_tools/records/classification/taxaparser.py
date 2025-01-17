@@ -9,7 +9,7 @@ import yaml
 from unidecode import unidecode
 
 from ...config import CONFIG_DIR
-from ...utils import LazyAttr, slugify
+from ...utils import LazyAttr, to_slug
 
 
 Part = namedtuple("Part", ["word", "stem", "index", "pos", "kind"])
@@ -79,7 +79,7 @@ class TaxaParser:
         """Returns a standardized form of the name"""
         if key is None:
             key = self.name
-        return slugify(str(key)).replace("_", "-") if key else ""
+        return to_slug(str(key)).replace("_", "-") if key else ""
 
     def patternize(self, val, **kwargs):
         """Constructs a regex pattern including modifiers"""

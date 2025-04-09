@@ -71,7 +71,7 @@ class Taxon(BaseDict):
             return self[attr]
         except KeyError:
             pass
-        return getattr(super(), attr)
+        return super().__getattr__(attr)
 
     def __str__(self):
         try:

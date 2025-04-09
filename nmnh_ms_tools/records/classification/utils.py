@@ -8,11 +8,24 @@ from xmu import EMuReader, EMuRecord, write_import
 from .taxon import Taxon
 from .taxanamer import TaxaNamer
 from .taxaparser import TaxaParser
+from .taxatree import NameIndex, StemIndex
 from ...config import CONFIG
 
 
 @cache
-def get_tree(src=None):
+def get_tree(src: str = None):
+    """Builds a taxonomic tree for geological specimens
+
+    Parameters
+    ----------
+    src : str
+        path to EMu export
+
+    Returns
+    -------
+    TaxaNamer
+        taxonomic tree
+    """
 
     timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
 
@@ -22,6 +35,7 @@ def get_tree(src=None):
     Taxon.tree = tree
     TaxaParser.tree = tree
 
+    # Disable index for the duration of the build
     tree.disable_index = True
 
     json_path = CONFIG["data"]["taxa_tree"]
@@ -37,6 +51,8 @@ def get_tree(src=None):
                 os.remove(idx.path)
             except OSError:
                 pass
+            else:
+                print(f"Removed {idx.path}")
 
         updates = []
         errors = []
@@ -51,6 +67,10 @@ def get_tree(src=None):
                 errors.append((rec["irn"], "Read failed"))
 
         tree.disable_index = False
+
+        # Create indexes
+        NameIndex(tree)
+        StemIndex(tree)
 
         # Populate relationships
         tree._assign_synonyms()

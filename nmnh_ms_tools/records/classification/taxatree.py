@@ -291,27 +291,30 @@ class TaxaTree(TaxaIndex):
 class NameIndex(TaxaIndex):
     """Constructs an index of taxon names"""
 
-    path = CONFIG["data"]["name_index"]
+    path = CONFIG["data"].get("name_index", "name_index.json")
     tree = None
 
-    def __init__(self):
+    def __init__(self, tree=None):
         super().__init__()
         try:
             self.from_json(self.path)
         except (IOError, OSError):
-            print(f"Building {self.path.split("_")[0]} index...")
-            count = 0
-            for obj in (self.obj, self.new):
-                for taxon in obj.values():
-                    self.add_taxon(taxon)
-                    count += 1
-                    if not count % 5000:
-                        print(f"{count:,} names processed")
-            print("{count:,} names processed")
-            for key, taxa in self.items():
-                self[key] = sorted(set(taxa))
-            self.to_json(self.path)
-            print("Done!")
+            if tree is None:
+                tree = self.tree
+            if tree:
+                print(f"Building name index...")
+                count = 0
+                for obj in [tree.obj, tree.new]:
+                    for taxon in obj.values():
+                        self.add_taxon(taxon)
+                        count += 1
+                        if not count % 5000:
+                            print(f"{count:,} names processed")
+                print(f"{count:,} names processed")
+                for key, taxa in self.items():
+                    self[key] = sorted(set(taxa))
+                self.to_json(self.path)
+                print("Done!")
 
     def add_taxon(self, taxon):
         """Adds an entry to the index"""
@@ -323,27 +326,30 @@ class NameIndex(TaxaIndex):
 class StemIndex(TaxaIndex):
     """Constructs an index of stemmed taxon names"""
 
-    path = CONFIG["data"]["name_index"]
+    path = CONFIG["data"].get("stem_index", "stem_index.json")
     tree = None
 
-    def __init__(self):
+    def __init__(self, tree=None):
         super().__init__()
         try:
             self.from_json(self.path)
         except (IOError, OSError):
-            print(f"Building {self.path.split("_")[0]} index...")
-            count = 0
-            for obj in (self.obj, self.new):
-                for taxon in obj.values():
-                    self.add_taxon(taxon)
-                    count += 1
-                    if not count % 5000:
-                        print("{count:,} names processed")
-            print("{count:,} names processed")
-            for key, taxa in self.items():
-                self[key] = sorted(set(taxa))
-            self.to_json(self.path)
-            print("Done!")
+            if tree is None:
+                tree = self.tree
+            if tree:
+                print(f"Building stem index...")
+                count = 0
+                for obj in [tree.obj, tree.new]:
+                    for taxon in obj.values():
+                        self.add_taxon(taxon)
+                        count += 1
+                        if not count % 5000:
+                            print(f"{count:,} names processed")
+                print(f"{count:,} names processed")
+                for key, taxa in self.items():
+                    self[key] = sorted(set(taxa))
+                self.to_json(self.path)
+                print("Done!")
 
     def add_taxon(self, taxon):
         """Adds an entry to the index"""

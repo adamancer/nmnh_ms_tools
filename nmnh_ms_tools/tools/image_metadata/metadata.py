@@ -130,7 +130,7 @@ class MediaFile:
             except ValueError:
                 pass
             else:
-                # Fix bizarro encoding
+                # HACK: Fix bizarro encoding
                 val = val.replace(b"\xd2", b'"')
                 val = val.replace(b"\xd3", b'"')
                 val = val.replace(b"\xd5", b"'")
@@ -141,26 +141,26 @@ class MediaFile:
                     raise ValueError(
                         f"Could not decode metadata in {self.path}: {key} => {val}"
                     ) from exc
-
-        self.metadata = metadata
-
+        self._metadata = metadata
         return metadata
 
     def rename(self, dst=None):
         """Renames the file based on available metadata"""
         dst = self._get_std_name(dst)
         self._path.rename(dst)
-        return self.copy_metadata_to(dst)
+        return self.copy_metadata_to(dst, omit=None)
 
     def copy_to(self, dst=None):
         dst = self._get_std_name(dst)
         shutil.copy2(self._path, dst)
-        return self.copy_metadata_to(dst)
+        return self.copy_metadata_to(dst, omit=None)
 
-    def copy_metadata_to(self, path):
+    def copy_metadata_to(self, path, omit={"unique_id"}):
         mm = self.__class__(path)
         mm._mapped = self.mapped.copy()
-        mm.mapped["unique_id"] = None
+        if omit:
+            for key in omit:
+                mm.mapped[key] = None
         return mm
 
     def digest(self):
@@ -248,7 +248,7 @@ class MediaFile:
             "CC0": "https://creativecommons.org/publicdomain/zero/1.0/",
         }
 
-        headline = rec.get("MulTitle")
+        headline = rec.get("MulTitle").replace("[AUTO]", "").strip()
 
         # Extract a single, well-formed catalog number from the headline
         obj_source_ids = []

@@ -11,6 +11,7 @@ from .utils import (
     short_name,
     split_strat,
     CHRONOSTRAT_RANKS,
+    LITHODEMES,
     LITHOLOGIES,
     LITHOSTRAT_RANKS,
 )
@@ -227,9 +228,12 @@ class StratUnit(Record):
         if vals["modifier"] and not (vals["unit_name"] or vals["lithology"]):
             vals["unit_name"] = vals["modifier"]
             vals["modifier"] = ""
-        # Present short names as "Unit 1" instead of "1 Unit"
-        if len(vals["unit_name"]) > 2:
+        # Lithodemes use the lithology
+        if self.rank == "lithodeme":
+            mask = "{unit_name} ({modifier})"
+        elif len(vals["unit_name"]) > 2:
             mask = "{unit_name} {rank} ({modifier})"
+        # Present short names as "Unit 1" instead of "1 Unit"
         else:
             mask = "{rank} {unit_name} ({modifier})"
         name = mask.format(**vals)
@@ -264,6 +268,9 @@ class StratUnit(Record):
         if matches:
             matches.sort(key=lambda m: m.span()[0])
             return matches[-1].group(0).lower()
+        for val in LITHODEMES:
+            if re.search(rf"\b{val}\b", unit, flags=re.I):
+                return "lithodeme"
         return ""
 
     def _parse_lithology(self, unit: str) -> str:
@@ -286,14 +293,14 @@ class StratUnit(Record):
         """Parses base name from unit name"""
         if self.rank:
             unit = re.sub(self.rank, "", unit, flags=re.I)
-        if self.lithology:
+        if self.lithology and self.rank != "lithodeme":
             unit = re.sub(self.lithology, "", unit, flags=re.I)
         unit = extract_modifier(unit)[0]
         return re.sub(r" +", " ", unit).strip(", ")
 
     def _parse_kind(self) -> str:
         """Determines whether unit is chrono- or lithostrat"""
-        if self.rank in LITHOSTRAT_RANKS or self.rank == "other":
+        if self.rank in LITHOSTRAT_RANKS or self.rank in {"lithodeme", "other"}:
             return "lithostrat"
         if self._hint is not None:
             hint = self._hint.strip("[]")
@@ -382,9 +389,11 @@ class StratPackage(Record):
     @property
     def lithology(self):
         lithology = ""
-        for unit in self.units:
-            if unit.lithology:
-                lithology = unit.lithology
+        for rank, units in self.units_by_rank().items():
+            if rank in {"group", "formation", "member", "bed"}:
+                lithology_ = ", ".join({u.lithology for u in units if u.lithology})
+                if lithology_:
+                    lithology = lithology_
         return lithology
 
     @property
@@ -459,7 +468,7 @@ class StratPackage(Record):
                         name = unit.short_name.rstrip("?")
                         field = f"AgeLithostrat{unit.rank.title()}"
                         rec.setdefault(field, []).append(name)
-                    elif rank in LITHOSTRAT_RANKS:
+                    elif rank in {"lithodeme", "series", "supergroup", "subgroup"}:
                         rec.setdefault("AgeOtherTermsRank_tab", []).append(
                             unit.rank.title()
                         )

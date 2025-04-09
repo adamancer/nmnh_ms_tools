@@ -132,7 +132,7 @@ def test_parse_units(test_input, expected):
             "Named Siltstone Formation | Unit 1A",
             {
                 "AgeLithostratFormation": "Named Fm",
-                "AgeOtherTermsRank_tab": ["Unit"],
+                "AgeOtherTermsRank_tab": ["Other"],
                 "AgeOtherTermsValue_tab": ["Unit 1A"],
                 "AgeLithostratLithology": "siltstone",
                 "AgeLithostratUncertain": "No",
@@ -143,7 +143,7 @@ def test_parse_units(test_input, expected):
             "Named Siltstone | Named Unit",
             {
                 "AgeLithostratFormation": "Named Fm",
-                "AgeOtherTermsRank_tab": ["Unit"],
+                "AgeOtherTermsRank_tab": ["Other"],
                 "AgeOtherTermsValue_tab": ["Named Unit"],
                 "AgeLithostratLithology": "siltstone",
                 "AgeLithostratUncertain": "No",
@@ -163,11 +163,20 @@ def test_parse_units(test_input, expected):
             ["Named Siltstone", "Named 1 Unit", "Named 2 Unit"],
             {
                 "AgeLithostratFormation": "Named Fm",
-                "AgeOtherTermsRank_tab": ["Unit", "Unit"],
+                "AgeOtherTermsRank_tab": ["Other", "Other"],
                 "AgeOtherTermsValue_tab": ["Named 1 Unit", "Named 2 Unit"],
                 "AgeLithostratLithology": "siltstone",
                 "AgeLithostratUncertain": "No",
                 "AgeVerbatimStratigraphy": "Named Siltstone | Named 1 Unit | Named 2 Unit",
+            },
+        ),
+        (
+            ["Named Dike"],
+            {
+                "AgeOtherTermsRank_tab": ["Lithodeme"],
+                "AgeOtherTermsValue_tab": ["Named Dike"],
+                "AgeLithostratUncertain": "No",
+                "AgeVerbatimStratigraphy": "Named Dike",
             },
         ),
     ],

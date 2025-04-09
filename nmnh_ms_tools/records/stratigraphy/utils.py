@@ -35,6 +35,16 @@ LITHOSTRAT_ABBRS = {
     "bd": "bed",
 }
 
+# List of lithodeme rock types. Intrusion types are defined below so that they
+# aren't absorbed into the lithology list.
+LITHODEMES = [
+    "gabbro",
+    "granodiorite",
+    "granite",
+    "kimberlite",
+    "syenite",
+]
+
 LITHOLOGIES = {
     "cgl": "conglomerate",
     "dol": "dolomite",
@@ -45,28 +55,37 @@ LITHOLOGIES = {
     "volc": "volcanic",
 }
 
-for lithology in [
-    "anhydrite",
-    "argillite",
-    "basalt",
-    "calcareous",
-    "carbonate",
-    "chalk",
-    "clay",
-    "claystone",
-    "dolomite",
-    "gneiss",
-    "granite",
-    "iron formation",
-    "marl",
-    "mudstone",
-    "oolite",
-    "quartzite",
-    "sand",
-    "siltstone",
-] + list(LITHOLOGIES.values()):
+for lithology in (
+    [
+        "anhydrite",
+        "argillite",
+        "basalt",
+        "calcareous",
+        "carbonate",
+        "chalk",
+        "clay",
+        "claystone",
+        "dolomite",
+        "gneiss",
+        "iron formation",
+        "marl",
+        "mudstone",
+        "oolite",
+        "quartzite",
+        "sand",
+        "siltstone",
+    ]
+    + LITHODEMES
+    + list(LITHOLOGIES.values())
+):
     LITHOLOGIES[lithology] = lithology
 
+LITHODEMES += [
+    "dike",
+    "intrusion",
+    "pluton",
+    "sill",
+]
 
 MODIFIERS = {
     # Position modifiers

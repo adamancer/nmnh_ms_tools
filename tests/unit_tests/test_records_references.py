@@ -128,3 +128,9 @@ def test_ref_to_emu(ref):
         "RefVolume": "55",
         "RefWebSiteIdentifier": "http://doi.org/10.1093/petrology/egu024",
     }
+
+
+def test_ref_from_dict():
+    data = {"entry_type": "article", "year": "2025", "eprint": "https://si.edu"}
+    ref = Reference(data)
+    assert ref.url == data["eprint"]

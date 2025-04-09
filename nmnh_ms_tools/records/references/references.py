@@ -215,7 +215,7 @@ class Reference(Record):
         Parameters
         ----------
         data : str or dict
-            bibliography data or a DOI
+            bibliography data (from EMu or bibtex) or a DOI
 
         Returns
         -------
@@ -225,8 +225,11 @@ class Reference(Record):
         """
         self.verbatim = data
         is_bibtex = False
-        if "RefTitle" in data:
+        if isinstance(data, dict) and "RefTitle" in data:
             parsed = self._parse_emu(data)
+        elif isinstance(data, dict) and "entry_type" in data:
+            parsed = self._parse_bibtex(data)
+            is_bibtex = True
         elif isinstance(data, str):
             if data.startswith("10.") or re.search(r"\bdoi\b", data, flags=re.I):
                 parsed = self.resolve_doi(data)
@@ -373,13 +376,22 @@ class Reference(Record):
 
     def _parse_bibtex(self, data: str) -> dict:
         """Parses a BibTex string"""
-        # Use BibTex data if verbatim if parsing a DOI
-        self.verbatim = data.strip()
-        parsed = parse_bibtex(data)
+        # Use BibTex data for verbatim if parsing a DOI
+        try:
+            self.verbatim = data.strip()
+            parsed = parse_bibtex(data)
+        except AttributeError:
+            self.verbatim = data
+            parsed = data.copy()
         # Combine month and year as date
         month = parsed.pop("month", "")
         year = parsed.pop("year", "")
-        parsed["date"] = (f"{month} {year}").strip()
+        parsed["date"] = (
+            f"{month} {year}" if month.isalpha() else f"{year}-{month}-"
+        ).strip()
+        # Map less common bibtex fields
+        if parsed.get("eprint") and not parsed.get("url"):
+            parsed["url"] = parsed.pop("eprint")
         return parsed
 
     def _parse_ris(self, data: str) -> dict:
@@ -440,7 +452,7 @@ def parse_bibtex(bibtex: str) -> dict:
     Parameters
     ----------
     bibtex : str
-        a BibTex string to parse
+        BibTex data
 
     Returns
     -------

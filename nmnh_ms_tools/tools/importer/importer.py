@@ -58,7 +58,10 @@ class Job(BaseDict):
     """Stores information about field mappings, etc. from import-specific job file"""
 
     def __init__(self, path="job.yml"):
-        super().__init__(self.load(path))
+        if path is None:
+            super().__init__({})
+        else:
+            super().__init__(self.load(path))
         self.used = {}
 
         # Reset map property
@@ -448,6 +451,10 @@ class Source(BaseDict):
     defaults = {}
     missing = {}
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._popped = {}
+
     def pop(self, *args) -> None:
         """Pops a value from the dict
 
@@ -455,12 +462,33 @@ class Source(BaseDict):
         """
         if not args or len(args) > 2:
             raise ValueError(f"pop accepts 1-2 arguments (got {args})")
+
         key = args[0]
+
+        # Literals can be explicitly represented as "literal(Value)"
+        if key and isinstance(key, str):
+            match = re.match(rf"literal\((.*)\)$", key)
+            if match:
+                return match.group(1)
+
+        # Warn but return value if key has been popped from this record already
+        try:
+            val = self._popped[key]
+        except KeyError:
+            pass
+        else:
+            warnings.warn(
+                f"{repr(key)} was already popped from source! Returning {repr(val)}"
+            )
+            return val
+
+        # Check source data for key. If not found,
         try:
             val = super().pop(key)
             if val == "--":
                 val = ""
             self.__class__.found[key] = True
+            self._popped[key] = val
             return val
         except KeyError:
             if len(args) > 1:
@@ -527,6 +555,7 @@ class ImportRecord(EMuRecord):
         self.combined = None
         self.defaults = {}
         self.dynamic_props = {}
+        self.automap = True
         self._source = None
 
         self._catnum = None
@@ -581,7 +610,7 @@ class ImportRecord(EMuRecord):
         self.data = self._check_data(val)
         self._source = Source(deepcopy(self.data))
 
-        if any(self._source.values()):
+        if self.automap and any(self._source.values()):
             # Check for additional data
             join_key = self.job.get("job", {}).get("join_key")
             if join_key:
@@ -1476,7 +1505,7 @@ class ImportRecord(EMuRecord):
     def map_site_number(
         self,
         site_num: str,
-        source: str = "Collector",
+        source: str = None,
         name: str = None,
         rec_class: str = "Event",
     ) -> None:
@@ -1563,13 +1592,16 @@ class ImportRecord(EMuRecord):
         self["LocPermanentLocationRef"] = loc
         self["LocLocationRef_tab"] = [loc]
 
-    def map_strat(self, src: list[str]) -> None:
+    def map_strat(self, src: list[str], remarks: str = None) -> None:
         """Maps lithostrat package from a set of fields
 
         Parameters
         ----------
         src : list[str]
             list of fields containing stratigraphic data or default values
+        remarks : str
+            the value or key in source containing the value for remarks about
+            stratigraphy
 
         Returns
         -------
@@ -1578,8 +1610,9 @@ class ImportRecord(EMuRecord):
         units = [self.pop(src, src) for src in src]
         units = [u for u in units if u]
         units = units[0] if len(units) == 1 else units
+        remarks = self.pop(remarks)
         if units:
-            for key, val in StratPackage(units).to_emu().items():
+            for key, val in StratPackage(units, remarks=remarks).to_emu().items():
                 self._set_path(key, val)
 
     def map_taxa(

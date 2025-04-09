@@ -1,5 +1,4 @@
 import csv
-from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -351,8 +350,17 @@ def expected():
                 "ColDateVisitedTo": EMuDate("Feb 1970"),
                 "ColDateVisitedToModifier": "",
                 "ColParticipantEtAl": "",
-                "ColParticipantRef_tab": [],
-                "ColParticipantRole_tab": [],
+                "ColParticipantRef_tab": [
+                    {
+                        "NamFirst": "Homer",
+                        "NamLast": "Simpson",
+                        "NamMiddle": "",
+                        "NamPartyType": "Person",
+                        "NamSuffix": "",
+                        "NamTitle": "",
+                    },
+                ],
+                "ColParticipantRole_tab": ["Collector"],
                 "ColPermitDescription_tab": [],
                 "ColPermitIssuerRef_tab": [],
                 "ColPermitNumber_tab": [],

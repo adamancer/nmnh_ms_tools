@@ -475,7 +475,7 @@ def test_validate_related(output_dir, validation_dir, validators):
     df = pd.read_csv(val_path)
     assert len(df) == 4
     assert df.iloc[-1].to_dict() == {
-        "Warning": "Inconsistent data in related fields",
+        "Warning": "Inconsistent data in related fields (diff=[('Valid', 'Invalid')])",
         "Module": "ecatalogue",
         "Field": "NotNmnhText0",
         "Value": "Valid",

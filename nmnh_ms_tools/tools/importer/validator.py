@@ -212,7 +212,12 @@ class Validator:
         for (mod, key), vals in self._related.items():
             for val, related in vals.items():
                 if len(related) > 1:
-                    msg = f"Inconsistent data in related fields"
+                    # Identify the offending values
+                    diff = []
+                    for vals in zip(*related):
+                        if len(set(vals)) > 1:
+                            diff.append(vals)
+                    msg = f"Inconsistent data in related fields (diff={diff})"
                     self.invalid[(mod, key, val)] = msg
 
         report = []

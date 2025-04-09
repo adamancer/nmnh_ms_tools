@@ -407,7 +407,9 @@ class CatNum(Record):
                 raise ValueError(f"Could not map {catnum} (primary={repr(primary)})")
             return "REF"
 
-        coll = rec.get("CatCatalog", rec.get("CatDivision"))
+        coll = rec.get("CatDivision")
+        if coll == "Mineralogy":
+            coll = rec.get("CatCatalog", coll)
         if coll:
             return coll[:3].upper()
 
@@ -425,7 +427,7 @@ def parse_catnums(val: str, parser: Parser = MULTIPARSER) -> list[CatNum]:
     Parameters
     ----------
     val : str
-        a value containing catalog numbers to parse
+        text containing one or more catalog numbers
     parser: nmnh_ms_tools.tools.specimen_numbers.Parser
         a specimen number parser
 
@@ -440,21 +442,29 @@ def parse_catnums(val: str, parser: Parser = MULTIPARSER) -> list[CatNum]:
     return catnums
 
 
-def parse_catnum(val: str, parser: Parser = PARSER) -> CatNum:
+def parse_catnum(
+    val: str, parser: Parser = PARSER, force_hyphen: bool = True
+) -> CatNum:
     """Parses a single catalog number from a string
 
     Parameters
     ----------
     val : str
-        a value containing a single catalog number
+        a single catalog number as text
     parser: nmnh_ms_tools.tools.specimen_numbers.Parser
         a specimen number parser
+    force_hyphen : bool
+        whether to standardize the delimiter between the number and suffix to a hyphen
+        before parsing. This allows the parser to handle well-formed catalog numbers
+        that otherwise would be interpreted as two separate numbers.
 
     Returns
     -------
     CatNum
         the parsed catalog number
     """
+    if force_hyphen and isinstance(val, str):
+        val = re.sub(r"(?<=\d)([,/ ]+)(?=[A-Za-z0-9]+$)", "-", val)
     try:
         return CatNum(val, parser=parser)
     except ValueError:
@@ -476,6 +486,11 @@ def is_antarctic(val: str | dict) -> bool:
     bool
         True if string is consistent with NASA meteorite number format
     """
+    if isinstance(val, dict):
+        try:
+            val = val["MetMeteoriteName"]
+        except KeyError:
+            return False
     return bool(
         re.match(r"(" + "|".join(ANTARCTIC_PREFIXES) + r")[A ]?\d{5,6}(?=[^\d]|$)", val)
     )

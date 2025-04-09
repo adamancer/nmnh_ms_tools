@@ -3,7 +3,14 @@
 from .. import _ImportClock
 
 with _ImportClock("records"):
-    from .catnums import CatNum, parse_catnum, parse_catnums, is_antarctic
+    from .catnums import (
+        CatNum,
+        parse_catnum,
+        parse_catnums,
+        is_antarctic,
+        PARSER as CATNUM_PARSER,
+        MULTIPARSER as CATNUM_MULTIPARSER,
+    )
     from .catnums_old import CatNums
     from .classification import (
         TaxaList,
@@ -25,6 +32,6 @@ with _ImportClock("records"):
         is_doi,
         std_doi,
     )
-    from .sites import Site, SEAS, sites_to_geodataframe
+    from .sites import Site, sites_to_geodataframe, SEAS
     from .specimens import Specimen
     from .stratigraphy import StratPackage, StratUnit, parse_strat_units

@@ -23,6 +23,7 @@ from nmnh_ms_tools.records import is_antarctic, parse_catnum, parse_catnums
         ("AB 123456", "AB123456"),
         ("ABC 123456", "ABC123456"),
         ("NMNH 123456", "NMNH 123456"),
+        ("NMNH 123456 1", "NMNH 123456-1"),
         ("NMNH 123456-1", "NMNH 123456-1"),
         ("NMNH 123456-01", "NMNH 123456-01"),
         ("NMNH 123456.0001", "NMNH 123456.0001"),
@@ -65,6 +66,20 @@ def test_parse_catnums(test_input):
         "NMNH 123457",
         "NMNH 123458",
     ]
+
+
+@pytest.mark.parametrize(
+    "test_input,expected",
+    [
+        ("Basalt, NMNH 123456", ["NMNH 123456"]),
+        ("Basalt (NMNH 123456)", ["NMNH 123456"]),
+        ("Basalt (Pahoeoe), NMNH 123456", ["NMNH 123456"]),
+        ("Basalt, NMNH 123456, USNM 123457", ["NMNH 123456", "USNM 123457"]),
+        # ("Basalt (Pahoeoe), NMNH 123456, USNM 123457", ["NMNH 123456", "USNM 123457"]),
+    ],
+)
+def test_parse_catnum_in_text(test_input, expected):
+    assert [str(c) for c in parse_catnums(test_input)] == expected
 
 
 @pytest.mark.parametrize(
@@ -124,6 +139,9 @@ def test_sub(test_input, val, expected):
         ("ALHA84001,A", True),
         ("ALHA84001,1A", True),
         ("ALHA84001,A1", True),
+        ({"MetMeteoriteName": "ALHA84001"}, True),
+        ({"MetMeteoriteName": "ALHA84001,1"}, True),
+        ({}, False),
     ],
 )
 def test_is_antarctic(test_input, expected):

@@ -70,13 +70,13 @@ class Parser:
     def extract_code(self, val):
         """Extracts the museum code from a catalog number"""
         pattern = r"\(?[A-Z]{4}\)?"
-        try:
-            code = re.search(pattern, val).group()
-        except AttributeError:
-            return None, val
-        else:
+        codes = re.findall(pattern, val)
+        if len(set(codes)) > 1:
+            raise ValueError(f"Multiple codes identified in {repr(val)}")
+        elif len(set(codes)) == 1:
             val = re.sub(pattern, "", val).strip()
-            return code.strip("()"), val
+            return codes[0].strip("()"), val
+        return None, val
 
     def delimit_codes(self, val):
 
@@ -149,7 +149,7 @@ class Parser:
 
         return val
 
-    def extract(self, val):
+    def extract(self, val, code=None):
 
         orig = val
 
@@ -171,7 +171,6 @@ class Parser:
         logger.debug(f"Split {repr(orig)} into {repr(vals)}")
 
         extracted = {}
-        code = None
         for verbatim in vals:
 
             # Drop values that don't include numbers
@@ -181,11 +180,20 @@ class Parser:
             val = self.prepare(verbatim)
 
             # Extract the museum code for the current segment
-            code_, val = self.extract_code(val)
-            if code_:
-                code = code_
-            if self.require_code and not code:
-                raise ValueError(f"No museum code: {val}")
+            try:
+                code_, val = self.extract_code(val)
+            except ValueError:
+                pass
+            else:
+                if code_:
+                    code = code_
+                if self.require_code and not code:
+                    raise ValueError(f"No museum code: {val}")
+                elif code_:
+                    logger.debug(
+                        f"Extracted code={repr(code)}, val={repr(val)}"
+                        f" from verbatim={repr(verbatim)}"
+                    )
 
             # Interpret runs of numbers separated by spaces
             if not self.clean:
@@ -194,19 +202,22 @@ class Parser:
                     logger.debug(f"Squashed {repr(val)} as {repr(val_)}")
                     val = val_
 
-            # Remove spaces where a number follows a letter
-            val = re.sub(r"([A-Z]) (\d)", r"\1\2", val, flags=re.I)
+            # FIXME: This is trash. Find a better way to do this.
+
+            # Remove spaces where a number follows a letter before splitting on
+            # soft delimiters
+            val = re.sub(r"\b([A-Z]) (\d)", r"\1\2", val, flags=re.I)
 
             # Split on soft delimiters and group parts
             parts = re.split(r"([;,/& ]+)", val)
             parts_ = [(None, parts.pop(0))]
             while parts:
                 parts_.append((parts.pop(0), parts.pop(0)))
+            logger.debug(f"Split {repr(val)} on soft delimiters into {repr(parts_)}")
 
             try:
                 spec_nums = self.group(parts_)
             except ValueError:
-                logger.exception("Evaluation failed")
                 if fallback:
                     logger.debug(
                         f"Falling back to parse of complete value"
@@ -214,8 +225,16 @@ class Parser:
                     )
                     return {orig: fallback}
                 else:
-                    logger.warning(f"Failed to parse {repr(val)}")
-                    extracted[val] = []
+                    # Try to re-parse by treating soft delimiters as hard delimiters
+                    extracted_ = self.extract(
+                        "; ".join([p[1] for p in parts_]), code=code
+                    )
+                    if extracted_:
+                        for verbatim, spec_nums in extracted_.items():
+                            extracted.setdefault(verbatim, []).extend(spec_nums)
+                    else:
+                        logger.warning(f"Failed to parse {repr(val)}")
+                        extracted[val] = []
             else:
                 for spec_num in spec_nums:
                     if spec_num.is_valid(min_num=self.min_num, max_diff=self.max_diff):

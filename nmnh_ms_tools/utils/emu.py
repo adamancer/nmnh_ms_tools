@@ -78,7 +78,7 @@ def create_note(text, module=None, mod="", maxlen=80, **kwargs):
     return {f"{mapping[k]}{mod}": v for k, v in note.items()}
 
 
-def create_markdown_note(data, text, mod="+", **kwargs):
+def create_change_note(data, text, mod="+", **kwargs):
     """Creates a note explaining a change in EMu
 
     The note is generally formatted as follows:

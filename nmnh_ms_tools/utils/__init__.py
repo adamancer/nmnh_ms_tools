@@ -38,7 +38,7 @@ with _ImportClock("utils"):
     )
     from .emu import (
         create_note,
-        create_markdown_note,
+        create_change_note,
         create_yaml_note,
     )
     from .files import (

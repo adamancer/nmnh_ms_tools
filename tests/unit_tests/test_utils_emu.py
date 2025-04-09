@@ -3,10 +3,10 @@
 import pytest
 
 
-from nmnh_ms_tools.utils import create_markdown_note, create_yaml_note
+from nmnh_ms_tools.utils import create_change_note, create_yaml_note
 
 
-def test_create_markdown_note():
+def test_create_change_note():
     data = [
         ("Simple Change", "A", "B"),
         ("Manual Change", "Change recorded manually"),
@@ -15,7 +15,7 @@ def test_create_markdown_note():
         ("List Item Added", ["A"], ["A", "B"]),
         ("List Item Removed", ["A", "B"], ["A"]),
     ]
-    assert create_markdown_note(data, "Markdown note", date="1970-01-01") == {
+    assert create_change_note(data, "Markdown note", date="1970-01-01") == {
         "NteAttributedToRef_nesttab(+)": [[1006206]],
         "NteDate0(+)": ["1970-01-01"],
         "NteMetadata_tab(+)": ["No"],
@@ -39,4 +39,4 @@ def test_create_yaml_note():
 
 def test_long_first_line():
     with pytest.raises(ValueError):
-        create_markdown_note([("k", "o", "v")], "Long first line", maxlen=1)
+        create_change_note([("k", "o", "v")], "Long first line", maxlen=1)

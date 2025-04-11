@@ -1,6 +1,6 @@
 """Defines methods for parsing and manipulating references"""
 
-from .references import Reference
+from .references import Reference, format_doi
 from .bibtex_old import BibTeXMapper
 from .references_old import (
     Citation,

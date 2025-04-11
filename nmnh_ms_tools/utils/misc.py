@@ -65,7 +65,9 @@ def prompt(
     if isinstance(validator, str):
         validator = re.compile(validator, re.U)
     elif isinstance(validator, dict) and sorted(validator.keys()) == ["n", "y"]:
-        text = "{} ".format(text, "/".join(list(validator.keys())))
+        validator[""] = False
+        text += "(y/[n]) "
+        print(text)
     elif isinstance(validator, dict):
         keys = list(validator.keys())
         keys.sort(key=lambda s: s.zfill(100))

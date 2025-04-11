@@ -1156,7 +1156,9 @@ class Site(Record):
             geom, source_ = get_alt_geometry(self.location_id)
         except UnboundExecutionError:
             warn("geohelper database not initiated")
-        except OperationalError:
+        except OperationalError as exc:
+            if "Could not decode to UTF-8" in str(exc):
+                raise
             warn("alternative_polygons table does not exist")
         finally:
             # Store the geometry in bbox so it is available if converted to dict

@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import warnings
 from collections import namedtuple
 from pathlib import Path
@@ -360,3 +361,39 @@ def read_yaml(
             raise
         warnings.warn(f"{repr(fp)} invalid")
         return {}
+
+
+def get_citrix_path(path: str | Path) -> Path:
+    """Convert a Windows path to a Citrix path
+
+    Parameters
+    ----------
+    path: str | Path
+        a file path
+
+    Returns
+    -------
+    Path
+        a Citrix path
+    """
+    parts = Path(path).resolve().parts
+    drive = re.search(r"([A-Za-z]).*?$", parts[0][::-1]).group(1).upper()
+    return Path(rf"\\Client\{drive}$\\").joinpath(*parts[1:])
+
+
+def get_windows_path(path: str | Path) -> Path:
+    """Convert a Citrix path to a Windows path
+
+    Parameters
+    ----------
+    path: str | Path
+        a file path
+
+    Returns
+    -------
+    Path
+        a Windows path
+    """
+    parts = Path(path).resolve().parts
+    drive = re.search(r"([A-Za-z]).*?$", parts[0][::-1]).group(1).upper()
+    return Path(drive + r":\\").joinpath(*parts[1:])

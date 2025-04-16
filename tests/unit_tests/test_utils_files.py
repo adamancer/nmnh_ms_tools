@@ -8,6 +8,8 @@ from PIL import Image
 
 from nmnh_ms_tools.utils import (
     HashCheck,
+    get_citrix_path,
+    get_windows_path,
     hasher,
     hash_file,
     hash_image_data,
@@ -15,6 +17,7 @@ from nmnh_ms_tools.utils import (
     is_newer,
     fast_hash,
     skip_hashed,
+    ucfirst,
 )
 
 
@@ -147,6 +150,26 @@ def test_is_different_image(black_image, white_image):
     assert is_different(black_image, white_image, compare_image_data=True)
     assert not is_different(black_image, black_image, compare_image_data=True)
     assert not is_different(white_image, white_image, compare_image_data=True)
+
+
+@pytest.mark.parametrize(
+    "test_input,expected",
+    [
+        (r"A:\PATH\TO\FILE.TXT", r"\\Client\A$\PATH\TO\FILE.TXT"),
+        (r"B:\PATH\TO\FILE.TXT", r"\\Client\B$\PATH\TO\FILE.TXT"),
+        (r"C:\PATH\TO\FILE.TXT", r"\\Client\C$\PATH\TO\FILE.TXT"),
+        (r"D:\PATH\TO\FILE.TXT", r"\\Client\D$\PATH\TO\FILE.TXT"),
+        (r"a:\path\to\file.txt", r"\\Client\A$\path\to\file.txt"),
+        (r"b:\path\to\file.txt", r"\\Client\B$\path\to\file.txt"),
+        (r"c:\path\to\file.txt", r"\\Client\C$\path\to\file.txt"),
+        (r"d:\path\to\file.txt", r"\\Client\D$\path\to\file.txt"),
+    ],
+)
+def test_citrix_path(test_input, expected):
+    path = get_citrix_path(test_input)
+    assert str(path) == expected
+    assert str(get_windows_path(test_input)) == ucfirst(test_input)
+    assert str(get_windows_path(path)) == ucfirst(test_input)
 
 
 def test_missing_hash(hashcheck):

@@ -108,10 +108,13 @@ class Reference(Record):
         "report": "techreport",
         "report-component": "techreport",
         # RIS
+        "chap": "incollection",
         "doctoral thesis": "phdthesis",
+        "thesis / dissertation": "phdthesis",
     }
     bib_to_emu = {
         "incollection": "Chapter",
+        "phdthesis": "Thesis",
     }
     formatter = CSEFormatter
     irns = {}
@@ -237,7 +240,7 @@ class Reference(Record):
             elif data.startswith("@"):
                 parsed = self._parse_bibtex(data)
                 is_bibtex = True
-            elif "TI  - " in data:
+            elif "TI  - " in data or "T1  - ":
                 parsed = self._parse_ris(data)
                 is_bibtex = True
             else:
@@ -331,7 +334,8 @@ class Reference(Record):
         rec["RefVolume"] = self.volume
         rec["RefIssue"] = self.number
         rec["RefPage"] = self.pages
-        rec["RefWebSiteIdentifier"] = self.url.replace("dx.doi", "doi")
+        if self.url:
+            rec["RefWebSiteIdentifier"] = self.url.replace("dx.doi", "doi")
 
         for person in self.author:
             person = person.to_emu()
@@ -359,7 +363,7 @@ class Reference(Record):
                 rec.setdefault("RefOtherIdentifierSource_tab", []).append(kind)
                 rec.setdefault("RefOtherIdentifier_tab", []).append(val)
 
-        if not self.doi and "doi.org" in self.url:
+        if not self.doi and self.url and "doi.org" in self.url:
             self.doi = self.url
 
         if self.doi:
@@ -396,28 +400,41 @@ class Reference(Record):
 
     def _parse_ris(self, data: str) -> dict:
         """Parses a RIS string"""
+        orig = data
+
         # Convert str to dict
-        lines = [s.split("  - ", 1) for s in data.strip().splitlines()]
-        data = dict([s for s in lines if len(s) > 1])
+        data = {}
+        for line in orig.strip().splitlines():
+            key, val = re.split(" *- *", line, 1)
+            if val:
+                data.setdefault(key, []).append(val)
+        data = {k: v[0] if len(v) == 1 else v for k, v in data.items()}
 
         mapped = {}
         mapped["entry_type"] = self.src_to_bib[data.pop("TY").lower()]
         mapped["author"] = data.pop("AU", None)
-        mapped["publisher"] = data.pop("DP", None)
         mapped["url"] = data.pop("UR", None)
+        mapped["booktitle"] = data.pop("BT", None)
+
+        pages = {p: None for p in [data.pop("SP", None), data.pop("EP", None)] if p}
+        mapped["pages"] = "-".join(pages)
 
         # Check multikey fields
         titles = _ordered_pop(data, ["TI", "T1"])
         if titles:
             mapped["title"] = titles[0]
 
-        dates = _ordered_pop(data, ["DA", "PY"])
+        dates = _ordered_pop(data, ["DA", "PY", "Y1"])
         if dates:
             mapped["date"] = dates[0]
 
+        pubs = _ordered_pop(data, ["PB", "DP"])
+        if pubs:
+            mapped["publisher"] = pubs[0]
+
         data = {k: v for k, v in data.items() if k not in ["AB"]}
         if data:
-            print(data)
+            print("Not parsed:", data)
 
         return mapped
 

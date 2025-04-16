@@ -49,6 +49,8 @@ with _ImportClock("utils"):
         hasher,
         is_different,
         is_newer,
+        get_citrix_path,
+        get_windows_path,
         read_csv,
         read_json,
         read_tsv,

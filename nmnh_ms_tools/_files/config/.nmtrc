@@ -87,6 +87,8 @@ georeferencing:
         - CLDA
         - CONE
         - CRTR
+        - GVPVLC
+        - GVPVLF
         - VLC
         - VLF
         - VLS

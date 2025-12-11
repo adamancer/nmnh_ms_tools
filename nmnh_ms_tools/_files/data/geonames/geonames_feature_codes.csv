@@ -674,3 +674,8 @@ V,TREE,,1,,,tree(s),a conspicuous tree used as a landmark
 V,TUND,,128,,,tundra,"a marshy, treeless, high latitude plain, dominated by mosses, lichens, and low shrub vegetation under permafrost conditions"
 V,VIN,,1,,,vineyard,a planting of grapevines
 V,VINS,,2,,,vineyards,plantings of grapevines
+T,GVPVLC,,8,,,volcano,a conical elevation composed of volcanic materials with a crater at the top
+T,GVPVLF,,8,,,volcanic field,a volcanic field
+T,GVPSUB,,2,,,volcanic subfeature,a volcanic subfeature like a cinder cone or maar
+T,VLF,,8,,,volcanic field,a volcanic field
+T,VLS,,2,,,volcanic subfeature,a volcanic subfeature like a cinder cone or maar

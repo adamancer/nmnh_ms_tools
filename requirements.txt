@@ -2,6 +2,7 @@ beautifulsoup4
 bibtexparser
 geographiclib
 geopandas
+gliner
 html5lib
 inflect
 lxml
@@ -20,6 +21,7 @@ six
 SQLAlchemy
 titlecase
 Unidecode
+xmu
 
 coverage
 pytest

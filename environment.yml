@@ -3,13 +3,14 @@ channels:
 - conda-forge
 - default
 dependencies:
-- python=>3.8
+- python=>3.8,<3.11
 - pip
 - bibtexparser
 - bs4
 - dateparser
 - geographiclib
 - geopandas
+- gliner
 - html5lib
 - inflect
 - lxml
@@ -34,3 +35,6 @@ dependencies:
 - coverage
 - pytest
 - pytest-mock
+# pip packages
+- pip:
+  - xmu

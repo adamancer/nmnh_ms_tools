@@ -2,7 +2,7 @@
 
 import re
 from datetime import date, datetime, timedelta
-from functools import cache, cached_property, total_ordering
+from functools import cached_property, total_ordering
 
 from xmu import EMuDate
 
@@ -15,8 +15,8 @@ class FiscalYear:
 
     Parameters
     ----------
-    year : int
-        the fiscal year
+    dt : datetime.date | datetime.datetime | str
+        date or year to map to a fiscal year
 
     Attributes
     ----------
@@ -24,8 +24,9 @@ class FiscalYear:
         the fiscal year
     """
 
-    def __init__(self, year):
-        self.year = year
+    def __init__(self, dt):
+        dt = EMuDate(dt)
+        self.year = dt.year + (1 if dt.month in (10, 11, 12) else 0)
 
     def __setattr__(self, attr, val):
         return set_immutable(self, attr, val)
@@ -40,12 +41,14 @@ class FiscalYear:
         return str(self)
 
     def __eq__(self, other):
-        return self.year == other.year
+        return self.year == FiscalYear(other).year
 
     def __lt__(self, other):
-        return self.year < other.year
+        return self.year < FiscalYear(other).year
 
     def __contains__(self, dt):
+        if isinstance(dt, str):
+            return dt in str(self)
         try:
             return self.start_date <= dt <= self.end_date
         except TypeError:
@@ -161,49 +164,6 @@ class DateRange:
         )
 
 
-@cache
-def fy(year: int) -> FiscalYear:
-    """Creates a fiscal year object
-
-    Parameters
-    ----------
-    year : int | str
-        the full fiscal year as either an integer or a string ending with YYYY
-
-    Returns
-    -------
-    FiscalYear
-        a FiscalYear object representing the given year
-    """
-    if isinstance(year, str):
-        return fy(int(year[-4:]))
-    return FiscalYear(year)
-
-
-def get_fy(dt: date | datetime | str):
-    """Get the fiscal year for the specified date
-
-    Parameters
-    ----------
-    dt : datetime.date | datetime.datetime | str
-        date to check
-
-    Returns
-    -------
-    FiscalYear
-        the FiscalYear corresponding to the specified date
-    """
-    try:
-        fyear = fy(dt.year)
-    except AttributeError as exc:
-        try:
-            return get_fy(datetime.fromisoformat(dt))
-        except:
-            raise exc
-    else:
-        return fyear if dt in fyear else fyear + 1
-
-
 def add_years(dt: date | datetime, num_years: int) -> date | datetime:
     """Adds the specified number of years to a date, accounting for Feb 29
 
@@ -229,7 +189,7 @@ def add_years(dt: date | datetime, num_years: int) -> date | datetime:
 
 def _remove_time(val: str) -> str:
     """Removes the time from a date"""
-    return re.split(r"\d+:", val)[0]
+    return re.split(r"\d+:", val)[0].strip()
 
 
 def _get_years(val: str) -> list[str]:

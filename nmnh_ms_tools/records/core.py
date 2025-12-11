@@ -57,7 +57,7 @@ class Record:
         try:
             self._url = None
         except AttributeError as exc:
-            if "Cannot modify existing attribute" not in str(exc):
+            if "Cannot modify immutable attribute" not in str(exc):
                 raise
         # Define indexing and cache params
         self.from_cache = False
@@ -66,7 +66,7 @@ class Record:
         try:
             self._writable = ["from_cache"]
         except AttributeError as exc:
-            if not "Cannot modify existing" in str(exc):
+            if not "Cannot modify immutable" in str(exc):
                 raise
 
         if not data:
@@ -109,7 +109,10 @@ class Record:
         set_immutable(self, attr, val, cls=Record)
 
     def __delattr__(self, attr):
-        del_immutable(self, attr)
+        # Hardcode Record so that subclasses that also call set_immutable (for
+        # example, to include a class-specific list of overwritable fields) do
+        # not get stuck in a recursion.
+        del_immutable(self, attr, cls=Record)
 
     def __eq__(self, other):
         return self.same_as(other, strict=True)

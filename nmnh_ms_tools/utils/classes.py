@@ -277,8 +277,11 @@ def custom_eq(inst: Any, other: Any, coerce: bool = False, ignore: list = None) 
         inst_val = getattr(inst, attr)
         other_val = getattr(other, attr)
         if isinstance(inst_val, (BaseGeometry, pd.Series, pd.DataFrame)):
-            if not inst_val.equals(other_val):
-                return False
+            try:
+                if not inst_val.equals(other_val):
+                    return False
+            except Exception as exc:
+                raise Exception("Could not compare {inst_val} and {other_val}") from exc
         elif inst_val != other_val:
             return False
     return True
@@ -299,7 +302,7 @@ def set_immutable(inst: Any, attr: str, val: Any, cls: type = None):
     val :
         the value to which to set the attribute
     cls : class
-        a Python class. Not needed unless
+        a Python class
 
     Returns
     -------
@@ -324,7 +327,7 @@ def set_immutable(inst: Any, attr: str, val: Any, cls: type = None):
             )
 
 
-def del_immutable(inst: Any, attr: str):
+def del_immutable(inst: Any, attr: str, cls: type = None):
     """Raises an error when trying to delete an immutable attribute
 
     Parameters
@@ -333,15 +336,20 @@ def del_immutable(inst: Any, attr: str):
         an object
     attr : str
         an attribute name
+    cls : class
+        a Python class
 
     Raises
     ------
     AttributeError
     """
+    if cls is None:
+        cls = inst.__class__
     if attr != "_mutable":
         raise AttributeError(
             f"Cannot delete immutable attribute {repr(attr)} from {inst.__class__.__name__} object"
         )
+    super(cls, inst).__delattr__(attr)
 
 
 @contextmanager

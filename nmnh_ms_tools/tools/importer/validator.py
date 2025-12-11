@@ -22,6 +22,7 @@ from xmu import (
 from ...bots import Bot
 from ...config import CONFIG
 from ...records import CatNum, Reference, Site, get_tree, is_antarctic
+from ...utils import get_windows_path
 
 
 class Validator:
@@ -299,7 +300,7 @@ class Validator:
                     dtypes[validation](obj)
                     is_dtype = True
                 except ValueError:
-                    pass
+                    raise
             return is_dtype
         except KeyError:
             pass
@@ -308,8 +309,8 @@ class Validator:
         if validation == "PathExists":
             try:
                 # Convert Citrix paths to local for validation
-                open(obj.replace("\\\\Client\\C$", "C:", 1))
-                return True
+                with open(get_windows_path(obj)):
+                    return True
             except FileNotFoundError:
                 return False
 
@@ -409,7 +410,11 @@ class Validator:
             except KeyError:
                 dct[str(obj)] = 1
 
-            valid = self.is_valid(obj, module, field)
+            try:
+                valid = self.is_valid(obj, module, field)
+            except Exception:
+                raise
+                valid = False
             if not valid:
                 self.invalid[(module, field, str(obj))] = None
             elif self._is_mangled_date(obj, module, field):

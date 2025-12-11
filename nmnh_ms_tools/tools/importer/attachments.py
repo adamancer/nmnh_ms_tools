@@ -11,8 +11,18 @@ class Attachment:
 
     irns = {}
     fields = []
+    unit_conversion_fields = []
 
     def __init__(self, rec, irns=None):
+        # Check for errors in field lists
+        for fields in self.unit_conversion_fields:
+            for field in fields:
+                if field in self.fields:
+                    raise ValueError(
+                        f"{repr(field)} appears in both {self.__class__.__name}.fields"
+                        f" and {self.__class__.__name}.unit_conversion_fields"
+                    )
+
         self.rec = deepcopy(rec)
         if irns:
             self.__class__.irns = irns
@@ -48,6 +58,23 @@ class Attachment:
             return rec
         for field in self.fields:
             rec.setdefault(field, [] if is_tab(field) else None)
+        # EMu includes conversions for some fields, like depths or coordinates, that
+        # are populated when the record is created. These will prevent records
+        # being matched during import. To get around this, we'll go through a list
+        # of equivalent fields for different units. If any are populated, remove the
+        # blank fields. If none are, include all related fields as blanks.
+        for fields in self.unit_conversion_fields:
+            vals = {f: rec.get(f) for f in fields}
+            if any(vals.values()):
+                for key, val in vals.items():
+                    if not val:
+                        try:
+                            del rec[key]
+                        except KeyError:
+                            pass
+            else:
+                for field in fields:
+                    rec.setdefault(field, [] if is_tab(field) else None)
         return {f: rec[f] for f in sorted(rec)}
 
 
@@ -129,23 +156,17 @@ class CollectionEvent(Attachment):
         "ExpCompletionDate",
         "ColCollectionMethod",
         # Depth
-        "AquDepthFromMet",
         "AquDepthFromModifier",
-        "AquDepthToMet",
         "AquDepthToModifier",
         "AquDepthDetermination",
         "AquVerbatimDepth",
-        "AquBottomDepthFromMet",
         "AquBottomDepthFromModifier",
-        "AquBottomDepthToMet",
         "AquBottomDepthToModifier",
         "AquBottomDepthDetermination",
         "AquVerbatimBottomDepth",
         "DepSourceOfSample",
         # Elevation
-        "TerElevationFromMet",
         "TerElevationFromModifier",
-        "TerElevationToMet",
         "TerElevationToModifier",
         "TerElevationDetermination",
         "TerVerbatimElevation",
@@ -158,11 +179,10 @@ class CollectionEvent(Attachment):
         "LatGeoreferencingNotes0",
         "LatLatLongDetermination_tab",
         "LatLatitudeVerbatim_nesttab",
-        "LatLatitude_nesttab",
         "LatLongitudeVerbatim_nesttab",
-        "LatLongitude_nesttab",
         "LatRadiusNumeric_tab",
         "LatRadiusUnit_tab",
+        "LatRadiusVerbatim_tab",
         # Mapping (1)
         "MapUTMEastingFloat_tab",
         "MapUTMNorthingFloat_tab",
@@ -211,4 +231,14 @@ class CollectionEvent(Attachment):
         "AdmGUIDIsPreferred_tab",
         "AdmGUIDType_tab",
         "AdmGUIDValue_tab",
+    ]
+    unit_conversion_fields = [
+        ("AquBottomDepthFromFath", "AquBottomDepthFromFt", "AquBottomDepthFromMet"),
+        ("AquBottomDepthToFath", "AquBottomDepthToFt", "AquBottomDepthToMet"),
+        ("AquDepthFromFath", "AquDepthFromFt", "AquDepthFromMet"),
+        ("AquDepthToFath", "AquDepthToFt", "AquDepthToMet"),
+        ("LatLatitude_nesttab", "LatLatitudeDecimal_nesttab"),
+        ("LatLongitude_nesttab", "LatLongitudeDecimal_nesttab"),
+        ("TerElevationFromFt", "TerElevationFromMet"),
+        ("TerElevationToFt", "TerElevationToMet"),
     ]

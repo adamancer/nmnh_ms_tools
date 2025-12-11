@@ -171,12 +171,15 @@ class Job(BaseDict):
                 )
             )
 
+        try:
+            cataloger = self["fields"]["cataloging"]["cataloged_by"]["kwargs"]["src"]
+        except KeyError:
+            cataloger = self["fields"]["cataloging"]["cataloged_by"]["default"]
+
         name = self["job"]["name"]
         rec = {
             "MulTitle": f"Batch import spreadsheet for the {name}",
-            "MulCreator_tab": [
-                self["fields"]["cataloging"]["cataloged_by"]["kwargs"]["src"]
-            ],
+            "MulCreator_tab": [cataloger],
             "MulDescription": (
                 f"Excel workbook used to import the {name}. The workbook submitted by the cataloger was"
                 f" edited by the data manager to improve the specificity, consistency, and accuracy"
@@ -411,9 +414,10 @@ class Job(BaseDict):
                                 }
                             )
 
-        return pd.DataFrame(changes)[
-            ["sheet", "row", "col", "orig", "clean", "lev_dist", "note"]
-        ]
+        if changes:
+            return pd.DataFrame(changes)[
+                ["sheet", "row", "col", "orig", "clean", "lev_dist", "note"]
+            ]
 
     def _add_source(self, path: str, join_key: str) -> None:
         """Adds ancillary records to the ImportRecord"""
@@ -482,7 +486,7 @@ class Source(BaseDict):
             )
             return val
 
-        # Check source data for key. If not found,
+        # Check source data for key
         try:
             val = super().pop(key)
             if val == "--":
@@ -583,6 +587,8 @@ class ImportRecord(EMuRecord):
         :getattr: returns the name of the cataloger
         :type: str
         """
+        if not self._cataloger:
+            self._cataloger = str(self["CatCatalogedBy"])
         return self._cataloger
 
     @property
@@ -964,10 +970,12 @@ class ImportRecord(EMuRecord):
         -------
         None
         """
+        date_from = self.pop(src_from)
+        date_to = self.pop(src_to, date_from)
         try:
-            dates = DateRange(self.pop(src_from), self.pop(src_to, src_to))
+            dates = DateRange(date_from, date_to)
         except ValueError:
-            pass
+            raise ValueError(date_from)
         else:
             val_from = dates.from_val
             val_to = dates.to_val
@@ -1312,7 +1320,7 @@ class ImportRecord(EMuRecord):
 
             by = self.pop(by, by)
             if not by:
-                by = self["CatCatalogedByRef"]
+                by = self.cataloger
 
             # Split related into lists
             date = split(date, delim=delim)
@@ -1379,8 +1387,9 @@ class ImportRecord(EMuRecord):
         prep: str = None,
         remarks: str = None,
         remarks_only: bool = False,
+        infer_count: bool = False,
     ) -> None:
-        """Maps a single prep from a column containing the prep count
+        """Maps a single prep from a column containing a count and/or remark
 
         Parameters
         ----------
@@ -1396,6 +1405,8 @@ class ImportRecord(EMuRecord):
             If src also contains text, src and remarks will be combined.
         remarks_only : bool, default=False
             whether remarks should be published without a count
+        infer_count : bool, default = False
+            whether a count of 1 should be assigned where no count is provided
 
         Returns
         -------
@@ -1406,24 +1417,47 @@ class ImportRecord(EMuRecord):
         remarks = self.pop(remarks, remarks)
         for key in as_list(src):
             try:
-                val = self.pop(key)
+                vals = [s[0] for s in split(self.pop(key)) if s]
             except KeyError:
                 pass
             else:
-                if val:
+                for val in vals:
+                    remarks_ = None
+
+                    # Allow remark (count) as well
+                    if "(" in val:
+                        orig = val
+                        try:
+                            remarks_, val = [s.strip(" )") for s in val.split("(")]
+                        except ValueError as exc:
+                            if infer_count:
+                                remarks_ = val
+                                val = 1
+                            else:
+                                raise ValueError(f"Invalid prep: {repr(orig)}") from exc
+                        if not val.isnumeric():
+                            raise ValueError(f"Invalid prep: {repr(orig)}")
+                        if remarks and remarks_:
+                            remarks_ = f"{remarks_.rstrip('. ')}. {ucfirst(remarks).strip('. ')}."
+                        elif remarks:
+                            remarks_ = remarks
+
                     val = val.lstrip("0")
                     if val and not val.isnumeric():
                         if remarks:
-                            remarks = (
+                            remarks_ = (
                                 f"{val.rstrip('. ')}. {ucfirst(remarks).strip('. ')}."
                             )
                         else:
-                            remarks = val
+                            remarks_ = val
                         val = None
-                    if val or remarks and remarks_only:
+
+                    if val or remarks_ and remarks_only:
                         self.setdefault("ZooPreparationCount_tab", []).append(val)
                         self.setdefault("ZooPreparation_tab", []).append(prep)
-                        self.setdefault("ZooPreparationRemarks_tab", []).append(remarks)
+                        self.setdefault("ZooPreparationRemarks_tab", []).append(
+                            remarks_
+                        )
                 return
         raise KeyError(f"'{src}' not found in source")
 
@@ -1448,6 +1482,26 @@ class ImportRecord(EMuRecord):
         if not named_part.startswith("Primary"):
             named_part = f"Primary {named_part}"
         return self.map_taxa(src, named_part, texture_structure, id_by, comments)
+
+    def map_record_classification(self):
+        """Maps record classification for Collection Event records
+
+        Returns
+        -------
+        None
+        """
+        for key in (
+            "AquVesselName",
+            "ColCollectionMethod",
+            "ColParticipantRef_tab",
+            "ColVerbatimDate",
+            "ExpExpeditionName",
+        ):
+            if self.get("BioEventSiteRef", {}).get(key):
+                self["BioEventSiteRef"]["LocRecordClassification"] = "Collection Event"
+                break
+        else:
+            self["BioEventSiteRef"]["LocRecordClassification"] = "Site"
 
     def map_related(self, src, relationship) -> None:
         """Maps a relationship to another object
@@ -1507,7 +1561,7 @@ class ImportRecord(EMuRecord):
         site_num: str,
         source: str = None,
         name: str = None,
-        rec_class: str = "Event",
+        rec_class: str = "Collection Event",
     ) -> None:
         """Maps a site/station number from the source
 
@@ -1519,7 +1573,7 @@ class ImportRecord(EMuRecord):
             the database, system, or role of the person who assigned the site identifier
         name : str, optional
             the name of the site represented by the identifier
-        rec_class : str, default="Event"
+        rec_class : str, default="Collection Event"
             a high-level classification for a Collection Event record. Should be either
             Site (for a generic location record) or Event (for a specific collecting
             event).
@@ -1873,7 +1927,7 @@ class ImportRecord(EMuRecord):
             path = str(
                 Path(self.job["job"]["import_file"]).parent
                 / "receipts"
-                / f"{to_attribute(str(self.catnum))}.txt"
+                / f"{to_attribute(str(self.catnum)).replace("_", "-")}.txt"
             )
 
         # Add suffix to filename if path already exists. This allows duplicate

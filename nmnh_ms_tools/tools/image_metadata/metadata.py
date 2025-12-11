@@ -2,11 +2,13 @@ import pprint
 import re
 import shutil
 import subprocess
+import time
 import warnings
+from mimetypes import guess_type
 from pathlib import Path
 
-from ..specimen_numbers import parse_spec_num
 from ...config import CONFIG
+from ...records import parse_catnums
 from ...utils import (
     LazyAttr,
     hash_file,
@@ -48,7 +50,7 @@ class MetadataField:
             vals = [vals]
         args = {}
         for val in vals:
-            if len(val) > self.length:
+            if isinstance(val, str) and len(val) > self.length:
                 warnings.warn(
                     f"Value too long: {self.write_fields} == {repr(val)} (max={self.length})"
                 )
@@ -77,6 +79,8 @@ class MediaFile:
             self.path = data["Multimedia"]
             self._metadata = {}
             self._mapped = self.from_emu(data)
+
+        self.mimetype = guess_type(self.path)[0]
 
     def __str__(self):
         return pprint.pformat(self.mapped)
@@ -112,6 +116,10 @@ class MediaFile:
             return False
         return True
 
+    @property
+    def is_image(self):
+        return self.mimetype.startswith("image/")
+
     def hash(self):
         return hash_file(self.path)
 
@@ -119,28 +127,31 @@ class MediaFile:
         return hash_image_data(self.path)
 
     def read_metadata(self, **kwargs):
-        cmd = ["exiftool", self.path]
-        for key, val in kwargs.items():
-            cmd.extend([f"-{key}", val])
-        result = subprocess.run(cmd, capture_output=True)
         metadata = {}
-        for line in re.split(rb"(?:\r\n|\n)", result.stdout):
-            try:
-                key, val = [s.strip() for s in line.split(b":", 1)]
-            except ValueError:
-                pass
-            else:
-                # HACK: Fix bizarro encoding
-                val = val.replace(b"\xd2", b'"')
-                val = val.replace(b"\xd3", b'"')
-                val = val.replace(b"\xd5", b"'")
-                val = val.replace(b"\xe2\x80\x99", b"'")
+        if self.is_image:
+            cmd = ["exiftool", self.path]
+            for key, val in kwargs.items():
+                cmd.extend([f"-{key}", val])
+            result = subprocess.run(cmd, capture_output=True)
+            for line in re.split(rb"(?:\r\n|\n)", result.stdout):
                 try:
-                    metadata[key.decode()] = val.decode(kwargs.get("charset", "utf-8"))
-                except UnicodeDecodeError as exc:
-                    raise ValueError(
-                        f"Could not decode metadata in {self.path}: {key} => {val}"
-                    ) from exc
+                    key, val = [s.strip() for s in line.split(b":", 1)]
+                except ValueError:
+                    pass
+                else:
+                    # HACK: Fix bizarro encoding
+                    val = val.replace(b"\xd2", b'"')
+                    val = val.replace(b"\xd3", b'"')
+                    val = val.replace(b"\xd5", b"'")
+                    val = val.replace(b"\xe2\x80\x99", b"'")
+                    try:
+                        metadata[key.decode()] = val.decode(
+                            kwargs.get("charset", "utf-8")
+                        )
+                    except UnicodeDecodeError as exc:
+                        raise ValueError(
+                            f"Could not decode metadata in {self.path}: {key} => {val}"
+                        ) from exc
         self._metadata = metadata
         return metadata
 
@@ -167,11 +178,14 @@ class MediaFile:
         return self.metadata
 
     def embed_metadata(self, path=None, **kwargs):
-        command = ["exiftool"]
+
+        if not self.is_image:
+            raise ValueError(f"Cannot embed metadata into file: {self.path.name}")
 
         if not kwargs:
             raise ValueError("No metadata provided")
 
+        command = ["exiftool"]
         structures = {}
         for key, field in self.fields.items():
             vals = kwargs.get(key)
@@ -210,8 +224,12 @@ class MediaFile:
                     shutil.copy2(self.path, path)
 
             command.extend(["-overwrite_original", str(path)])
-            result = subprocess.run(command, capture_output=True)
-            if result.returncode:
+            for i in range(10):
+                result = subprocess.run(command, capture_output=True)
+                if not result.returncode:
+                    break
+                time.sleep(1)
+            else:
                 raise ValueError(f"Failed to embed metadata: {result}")
             return True
         raise ValueError(f"Invalid command: {command}")
@@ -244,32 +262,49 @@ class MediaFile:
         }:
             credit += ", NMNH"
 
+        # Copyright is distinct from usage rights under Smithsonian policy
+        copyright_flag = (
+            0
+            if "No copyright restrictions exist" in rec.get("DetSIRightsNotes", "")
+            else 1
+        )
+
         licenses = {
             "CC0": "https://creativecommons.org/publicdomain/zero/1.0/",
         }
 
+        usage_terms = {
+            "CC0": "This image was obtained from the Smithsonian Institution. It has been made available under the Creative Commons Zero (CC0) license (https://creativecommons.org/publicdomain/zero/1.0/).",
+            "Usage conditions apply": "This image was obtained from the Smithsonian Institution. Please contact the Department of Mineral Sciences at the Smithsonian Institution National Museum of Natural History for additional information regarding the use or reproduction of this image. A fee may apply.",
+            "Not determined": "This image was obtained from the Smithsonian Institution. Please contact the Department of Mineral Sciences at the Smithsonian Institution National Museum of Natural History for additional information regarding the use or reproduction of this image. A fee may apply.",
+        }
+
         headline = rec.get("MulTitle").replace("[AUTO]", "").strip()
 
-        # Extract a single, well-formed catalog number from the headline
+        # Extract catalog numbers from the headline
         obj_source_ids = []
         obj_sources = []
         if headline:
             try:
-                catnum = parse_spec_num(headline.split("(")[1].rstrip(")"))
+                catnums = parse_catnums(headline)
+            except UnboundLocalError:
+                # FIXME: Fix the underlying issue in the specimen parser
+                pass
             except ValueError:
                 pass
             else:
-                obj_source_ids = [str(catnum)]
-                obj_sources = ["Smithsonian NMNH"]
+                obj_source_ids = [str(c) for c in catnums]
+                obj_sources = ["Smithsonian NMNH"] * len(catnums)
 
         return self._clean_mapped(
             {
                 "caption": rec.get("MulDescription"),
-                "copyright": rec.get("DetSIRightsStatement"),
+                "copyright": rec.get("DetSIRightsNotes"),
+                "copyright_flag": copyright_flag,
                 "creator": creator,
                 "credit": credit,
                 "headline": headline,
-                "license": licenses.get(rec.get("DetSIRightsStatement")),
+                "license": licenses.get(rec["DetSIRightsStatement"]),
                 "jobid": rec.get("AdmImportIdentifier", ""),
                 "keywords": rec.get("DetSubject_tab", []),
                 "obj_source_ids": obj_source_ids,
@@ -278,6 +313,8 @@ class MediaFile:
                 "subjectcode": None,
                 "title": title,
                 "unique_id": unique_id,
+                "usage_terms": usage_terms[rec["DetSIRightsStatement"]],
+                "web_statement": "https://si.edu/termsofuse",
             }
         )
 

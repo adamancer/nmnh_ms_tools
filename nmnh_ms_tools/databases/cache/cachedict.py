@@ -2,7 +2,6 @@
 
 import logging
 import os
-from collections import OrderedDict
 
 from sqlalchemy.exc import IntegrityError
 
@@ -17,11 +16,10 @@ class CacheDict:
 
     def __init__(self, *args, **kwargs):
         self.session = None
-        self.recent = OrderedDict()
+        self.recent = {}
         self.max_recent = 5000
         for key, val in dict(*args, **kwargs).items():
             self[key] = val
-        self._cache = None
 
     def __str__(self):
         return str(self.recent)
@@ -50,10 +48,9 @@ class CacheDict:
     def __getitem__(self, key):
         key = self.keyer(key)
         try:
-            self.recent.move_to_end(key)  # shift accessed key to end of dict
             return self.recent[key]
         except KeyError:
-            if self.session:
+            if self.session is not None:
                 query = self.session.query(Cache.val).filter_by(key=key)
                 try:
                     val = self.reader(query.first())
@@ -61,7 +58,7 @@ class CacheDict:
                     return val
                 except AttributeError:
                     pass
-            raise KeyError("'{key}' not found")
+            raise KeyError(f"{repr(key)} not found")
 
     def __delitem__(self, key):
         raise NotImplementedError
@@ -79,9 +76,7 @@ class CacheDict:
         """Fills the recent dictionary with previously cached entries"""
         if self.session:
             query = self.session.query(Cache).limit(self.max_recent)
-            self._cache = {}
-            self.recent = OrderedDict((r.key, self.reader(r)) for r in query)
-            self._cache = None
+            self.recent = {r.key: self.reader(r) for r in query}
 
     @staticmethod
     def keyer(key):

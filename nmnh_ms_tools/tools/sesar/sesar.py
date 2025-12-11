@@ -1,26 +1,32 @@
 import csv
 import html
 import logging
+import os
 import re
 from urllib.parse import parse_qs
 from datetime import datetime, timedelta
 from pathlib import Path
 
 import polars as pl
-import yaml
 from lxml import etree
 
 from ...bots import Bot
 from ...config import DATA_DIR
 from ...records import CatNum, Record, Site, get_tree
-from ...utils import LazyAttr, base_to_int, fast_hash, int_to_base, oxford_comma
+from ...utils import (
+    LazyAttr,
+    base_to_int,
+    fast_hash,
+    int_to_base,
+    mutable,
+    oxford_comma,
+)
 from vocmap import VocMap
 from xmu import EMuDate
 
 logger = logging.getLogger(__name__)
 
-SESAR_DIR = Path(DATA_DIR) / "sesar"
-IGSN_PATH = SESAR_DIR / "igsns.csv"
+SESAR_CONFIG_DIR = os.path.expanduser("~") / "data" / "sesar"
 
 
 class IGSNData:
@@ -30,7 +36,7 @@ class IGSNData:
         self.df = pl.read_csv(path, dtypes=[pl.Utf8] * 3)
 
         # Clean up the dataframe
-        self.df = self.df.unique().sort("IGSN")
+        self.df = self.df.unique().sort("IGSN ID")
         self.df.write_csv(self.path)
 
         for cl in [IGSN, SESARRecord]:
@@ -51,32 +57,32 @@ class IGSNData:
             new = pl.from_dicts(args[0])
         elif kwargs:
             new = pl.from_dicts([kwargs])
-        self.df = pl.concat([self.df, new]).sort("IGSN")
+        self.df = pl.concat([self.df, new]).sort("IGSN ID")
         self.df.write_csv(self.path)
         return self
 
     def update(self, igsn, **kwargs):
-        rows = self.df.filter(pl.col("IGSN") == igsn).to_dicts()
+        rows = self.df.filter(pl.col("IGSN ID") == igsn).to_dicts()
         for row in rows:
             row.update(kwargs)
         schema = {k: pl.Utf8 for k in row}
         self.df = pl.concat(
             [
-                self.df.filter(pl.col("IGSN") != igsn),
+                self.df.filter(pl.col("IGSN ID") != igsn),
                 pl.from_dicts(rows, schema=schema),
             ]
-        ).sort("IGSN")
+        ).sort("IGSN ID")
         self.df.write_csv(self.path)
         return self
 
     def min(self):
-        return IGSN(self.df.select(pl.min("IGSN")).to_dicts()[0]["IGSN"])
+        return IGSN(self.df.select(pl.min("IGSN ID")).to_dicts()[0]["IGSN ID"])
 
     def max(self):
-        return IGSN(self.df.select(pl.max("IGSN")).to_dicts()[0]["IGSN"])
+        return IGSN(self.df.select(pl.max("IGSN ID")).to_dicts()[0]["IGSN ID"])
 
     def duplicates(self, col):
-        other = {"Name": "IGSN", "IGSN": "Name"}[col]
+        other = {"Name": "IGSN ID", "IGSN ID": "Name"}[col]
         vals = {}
         for dct in self.df.filter(pl.col(col).is_duplicated()).to_dicts():
             vals.setdefault(dct[col], []).append(dct[other])
@@ -95,24 +101,27 @@ class IGSNData:
                 catnum = None
 
         if catnum is not None:
-            catnum.mask = "include_div"
             variants = [str(catnum)]
-            if catnum.division == "MIN":
+            if catnum.coll_id == "MIN":
                 if catnum.suffix == "00":
-                    catnum.suffix = ""
+                    catnum = catnum.modcopy(suffix="")
                 elif catnum.suffix == "":
-                    catnum.suffix = "00"
+                    catnum = catnum.modcopy(suffix="00")
                 variants.append(str(catnum))
         else:
             print(f"Could not parse {repr(name)} as catalog number")
             variants = [name]
 
+        # Check names for multiple spaces
+        if any(["  " in n for n in variants]):
+            raise ValueError(f"Invalid names: {variants}")
+
         rows = self.df.filter(pl.col("Name").is_in(variants))
-        return [r["IGSN"] for r in rows.to_dicts()]
+        return [r["IGSN ID"] for r in rows.to_dicts()]
 
     def match_igsn(self, igsn):
         """Returns the sample name matching an IGSN"""
-        rows = self.df.filter(pl.col("IGSN") == igsn)
+        rows = self.df.filter(pl.col("IGSN ID") == igsn)
         return [r["Name"] for r in rows.to_dicts()]
 
     def find_new_registrations(self):
@@ -127,7 +136,9 @@ class IGSNData:
                     igsn -= 1
                     break
                 else:
-                    self.add(Name=rec.name, IGSN=igsn.suffix, Hash=rec.hash())
+                    self.add(
+                        **{"Name": rec.name, "IGSN ID": str(igsn), "Hash": rec.hash()}
+                    )
         return igsn
 
 
@@ -152,7 +163,7 @@ class IGSN:
         if not re.match(r"10\.\d{5}/[A-Z]{3}[A-Z0-9]{6}$", val):
             try:
                 print(val)
-                val = self.df.filter(Name=val)[0]["IGSN"]
+                val = self.df.filter(Name=val)[0]["IGSN ID"]
                 print(self.df.filter(Name=val))
                 print(self.verbatim, val)
             except IndexError:
@@ -232,18 +243,14 @@ class SESARBot(Bot):
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("wait", 0.2)
         super().__init__(*args, **kwargs)
-        self._params = {}
+        # Add Java Web Token to header
         try:
-            with open("config.yml") as f:
-                config = yaml.safe_load(f)
-                self._params.update(
-                    {
-                        "username": config["username"],
-                        "password": config["password"],
-                    }
-                )
+            with open("jwt") as f:
+                self._headers = {"Authorization": f"Bearer {f.read().strip()}"}
         except FileNotFoundError:
-            print("No config file found! Cannot register or update records")
+            raise FileNotFoundError(
+                "You must create a file called jwt with your access token to register or update samples"
+            )
 
     @property
     def url(self):
@@ -256,8 +263,9 @@ class SESARBot(Bot):
         igsns = [igsn.value]
         for val in igsns:
             params = {"igsn": val}
-            params.update(self._params)
-            resp = self.get(f"{self.url}/display.php", params=params)
+            resp = self.get(
+                f"{self.url}/display.php", params=params, headers={"Accept": "text/xml"}
+            )
             if resp.status_code == 200:
                 break
         if resp.status_code == 200:
@@ -265,30 +273,21 @@ class SESARBot(Bot):
         return resp
 
     def register(self, content):
-        if not self._params:
-            raise ValueError("Username and password must be supplied in config.yml")
         data = {"content": content}
-        data.update(self._params)
         resp = self.post(f"{self.url}/upload.php", data=data)
         if resp.status_code == 200:
             self._log_result(resp, False)
         return resp
 
     def update(self, content):
-        if not self._params:
-            raise ValueError("Username and password must be supplied in config.yml")
         data = {"content": content}
-        data.update(self._params)
         resp = self.post(f"{self.url}/update.php", data=data)
         if resp.status_code == 200:
             self._log_result(resp, False)
         return resp
 
     def delete_url(self, igsn, puburl):
-        if not self._params:
-            raise ValueError("Username and password must be supplied in config.yml")
         data = {"igsn": str(IGSN(igsn)), "puburl": puburl}
-        data.update(self._params)
         resp = self.post(f"{self.url}/deletePubURL.php", data=data)
         if resp.status_code == 200:
             self._log_result(resp, False)
@@ -370,6 +369,7 @@ class SESARRecord(Record):
     terms = None
 
     # Normal class attributes
+    file_dir = Path("files")
     map_unknown_terms = True
     _df = None
     _types = None
@@ -380,7 +380,7 @@ class SESARRecord(Record):
         self._class_attrs = set(dir(self))
         self._properties = ["name"]
         # Explicitly define defaults for all reported attributes
-        self.user_code = ""
+        self.sesar_code = ""
         self.sample_type = ""
         self.sample_subtype = ""
         self._name = ""
@@ -395,7 +395,6 @@ class SESARRecord(Record):
         self.age_min = ""
         self.age_max = ""
         self.age_unit = ""
-        self.geological_age = ""
         self.geological_age = ""
         self.geological_unit = ""
         self.collection_method = ""
@@ -438,6 +437,7 @@ class SESARRecord(Record):
         self.collection_end_date = ""
         self.collection_date_precision = ""
         self.current_archive = ""
+        self.current_archive_contact = ""
         self.original_archive = ""
         self.original_archive_contact = ""
         self.depth_min = ""
@@ -469,35 +469,38 @@ class SESARRecord(Record):
     @property
     def vocabs(self):
         if self.__class__._vocabs is None:
-            path = SESAR_DIR / "vocabs.csv"
+            path = self.file_dir / "vocabs.csv"
             try:
                 vocabs = VocMap(path)
             except OSError:
                 vocabs = VocMap()
 
             with open(
-                SESAR_DIR / "suggested.csv", encoding="utf-8-sig", newline=""
+                self.file_dir / "suggested.csv", encoding="utf-8-sig", newline=""
             ) as f:
                 for row in csv.DictReader(f):
                     vocabs.add([row["value"]], name=row["name"])
 
-            for endpoint in (
-                "classifications",
-                "countries",
-                "launchtypes",
-                "navtypes",
-                "sampletypes",
-            ):
-                resp = self.bot.get(
-                    f"https://api.geosamples.org/v1/vocabularies/{endpoint}/all"
-                )
-                terms = []
-                for key, val in resp.json().items():
-                    if isinstance(val, str):
-                        terms.append(val)
-                    else:
-                        terms.extend([f"{key}>{v}" for v in val])
-                vocabs.add(terms, name=endpoint)
+            # NOTE: These endpoints no longer exist. Human-readable vocabularies
+            # are available at https://www.geosamples.org/vocabularies but there is
+            # no obvious machine-readable equivalent.
+            # for endpoint in (
+            #    "classifications",
+            #    "countries",
+            #    "launchtypes",
+            #    "navtypes",
+            #    "sampletypes",
+            # ):
+            #    resp = self.bot.get(
+            #        f"https://api.geosamples.org/v1/vocabularies/{endpoint}/all"
+            #    )
+            #    terms = []
+            #    for key, val in resp.json().items():
+            #        if isinstance(val, str):
+            #            terms.append(val)
+            #        else:
+            #            terms.extend([f"{key}>{v}" for v in val])
+            #    vocabs.add(terms, name=endpoint)
 
             vocabs.save(path)
             self.__class__._vocabs = vocabs
@@ -507,7 +510,7 @@ class SESARRecord(Record):
     @property
     def types(self):
         if self._types is None:
-            with open(SESAR_DIR / "classifications.xsd") as f:
+            with open(SESAR_CONFIG_DIR / "classifications.xsd") as f:
                 types = list(set(re.findall(r'"([A-Za-z]+)Type"', f.read())))
                 del types[types.index("Igneous")]
                 self.__class__._types = types
@@ -532,7 +535,7 @@ class SESARRecord(Record):
         # Look up IGSN if not provided
         if self.name and not self.igsn:
             try:
-                self.igsn = self.df.filter(Name=self.name).to_dict()[0]["igsn"]
+                self.igsn = self.df.filter(Name=self.name).to_dict()[0]["IGSN ID"]
             except KeyError:
                 pass
 
@@ -630,9 +633,11 @@ class SESARRecord(Record):
             result = _xml_to_dict(etree.fromstring(resp.text))["results"]["sample"]
             igsn = IGSN(result["igsn"])
             self.df.add(
-                Name=self.name,
-                IGSN=igsn.suffix,
-                Hash=self.hash(),
+                **{
+                    "Name": self.name,
+                    "IGSN ID": str(igsn),
+                    "Hash": self.hash(),
+                }
             )
         return resp
 
@@ -659,8 +664,9 @@ class SESARRecord(Record):
         if not self.igsn:
             igsns = self._df.match_name(self.name)
             if len(igsns) == 1:
-                self.igsn = igsns[0]
-                self.inferred_igsn = True
+                with mutable(self):
+                    self.igsn = igsns[0]
+                    self.inferred_igsn = True
             elif igsns:
                 raise ValueError(f"Multiple IGSNs match {repr(self.name)} ({igsns})")
 
@@ -786,7 +792,7 @@ class SESARRecord(Record):
         taxa = [t["ClaScientificName"] for t in data.get("IdeTaxonRef_tab", [])]
 
         # Map primary taxon to a SESAR classification
-        if not taxa[0]:
+        if not taxa or not taxa[0]:
             raise ValueError(f"No identification provided: {data}")
         primary = self.tree.place(taxa[0])
         parents = [t["sci_name"] for t in primary.official().parents(True)]
@@ -797,6 +803,12 @@ class SESARRecord(Record):
                 key = f"Mineral>{parents[-1]}"
         else:
             key = " > ".join(parents)
+        # Infer sample type from division for unidentified samples
+        if key == "Geological material > Unidentified":
+            if data["CatDivision"] == "Petrology & Volcanology":
+                key += " > unidentified rock"
+            elif data["CatDivision"] == "Mineralogy":
+                key += " > unidentified mineral"
         classification = self.map_term(key, "classifications")
 
         # Some rock names (like impactites) do not map to useful official
@@ -833,7 +845,7 @@ class SESARRecord(Record):
                     classification.insert(-1, f"{type_}Type")
                     break
 
-        self.user_code = "NHB"
+        self.sesar_code = "NHB"
 
         # Sample type defaults to Individual Sample if empty
         self.sample_type = self.map_term(evt.get("ColCollectionMethod"), "sampletypes")
@@ -843,11 +855,11 @@ class SESARRecord(Record):
             self.sample_type = "Individual Sample"
         self.sample_subtype = None
 
-        self.name = CatNum(data).summarize("include_div")
+        self.name = str(CatNum(data))
         self.material = material
 
         try:
-            self.igsn = other_nums[{"CatOtherNumbersType_tab": "IGSN"}][0][
+            self.igsn = other_nums[{"CatOtherNumbersType_tab": "IGSN ID"}][0][
                 "CatOtherNumbersValue_tab"
             ]
         except IndexError:
@@ -856,7 +868,7 @@ class SESARRecord(Record):
         # Check other numbers and relationships for IGSNs
         try:
             self.parent_igsn = rels[
-                {"RelRelationship_tab": "Child", "RelNhIDType_tab": "IGSN"}
+                {"RelRelationship_tab": "Child", "RelNhIDType_tab": "IGSN ID"}
             ][0]["RelNhURI_tab"]
         except IndexError:
             pass
@@ -924,7 +936,9 @@ class SESARRecord(Record):
             self.county = site.county
             self.city = site.municipality
 
+        # Note that these are physiographic features
         for location_type, field in {
+            "Volcano": "volcano",
             "Island": "island",
             "Island Group": "island_group",
             "Bay/Sound": "bay_sound",
@@ -944,12 +958,14 @@ class SESARRecord(Record):
         for attr in (
             "site_num",
             "mine",
-            "volcano",
             "settings",
         ):
             val = getattr(site, attr)
             if val and isinstance(val, list):
                 val = val[0]
+            # Omit numeric site ids from GeoNames, Mindat, etc.
+            if attr == "site_num" and val.isnumeric():
+                continue
             if val:
                 self.locality = val
                 break
@@ -1062,19 +1078,19 @@ class SESARRecord(Record):
                     self.collection_date_precision = attr
                     break
 
-        coll, contact = {
-            "Gems": ("Gem", "featherr@si.edu"),
-            "Minerals": ("Mineral", "pohwatp@swi.edu"),
-            "Rock & Ore Collections": ("Rock & Ore", "halel@si.edu"),
+        coll = {
+            "Gems": "Gem and Mineral",
+            "Minerals": "Gem and Mineral",
+            "Rock & Ore Collections": "Rock and Ore",
         }[data["CatCatalog"]]
         self.current_archive = f"National {coll} Collection, Smithsonian Institution"
-        self.current_archive_contact = contact
+        self.current_archive_contact = "NMNH-MineralSciences@si.edu"
         self.original_archive = None
         self.original_archive_contact = None
 
         self.sample_other_names = []
         for row in other_nums:
-            if row["CatOtherNumbersType_tab"] not in ("Accession number", "IGSN"):
+            if row["CatOtherNumbersType_tab"] not in ("Accession number", "IGSN ID"):
                 self.sample_other_names.append(
                     {"sample_other_name": row["CatOtherNumbersValue_tab"]}
                 )
@@ -1116,7 +1132,7 @@ class SESARRecord(Record):
         content = re.sub(rb"&amp;lt;(/?[a-z_]+)&amp;gt;", rb"<\1>", data)
 
         # Preserve the original XML in verbatim
-        self.verbatim = data.decode("utf-8")
+        self.verbatim = content.decode("utf-8")
 
         dct = _xml_to_dict(etree.fromstring(content))["samples"][0]["sample"]
         for key, val in dct.items():
@@ -1129,10 +1145,21 @@ class SESARRecord(Record):
             self.classification = {"Unknown": 0}
 
         # Convert collection dates to datetimes if necessary
-        if self.collection_start_date and ":" not in self.collection_start_date:
-            self.collection_start_date += "T00:00:00"
-        if self.collection_end_date and ":" not in self.collection_end_date:
-            self.collection_end_date += "T00:00:00"
+        def fix_datetime(dt, precision):
+            if val and ":" not in val:
+                if precision == "year" and re.match(r"\d{4}$", dt):
+                    dt += "-01-01"
+                elif precision == "month" and re.match(r"\d{4}-\d{2}$", dt):
+                    dt += "-01"
+                dt += "T00:00:00"
+            return dt
+
+        self.collection_start_date = fix_datetime(
+            self.collection_start_date, self.collection_date_precision
+        )
+        self.collection_end_date = fix_datetime(
+            self.collection_end_date, self.collection_date_precision
+        )
 
     def _to_emu(self, **kwargs):
         """Formats record for EMu"""
@@ -1191,13 +1218,13 @@ def display_igsn(igsn, prefix=""):
 
 def _read_xml(path: str | Path):
     parsed = etree.parse(path)
-    return etree.XMLSchema(parsed) if path.endswith(".xsd") else parsed
+    return etree.XMLSchema(parsed) if str(path).endswith(".xsd") else parsed
 
 
 def _read_terms(obj: SESARRecord) -> list[str]:
     return [
         c.tag.split("}")[1]
-        for c in template.xpath(
+        for c in SESARRecord.template.xpath(
             "/g:samples/g:sample", namespaces={"g": "http://app.geosamples.org"}
         )[0]
     ]
@@ -1205,8 +1232,10 @@ def _read_terms(obj: SESARRecord) -> list[str]:
 
 # Define deferred class attributes
 LazyAttr(SESARRecord, "bot", SESARBot)
-LazyAttr(SESARRecord, "schema", _read_xml, path=SESAR_DIR / "sample.xsd")
-LazyAttr(SESARRecord, "update_schema", _read_xml, path=SESAR_DIR / "updateSample.xsd")
-LazyAttr(SESARRecord, "template", _read_xml, path=SESAR_DIR / "sample.xml")
+LazyAttr(SESARRecord, "schema", _read_xml, path=SESAR_CONFIG_DIR / "sample.xsd")
+LazyAttr(
+    SESARRecord, "update_schema", _read_xml, path=SESAR_CONFIG_DIR / "updateSample.xsd"
+)
+LazyAttr(SESARRecord, "template", _read_xml, path=SESAR_CONFIG_DIR / "sample.xml")
 LazyAttr(SESARRecord, "tree", get_tree)
 LazyAttr(SESARRecord, "terms", _read_terms, SESARRecord)

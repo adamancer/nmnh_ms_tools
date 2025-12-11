@@ -4,13 +4,16 @@ import json
 import logging
 import pprint as pp
 import os
+import re
 from collections.abc import MutableMapping, MutableSequence
+
+from xmu import write_xml
 
 from .taxalist import TaxaList
 from .taxaparser import TaxaParser
 from .taxon import Taxon
-from ...config import CONFIG
-from ...utils import LazyAttr, to_slug
+from ...config import CONFIG, CONFIG_DIR
+from ...utils import LazyAttr, to_slug, ucfirst
 
 
 logger = logging.getLogger(__name__)
@@ -124,6 +127,8 @@ class TaxaTree(TaxaIndex):
     # Deferred class attributes are defined at the end of the file
     name_index = None
     stem_index = None
+    capex = None
+    config = None
 
     def __init__(self, *args, **kwargs):
         self.disable_index = False
@@ -164,7 +169,8 @@ class TaxaTree(TaxaIndex):
 
     def place(self, name):
         """Places a name in the hierarchy, adding a new entry if needed"""
-        assert name.strip()
+        if not name.strip():
+            raise ValueError(f"name is empty: {repr(name)}")
         qualifier = "uncertain" if name.endswith("?") else ""
         name = name.rstrip("?")
         try:
@@ -217,13 +223,62 @@ class TaxaTree(TaxaIndex):
 
     def write_new(self, fp="import.xml"):
         """Writes an EMu import file containing any new taxa"""
-        try:
-            from minsci import xmu
-        except ModuleNotFoundError:
-            raise ModuleNotFoundError("write_new requires the minsci module")
         if self.new:
             taxa = [self.new[k] for k in sorted(self.new.identifiers())]
-            xmu.write(fp, [t.to_emu() for t in taxa], "etaxonomy")
+            write_xml([t.to_emu() for t in taxa], fp)
+
+    def capped(self, name=None, capitalize=True):
+        """Capitalizes taxon name based on simple set of rules and exceptions"""
+        if name is None:
+            name = self.sci_name
+        # Filter out codes
+        if re.match(r"\d", name):
+            return name
+        name = name.lower()
+        for word in self.capex:
+            pattern = re.compile(rf"\b{word}\b", flags=re.I)
+            matches = pattern.findall(name)
+            if matches and word.isupper():
+                name = pattern.sub(matches[0].upper(), name)
+            else:
+                name = pattern.sub(word, name)
+        return ucfirst(name) if name and capitalize else name
+
+    def join(self, names, maxtaxa=3, conj="and"):
+        """Joins a list of taxa into a string, a la oxford_comma"""
+        conj = f" {conj.strip()} "
+        if maxtaxa is not None and len(names) > maxtaxa:
+            names = names[:maxtaxa]
+        if len(names) <= 2:
+            return conj.join(names)
+        if conj.strip() in ["with"]:
+            first = names.pop(0)
+            return f"{first} with {self.join(names, None, "and")}"
+        last = names.pop()
+        return f"{", ".join(names)},{conj}{last}"
+
+    def name_item(self, taxa, setting=None, allow_varieties=False):
+        """Generates name based using a list of taxa and an optional setting"""
+        taxalist = TaxaList()
+        for taxon in taxa:
+            if taxon:
+                matches = self.place(str(taxon))  # place always returns one
+                taxalist.append(TaxaList([matches]).best_match(taxon, True))
+        taxalist = taxalist.simplify()
+        if setting:
+            name = f"{self.join(taxalist.names()[:2])} {setting}"
+        elif len(taxa) == 1 or len(set(taxalist.names())) == 1:
+            name = taxalist[0].name if allow_varieties else taxalist[0].sci_name
+        elif len(taxa) == 2 and taxalist[0].is_mineral() and taxalist[1].is_rock():
+            name = self.join(taxalist.names(), conj="from")
+        else:
+            name = self.join(taxalist.names(), conj="with")
+        return self.capped(name, capitalize=True)
+
+    def name_group(self, taxa, capitalize=False):
+        """Generates a name describing a list of taxa"""
+        name = self.join(TaxaList(taxa).names()).lower()
+        return ucfirst(name) if capitalize else name
 
     @staticmethod
     def most_specific_common_parent(taxa):
@@ -360,8 +415,14 @@ class StemIndex(TaxaIndex):
         return val
 
 
+def _read_capitalization_rules():
+    return [str(s) if isinstance(s, int) else s for s in TaxaTree.config["capex"]]
+
+
 # Define deferred class attributes
 LazyAttr(NameIndex, "tree", lambda: Taxon.tree)
 LazyAttr(StemIndex, "tree", lambda: Taxon.tree)
 LazyAttr(TaxaTree, "name_index", NameIndex)
 LazyAttr(TaxaTree, "stem_index", StemIndex)
+LazyAttr(TaxaTree, "capex", _read_capitalization_rules)
+LazyAttr(TaxaTree, "config", os.path.join(CONFIG_DIR, "config_classification.yml"))

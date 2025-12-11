@@ -14,7 +14,6 @@ with _ImportClock("records"):
     from .catnums_old import CatNums
     from .classification import (
         TaxaList,
-        TaxaNamer,
         TaxaParser,
         TaxaTree,
         Taxon,

@@ -1,5 +1,6 @@
 """Defines methods for parsing and manipulating lists of rock/mineral names"""
 
+import re
 from collections.abc import MutableSequence
 
 
@@ -105,6 +106,14 @@ class TaxaList(MutableSequence):
         unique = [t for i, t in enumerate(taxa) if t not in taxa[:i]]
         return self.__class__(unique)
 
+    def simplify(self):
+        """Remove redundant taxa"""
+        taxa = []
+        for taxon in self.unique():
+            if not re.search(rf"\b{str(taxon).lower()}\b", "-".join(taxa)):
+                taxa.append(str(taxon).lower())
+        return self.__class__(taxa)
+
     def most_specific_common_parent(self, name="specimens"):
         """Finds the most specific common parent"""
         parents = [t.parents(True, False) for t in self]
@@ -119,4 +128,3 @@ class TaxaList(MutableSequence):
             except IndexError:
                 # At least one list is empty
                 return name
-        return name

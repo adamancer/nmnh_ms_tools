@@ -6,9 +6,8 @@ from functools import cache
 from xmu import EMuReader, EMuRecord, write_import
 
 from .taxon import Taxon
-from .taxanamer import TaxaNamer
 from .taxaparser import TaxaParser
-from .taxatree import NameIndex, StemIndex
+from .taxatree import TaxaTree, NameIndex, StemIndex
 from ...config import CONFIG
 
 
@@ -23,13 +22,13 @@ def get_tree(src: str = None):
 
     Returns
     -------
-    TaxaNamer
+    TaxaTree
         taxonomic tree
     """
 
     timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
 
-    tree = TaxaNamer()
+    tree = TaxaTree()
 
     # Add tree to taxa classes
     Taxon.tree = tree

@@ -146,6 +146,7 @@ class Reference(Record):
         self.note = ""
         self.type = ""
         self._date = None
+        self._verbatim_date = None
         super().__init__(data)
 
     def __str__(self):
@@ -177,12 +178,13 @@ class Reference(Record):
     @date.setter
     def date(self, val):
         self._date = EMuDate(val)
+        self._verbatim_date = val
 
     @property
     def month(self):
         try:
             return self.date.strftime("%b")
-        except ValueError:
+        except (AttributeError, ValueError):
             return ""
 
     @property
@@ -330,7 +332,7 @@ class Reference(Record):
         rec["RefTitle"] = self.title
         rec["RefSeries"] = self.series
         rec["RefDate"] = self.date
-        rec["RefDateRange"] = self.date
+        rec["RefDateRange"] = self._verbatim_date
         rec["RefVolume"] = self.volume
         rec["RefIssue"] = self.number
         rec["RefPage"] = self.pages

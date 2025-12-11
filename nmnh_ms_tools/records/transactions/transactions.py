@@ -42,7 +42,10 @@ class Contact(EMuRecord):
     def affiliation(self) -> str:
         """The current affiliation for the contact"""
         grid = self.grid("AffAffiliationRef_tab")
-        current = grid[{"AffCurrent_tab": "Yes"}][0]
+        try:
+            current = grid[{"AffCurrent_tab": "Yes"}][0]
+        except IndexError:
+            raise ValueError(f"No affiliation specified: {self}")
         return the(current["AffAffiliationRef_tab"]["NamOrganisation"])
 
     def is_person(self) -> bool:
@@ -256,6 +259,7 @@ class Transaction(EMuRecord):
     def unit(self) -> str:
         """The name of the transacting unit"""
         return {
+            "Education & Outreach": "EOVE",
             "Invertebrate Zoology": "IZ",
             "Paleobiology": "PAL",
             "Mineral Sciences": "MS",
@@ -270,12 +274,18 @@ class Transaction(EMuRecord):
     def catalog(self) -> str:
         """The name of the transacting catalog"""
 
+        # Check for manual mapping in the config file
+        try:
+            return self.trn_config["map_catalog"][self["TraNumber"]]
+        except KeyError:
+            pass
+
         # Catalog logic is only implemented for Mineral Sciences
         if self.unit != "MS":
             return self.unit
 
         # Trying mapping catalog from the item list
-        cats = Counter([i.catalog for i in self.tr_items if i.catalog != "DMS"])
+        cats = Counter([i.catalog for i in self.tr_items if i.catalog != "MS"])
         if cats and (len(cats) == 1 or max(cats.values()) > 2):
             return sorted(cats.items(), key=lambda kv: kv[1])[-1][0]
 
@@ -288,14 +298,14 @@ class Transaction(EMuRecord):
             pass
         staff.append(self["TraEnteredByRef"]["NamFullName"])
 
-        staff = [self.trn_config["initiators"].setdefault(s, "DMS") for s in staff]
-        staff = [s for s in staff if s and s != "DMS"]
+        staff = [self.trn_config["initiators"].setdefault(s, "MS") for s in staff]
+        staff = [s for s in staff if s and s != "MS"]
 
         if set(staff) == {"GEM", "MIN"}:
             return "GEM"
         elif len(set(staff)) == 1:
             return staff[0]
-        return "DMS"
+        return "MS"
 
     @property
     def coll_contact(self) -> str:
@@ -351,7 +361,10 @@ class Transaction(EMuRecord):
     @property
     def open_date(self) -> EMuDate:
         """The date on which the transaction was opened"""
-        return self["TraDateOpen"]
+        if self["TraDateOpen"]:
+            return self["TraDateOpen"]
+        if self["TraType"] == "LOAN OUTGOING":
+            return self["TraFromDate"]
 
     @property
     def received_date(self) -> EMuDate:
@@ -392,14 +405,21 @@ class Transaction(EMuRecord):
         dates = [self.closed_date, self.acknowledged_date]
         return min([d for d in dates if d])
 
-    def is_active(self) -> bool:
+    def is_active(self, opened=False) -> bool:
         """Tests whether the transaction record is active
+
+        Parameters
+        ----------
+        opened : bool
+            if True, limit to transactions that are either open or closed
 
         Returns
         -------
         bool
             True if the transaction record is active
         """
+        if opened:
+            return self.is_open() or self.is_closed()
         return self["SecRecordStatus"] == "Active"
 
     def is_open(self) -> bool:
@@ -491,13 +511,6 @@ class LoanOutgoing(Transaction):
             return self["TraDueDate"]
         # If no due date, use three years from when the loan was opened
         return add_years(self.open_date, 3)
-
-    @property
-    def open_date(self) -> EMuDate:
-        """The date on which the transaction was opened"""
-        for key in ["TraDateOpen", "TraFromDate"]:
-            if self[key]:
-                return self[key]
 
     @property
     def num_dunns(self) -> int:

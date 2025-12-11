@@ -4,6 +4,7 @@ from .. import _ImportClock
 
 with _ImportClock("utils"):
 
+    from .cache import PersistentLookup
     from .classes import (
         LazyAttr,
         custom_copy,
@@ -24,7 +25,7 @@ with _ImportClock("utils"):
         parse_coordinate,
         round_to_uncertainty,
     )
-    from .dates import DateRange, FiscalYear, fy, get_fy, add_years
+    from .dates import DateRange, FiscalYear, add_years
     from .dicts import (
         AbbrDict,
         BaseDict,

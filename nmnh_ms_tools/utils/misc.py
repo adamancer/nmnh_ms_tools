@@ -73,7 +73,7 @@ def prompt(
         keys.sort(key=lambda s: s.zfill(100))
         options = ["{} ".format(key, validator[key]) for key in keys]
     elif isinstance(validator, list):
-        options = ["{} ".format(i + 1, val) for i, val in enumerate(validator)]
+        options = ["{}. {}".format(i + 1, val) for i, val in enumerate(validator)]
     else:
         raise ValueError("Validator must be dict, list, or str")
     # Validate response

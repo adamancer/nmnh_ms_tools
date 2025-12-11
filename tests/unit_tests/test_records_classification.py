@@ -13,6 +13,7 @@ def tree():
     tree = get_tree()
     for idx in ["name_index", "stem_index"]:
         try:
+            continue
             os.remove(getattr(tree, idx).path)
         except FileNotFoundError:
             pass
@@ -33,3 +34,18 @@ def test_parse_complex_rock_name():
 
 def test_preferred(tree):
     assert tree["sphene"].preferred()["name"] == "Titanite"
+
+
+@pytest.mark.parametrize(
+    "taxa,setting,expected",
+    [
+        (["Diamond"], "Necklace", "Diamond necklace"),
+        (["Diamond", "Ruby"], "Bracelet", "Diamond and ruby bracelet"),
+        (["Corundum", "Sapphire", "Ruby"], None, "Sapphire and ruby"),
+        (["Sphene"], None, "Titanite"),
+        (["Titanite", "Sphene"], None, "Titanite"),
+        (["Garnet-biotite schist", "Garnet", "Biotite"], None, "Garnet-biotite schist"),
+    ],
+)
+def test_name_item(tree, taxa, setting, expected):
+    tree.name_item(taxa, setting) == expected

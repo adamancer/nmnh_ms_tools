@@ -204,7 +204,7 @@ def fnv1a_64(val, encoding=None):
     for byte in val:
         hval = hval ^ byte
         hval = (hval * fnv_prime) % fnv_size
-    return hex(hval)[2:]
+    return f"{hval:x}"
 
 
 def fast_hash(*args, **kwargs):

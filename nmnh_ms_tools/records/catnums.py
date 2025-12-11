@@ -8,8 +8,8 @@ from xmu import EMuRecord
 
 from .core import Record
 from ..tools.specimen_numbers.parsers import Parser
-from ..tools.specimen_numbers.specnum import SpecNum
-from ..utils import del_immutable, mutable, set_immutable
+from ..tools.specimen_numbers.specnum import SpecNum, parse_spec_num
+from ..utils import PrefixedNum, del_immutable, mutable, set_immutable
 
 
 logger = logging.getLogger(__name__)
@@ -139,7 +139,7 @@ class CatNum(Record):
 
     @property
     def number(self):
-        return self._spec_num.number
+        return self._spec_num.number.lstrip("0")
 
     @property
     def suffix(self):
@@ -147,6 +147,10 @@ class CatNum(Record):
 
     @property
     def delim(self):
+        if not self.suffix or (
+            self.suffix and self.suffix.isalpha() and len(self.suffix) == 1
+        ):
+            return ""
         return self._spec_num.delim
 
     @property
@@ -200,7 +204,7 @@ class CatNum(Record):
         CatNum
             CatNum modifed by the data in kwargs
         """
-        coll_id = kwargs.pop("coll_id", None)
+        coll_id = kwargs.pop("coll_id", self.coll_id)
         copy_ = self.__class__(self._spec_num.modcopy(**kwargs))
         if coll_id:
             with mutable(copy_):
@@ -222,9 +226,19 @@ class CatNum(Record):
         if isinstance(data, SpecNum):
             spec_num = data
         elif isinstance(data, str):
-            spec_num = self.parser.parse_spec_num(data)
+            try:
+                spec_num = parse_spec_num(data)
+            except:
+                raise
+                spec_num = self.parser.parse_spec_num(data)
         elif isinstance(data, dict) and set(data) & {"CatNumber", "MetMeteoriteName"}:
             spec_num = self._parse_emu(data)
+        elif isinstance(data, dict) and "number" in data:
+            # Translate a CatNum dict back to SpecNum
+            data.setdefault("kind", "")
+            coll_id = data.pop("coll_id", None)
+            spec_num = SpecNum(**data)
+            self.coll_id = coll_id
 
         with mutable(spec_num):
             # Check for collection ID in trailing parenthetical

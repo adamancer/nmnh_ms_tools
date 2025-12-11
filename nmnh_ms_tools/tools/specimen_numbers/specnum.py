@@ -22,15 +22,16 @@ class SpecNum:
             # Call delim to finalize formatting of suffix
             if delim is None:
                 delim = "-"
-                if suffix and suffix[0] in "-,./ ":
-                    delim = suffix[0]
-                    suffix = suffix.lstrip("-,./ ")
-                if (
-                    suffix.isalpha()
-                    and len(suffix) == 1
-                    or re.match(r"[A-Za-z]-\d+", suffix)
-                ):
-                    delim = ""
+                if suffix:
+                    if suffix[0] in "-,./ ":
+                        delim = suffix[0]
+                        suffix = suffix.lstrip("-,./ ")
+                    elif (
+                        suffix.isalpha()
+                        and len(suffix) == 1
+                        or re.match(r"[A-Za-z]-\d+", suffix)
+                    ):
+                        delim = ""
 
             # Ensure that empty attributes are represented as empty strings
             self.suffix = suffix if suffix else ""
@@ -327,6 +328,7 @@ class SpecNum:
         if len(self.prefix) > 1:
             delim_prefix = " "
 
+        suffix = self.suffix.lstrip("0") if strip_leading_zeroes else self.suffix
         if delim is None:
             delim = self.delim
 
@@ -338,8 +340,8 @@ class SpecNum:
                 self.prefix,
                 delim_prefix,
                 self.number,
-                delim,
-                self.suffix.lstrip("0") if strip_leading_zeroes else self.suffix,
+                delim if suffix else "",
+                suffix,
             )
             .rstrip(delim)
             .strip()

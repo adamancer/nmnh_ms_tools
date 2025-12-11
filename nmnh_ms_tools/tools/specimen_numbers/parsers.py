@@ -1,13 +1,19 @@
+import json
 import logging
 import os
 import re
 
 from .specnum import SpecNum, expand_range, is_spec_num, parse_spec_num
+from ...config import CONFIG
+from ...utils import PersistentLookup
+from ...utils.gliner import predict_long_text
 
 logger = logging.getLogger(__name__)
 
 
 class Parser:
+
+    _model = None
 
     def __init__(self, clean=True, require_code=True, hints=None, parse_order=None):
         self._parse_order = ["spec_num_strict", "range", "short", "suffix", "spec_num"]
@@ -24,6 +30,8 @@ class Parser:
         if self.clean:
             self.min_num = 1
             self.max_diff = 1e10
+        self.cache_name = "catnums.csv"
+        self._lookup = None
 
     @property
     def parse_order(self):
@@ -50,6 +58,28 @@ class Parser:
             )
         self._hints.clear()
         self._hints = val
+
+    @property
+    def model(self):
+        if not self.__class__._model:
+            # Imporitng gliner is expensive, so defer until model is needed
+            from gliner import GLiNER
+
+            try:
+                self.__class__._model = GLiNER.from_pretrained(
+                    CONFIG["models"]["specimen_numbers"],
+                    load_tokenizer=True,
+                    local_files_only=True,
+                )
+            except KeyError:
+                raise ValueError("No specimen number model is defined")
+        return self.__class__._model
+
+    @property
+    def lookup(self):
+        if self._lookup is None:
+            self._lookup = PersistentLookup(self.cache_name)
+        return self._lookup
 
     def parse_spec_num(self, val):
         """Parses a single catalog number"""
@@ -149,99 +179,39 @@ class Parser:
 
         return val
 
-    def extract(self, val, code=None):
+    def extract(self, val):
 
-        orig = val
-
-        # Parse the cleaned value in its entirety as a fallback
-        fallback = None
-        if self.clean:
-            try:
-                spec_num = parse_spec_num(self.prepare(val), fallback=True)
-            except ValueError:
-                pass
-            else:
-                if spec_num.is_valid(min_num=self.min_num, max_diff=self.max_diff):
-                    fallback = [str(spec_num)]
-
-        # Split on hard delimiters and evaluate soft delimiters
-        vals = []
-        for val in re.split(r" *[;\|] *", self.delimit_codes(val)):
-            vals.append(val)
-        logger.debug(f"Split {repr(orig)} into {repr(vals)}")
+        try:
+            return json.loads(self.lookup[val])
+        except KeyError:
+            pass
 
         extracted = {}
-        for verbatim in vals:
 
-            # Drop values that don't include numbers
-            if not re.search(r"\d", verbatim):
-                continue
-
-            val = self.prepare(verbatim)
-
-            # Extract the museum code for the current segment
-            try:
-                code_, val = self.extract_code(val)
-            except ValueError:
-                pass
-            else:
-                if code_:
-                    code = code_
-                if self.require_code and not code:
-                    raise ValueError(f"No museum code: {val}")
-                elif code_:
-                    logger.debug(
-                        f"Extracted code={repr(code)}, val={repr(val)}"
-                        f" from verbatim={repr(verbatim)}"
-                    )
-
-            # Interpret runs of numbers separated by spaces
-            if not self.clean:
-                val_ = self.squash(val)
-                if val != val_:
-                    logger.debug(f"Squashed {repr(val)} as {repr(val_)}")
-                    val = val_
-
-            # FIXME: This is trash. Find a better way to do this.
-
-            # Remove spaces where a number follows a letter before splitting on
-            # soft delimiters
-            val = re.sub(r"\b([A-Z]) (\d)", r"\1\2", val, flags=re.I)
-
-            # Split on soft delimiters and group parts
-            parts = re.split(r"([;,/& ]+)", val)
-            parts_ = [(None, parts.pop(0))]
-            while parts:
-                parts_.append((parts.pop(0), parts.pop(0)))
-            logger.debug(f"Split {repr(val)} on soft delimiters into {repr(parts_)}")
-
-            try:
-                spec_nums = self.group(parts_)
-            except ValueError:
-                if fallback:
-                    logger.debug(
-                        f"Falling back to parse of complete value"
-                        f" ({repr(fallback[-1])} from {repr(val)})"
-                    )
-                    return {orig: fallback}
+        # If the string appears to be a catalog number, run extract directly
+        if re.match("[A-Z]{2,4} ", val):
+            valid = True
+            for key, vals in self._extract(val).items():
+                try:
+                    [parse_spec_num(v) for v in vals]
+                except ValueError:
+                    break
                 else:
-                    # Try to re-parse by treating soft delimiters as hard delimiters
-                    extracted_ = self.extract(
-                        "; ".join([p[1] for p in parts_]), code=code
-                    )
-                    if extracted_:
-                        for verbatim, spec_nums in extracted_.items():
-                            extracted.setdefault(verbatim, []).extend(spec_nums)
-                    else:
-                        logger.warning(f"Failed to parse {repr(val)}")
-                        extracted[val] = []
+                    extracted.setdefault(key, []).extend(vals)
             else:
-                for spec_num in spec_nums:
-                    if spec_num.is_valid(min_num=self.min_num, max_diff=self.max_diff):
-                        spec_num = spec_num.modcopy(code=code)
-                        extracted.setdefault(verbatim, []).append(str(spec_num))
+                return extracted
 
-        logger.debug(f"Extracted {extracted} from {repr(orig)}")
+        # Use entity classifier to find candidates in more complex strings
+        for entity in predict_long_text(
+            self.model, f"[{val}]", ["catalog_numbers"], chunk_size=280
+        ):
+            for key, vals in self._extract(entity["text"]).items():
+                extracted.setdefault(key, []).extend(vals)
+
+        if self.lookup is not None:
+            self.lookup[val] = json.dumps(extracted)
+            self.lookup[val]
+
         return extracted
 
     def group(self, parts, join_with="; ", fix_spacing=False):
@@ -512,3 +482,100 @@ class Parser:
             pass
 
         raise ValueError(f"Not a specimen number (strict): {repr(val)}")
+
+    def _extract(self, val):
+
+        orig = val
+
+        # Parse the cleaned value in its entirety as a fallback
+        fallback = None
+        if self.clean:
+            try:
+                spec_num = parse_spec_num(self.prepare(val), fallback=True)
+            except ValueError:
+                pass
+            else:
+                if spec_num.is_valid(min_num=self.min_num, max_diff=self.max_diff):
+                    fallback = [str(spec_num)]
+
+        # Split on hard delimiters and evaluate soft delimiters
+        vals = []
+        for val in re.split(r" *[;\|] *", self.delimit_codes(val)):
+            vals.append(val)
+        logger.debug(f"Split {repr(orig)} into {repr(vals)}")
+
+        extracted = {}
+        for verbatim in vals:
+
+            # Drop values that don't include numbers
+            if not re.search(r"\d", verbatim):
+                continue
+
+            val = self.prepare(verbatim)
+
+            # Extract the museum code for the current segment
+            try:
+                code_, val = self.extract_code(val)
+            except ValueError:
+                pass
+            else:
+                if code_:
+                    code = code_
+                if self.require_code and not code:
+                    raise ValueError(f"No museum code: {val}")
+                elif code_:
+                    logger.debug(
+                        f"Extracted code={repr(code)}, val={repr(val)}"
+                        f" from verbatim={repr(verbatim)}"
+                    )
+
+            # Interpret runs of numbers separated by spaces
+            if not self.clean:
+                val_ = self.squash(val)
+                if val != val_:
+                    logger.debug(f"Squashed {repr(val)} as {repr(val_)}")
+                    val = val_
+
+            # FIXME: This is trash. Find a better way to do this.
+
+            # Remove spaces where a number follows a letter before splitting on
+            # soft delimiters
+            # val = re.sub(r"\b([A-Z]) (\d)", r"\1\2", val, flags=re.I)
+
+            # Split on soft delimiters and group parts
+            parts = re.split(r"([;,/& ]+)", val)
+            parts_ = [(None, parts.pop(0))]
+            while parts:
+                parts_.append((parts.pop(0), parts.pop(0)))
+            logger.debug(f"Split {repr(val)} on soft delimiters into {repr(parts_)}")
+
+            try:
+                spec_nums = self.group(parts_)
+            except ValueError:
+                if fallback:
+                    logger.debug(
+                        f"Falling back to parse of complete value"
+                        f" ({repr(fallback[-1])} from {repr(val)})"
+                    )
+                    return {orig: fallback}
+                else:
+                    # Try to re-parse by treating soft delimiters as hard delimiters
+                    # extracted_ = self.extract(
+                    #    "; ".join([p[1] for p in parts_]), code=code
+                    # )
+                    # if extracted_:
+                    #    for verbatim, spec_nums in extracted_.items():
+                    #        extracted.setdefault(verbatim, []).extend(spec_nums)
+                    # else:
+                    #    logger.warning(f"Failed to parse {repr(val)}")
+                    #    extracted[val] = []
+                    logger.warning(f"Failed to parse {repr(val)}")
+                    extracted[val] = []
+            else:
+                for spec_num in spec_nums:
+                    if spec_num.is_valid(min_num=self.min_num, max_diff=self.max_diff):
+                        spec_num = spec_num.modcopy(code=code)
+                        extracted.setdefault(verbatim, []).append(str(spec_num))
+
+        logger.debug(f"Extracted {extracted} from {repr(orig)}")
+        return extracted

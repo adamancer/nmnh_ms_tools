@@ -8,6 +8,7 @@ from collections import OrderedDict
 import yaml
 from sqlalchemy.exc import OperationalError, UnboundExecutionError
 from sqlalchemy.schema import Index
+from unidecode import unidecode
 
 from .database import Base, Session, AdminNames, AdminThesaurus
 from ..cache import CacheDict
@@ -80,7 +81,7 @@ class AdminFeatures(GeoNamesFeatures):
             ]
         )
         self.update_thesaurus = True
-        self._std = LocStandardizer()
+        self._std = LocStandardizer(strip_parentheticals=False)
 
     @property
     def session(self):
@@ -104,12 +105,18 @@ class AdminFeatures(GeoNamesFeatures):
         self, country, state_province=None, county=None, is_name=True, **kwargs
     ):
         if not country:
-            raise ValueError("country is required")
+            raise ValueError(
+                f"country is required: {[country, state_province, county]}"
+            )
 
         if county and not state_province:
-            raise ValueError("state_province is required when resolving a county")
+            raise ValueError(
+                f"state_province is required to resolve county: {json.dumps([country, state_province, county])}"
+            )
 
-        logger.debug(f"Running get_admin on {(country, state_province, county)}")
+        logger.debug(
+            f"Running get_admin on {json.dumps([country, state_province, county])}"
+        )
 
         result = {}
         resolved = []
@@ -311,7 +318,10 @@ class AdminFeatures(GeoNamesFeatures):
 
     def map_deprecated(self, country, state_province=None, county=None):
         logger.debug(f"Mapping {(country, state_province, county)} from thesaurus")
-        vals = [dedupe(as_list(n)) for n in [country, state_province, county]]
+        country = [unidecode(s) for s in dedupe(as_list(country))]
+        state_province = [unidecode(s) for s in dedupe(as_list(state_province))]
+        county = [unidecode(s) for s in dedupe(as_list(county))]
+        vals = [country, state_province, county]
         fltr = []
         vals = []
         mapping = {}
@@ -321,7 +331,7 @@ class AdminFeatures(GeoNamesFeatures):
             ("state_province", state_province),
             ("county", county),
         ):
-            names = dedupe(as_list(names))
+            # names = dedupe(as_list(names))
             if names:
                 update_key = key
                 mapping[key] = names
@@ -335,7 +345,7 @@ class AdminFeatures(GeoNamesFeatures):
             try:
                 obj = yaml.safe_load(row.mapping)
             except (AttributeError, TypeError):
-                raise ValueError(f"{vals} resolves to empty mapping")
+                raise ValueError(f"Admin resolves to empty mapping: {json.dumps(vals)}")
             except yaml.YAMLError:
                 obj = {update_key: row.mapping}
             else:
@@ -343,7 +353,8 @@ class AdminFeatures(GeoNamesFeatures):
                     obj = {update_key: obj}
             mappings.append(obj)
         if not mappings:
-            vals = [dedupe(as_list(n)) for n in [country, state_province, county]]
+            # vals = [dedupe(as_list(n)) for n in [country, state_province, county]]
+            vals = [country, state_province, county]
             while not vals[-1]:
                 vals = vals[:-1]
             # Exclude amibiguous combinations like multiple states/multiple counties
@@ -352,7 +363,7 @@ class AdminFeatures(GeoNamesFeatures):
                 for vals in list(itertools.product(*vals)):
                     session.add(AdminThesaurus(**dict(zip(self.name_fields, vals))))
                 session.commit()
-            raise ValueError(f"{vals} does not resolve")
+            raise ValueError(f"Admin does not resolve: {json.dumps(vals)}")
         session.close()
         mapping.update(combine(*mappings))
         # Check if mapping points to another row in the thesaurus
@@ -395,7 +406,7 @@ class AdminFeatures(GeoNamesFeatures):
             try:
                 self.get_admin(*divs)
             except ValueError:
-                pass  # print(divs, 'does not resolve')
+                pass
             else:
                 session.delete(row)
             if i and not i % 100:

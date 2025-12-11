@@ -131,9 +131,17 @@ class MatchAnnotator(MatchEvaluator):
             selected.append(self.name(combined))
         constrained_to = self.interpreted_as("constrained")
         if constrained_to:
-            constrained_to.sort(key=lambda s: s.radius_km)
-            selected += [self.name(s) for s in constrained_to]
-            result = f"the intersection between {oxford_comma(selected, delim="; ")}"
+            # constrained_to.sort(key=lambda s: s.radius_km)
+            # selected += [self.name(s) for s in constrained_to]
+            # result = f"the intersection between {oxford_comma(selected, delim="; ")}"
+            constrained = [
+                self.name(s) for s in sorted(constrained_to, key=lambda s: s.radius_km)
+            ]
+            return (
+                f"Coordinates based on {oxford_comma(selected, delim='; ')},"
+                f" with the uncertainty radius constrained to"
+                f" {oxford_comma(constrained, delim='; ')}"
+            )
         elif len(selected) == 1:
             result = oxford_comma(selected, delim="; ")
         else:
@@ -268,9 +276,17 @@ class MatchAnnotator(MatchEvaluator):
             )
             if len(selected) == 1:
                 name = sites[0].split(" (n=")[0]
-                explanations = self.multiples.get(name, [])
+                explanations = self.multiples.get(name.strip('"'), [])
                 if len(set(explanations)) != 1:
-                    logger.warning(f"Could not explain {repr(name)}")
+                    if not explanations:
+                        logger.warning(
+                            f"No explanation for how {name} was interepreted"
+                        )
+                    else:
+                        explanations = sorted(set(explanations))
+                        logger.warning(
+                            f"Multiple explanations for how {name} was interepreted (explanations={explanations})"
+                        )
                     msg += "uses the best match on this name"
                 else:
                     msg += explanations[0]

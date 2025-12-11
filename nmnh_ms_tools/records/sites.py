@@ -367,6 +367,9 @@ class Site(Record):
             f"'{self.__class__.__name__}' object has no attribute '{attr}'"
         )
 
+    def __setattr__(self, attr, val):
+        set_immutable(self, attr, val)
+
     def __delattr__(self, attr):
         del_immutable(self, attr)
 
@@ -408,8 +411,7 @@ class Site(Record):
                 val = GEOCONFIG.get_feature_radius(self.site_kind)
             except (KeyError, TypeError):
                 return 1  # force the minimum radius for a site to 1 km
-        with mutable(self.geometry):
-            self.geometry.radius_km = val
+        self.geometry.radius_km = val
 
     @property
     def site_kind(self):
@@ -460,6 +462,8 @@ class Site(Record):
             self._parse_geoname_id(data)
         elif isinstance(data, str) and data.isnumeric():
             self._parse_geoname_id(int(data))
+        elif isinstance(data, str) and "geonames.org" in data:
+            self._parse_geoname_id(int(re.search(r"\d+", data).group()))
         elif "irn" in data or any([re.match(r"(Loc|Col)[A-Z]", k) for k in data]):
             self._parse_emu(data)
         elif isinstance(data, list) and "geonameId" in data[0]:
@@ -575,7 +579,11 @@ class Site(Record):
         """Maps continent names and codes based on GeoNames"""
         self.continent_code = ""
         if not self.continent and self.country:
-            self.continent = self.local.get_continent(self.country)
+            # FIXME: Should continent and country be lists?
+            conts = []
+            for country in self.country.split(" | "):
+                conts.append(self.local.get_continent(country))
+            self.continent = sorted(set(conts))
         if self.continent:
             if len(self.continent) == 2:
                 self.continent_code = self.continent.upper()
@@ -602,7 +610,7 @@ class Site(Record):
                 for key, val in result.items():
                     setattr(self, key, val if isinstance(val, str) else val.copy())
                 self.interpreted = interpreted.copy()
-            return gdf
+            return gdf.copy()
 
         attrs = {
             "country": "country_code",
@@ -632,7 +640,10 @@ class Site(Record):
                 except KeyError:
                     admin[key] = [None] * maxlen
                 else:
-                    if len(val) == 1:
+                    # Each key must be present for next block to work
+                    if not val:
+                        admin[key] = [None] * maxlen
+                    elif len(val) == 1:
                         admin[key] += val * (maxlen - len(val))
                     elif len(val) and len(val) != maxlen:
                         raise ValueError(f"Admin divs cannot be reconciled: {admin}")
@@ -656,8 +667,12 @@ class Site(Record):
 
             # Update record with preferred names, admin codes, and georeference matches
             result = combine(*results)
-            result["admin_div_1"] = result.get("state_province", [])
-            result["admin_div_2"] = result.get("county", [])
+            result.setdefault("state_province", [])
+            result.setdefault("county", [])
+            result["admin_div_1"] = result["state_province"]
+            result["admin_div_2"] = result["county"]
+            for key, val in admin.items():
+                result.setdefault(key, val)
             with mutable(self):
                 for key, val in result.items():
                     setattr(self, key, val)
@@ -820,7 +835,7 @@ class Site(Record):
         return True
 
     def restrict(self, other=None):
-        """Restricts radius to roughly match intersection with another site
+        """Restricts site to roughly match intersection with another site
 
         For example, a mountain range might be restricted to its intersection
         with a county. If no site is provided, restrict to the lowest admin
@@ -841,24 +856,35 @@ class Site(Record):
                 pass
             return self
 
-        contained = self.centroid.within(other)
-        if not contained or (self.geom_type != "Point" and other.geom_type != "Point"):
+        # Only use intersections for non-point geometries
+        if self.geom_type != "Point" and other.geom_type != "Point":
             xtn = self.intersection(other)
             if xtn.geom[0].is_empty:
                 raise ValueError(f"Could not restrict {self} to {other}")
-            self.geometry = GeoMetry(xtn, crs=self.crs)
+            site = self.copy()
+            with mutable(site):
+                site.geometry = GeoMetry(xtn, crs=self.crs)
+            return site
 
-        elif contained:
-            # Leave the centroid alone and set the radius to the maximum
-            # distance to the other geometry
+        # Otherwise leave the centroid alone and set the radius to the maximum
+        # distance to the other geometry. This can reduce the uncertainty for
+        # very large features. A previous incarnation of this function required
+        # this geom to occur inside the other geometry, but currently it only
+        # requires the geometries to intersect within uncertainty.
+        elif self.intersects(other):
             max_dist_km = self.max_dist_km(other)
             if max_dist_km < self.radius_km:
-                self.radius_km = max_dist_km
+                site = self.copy()
+                with mutable(site):
+                    site.geometry = site.geometry.copy()
+                    with mutable(site.geometry):
+                        site.radius_km = max_dist_km
+                return site
 
         return self
 
     def map_marine_features(self):
-        """Maps marine features to specific field"""
+        """Maps marine features to specific fields"""
         func_name = "map_marine_features"
         if not self.changed(func_name):
             return
@@ -871,10 +897,10 @@ class Site(Record):
                 r"\b(?:antarctic|arctic|indian|southern)(?: ocean)\b",
             ] + [r"\b" + s + r"\b" for s in SEAS]:
                 matches = re.findall(pat, rec_str, flags=re.I)
-                oceans = [m for m in matches if "ocean" in m.lower()]
+                oceans = sorted({m for m in matches if "ocean" in m.lower()})
                 if oceans:
                     self.ocean = " | ".join(oceans)
-                seas = [m for m in matches if "sea" in m.lower()]
+                seas = sorted({m for m in matches if "sea" in m.lower()})
                 if seas:
                     self.sea_gulf = " | ".join(seas)
 
@@ -979,6 +1005,24 @@ class Site(Record):
             return False
         return True
 
+    def is_admin(self, include_related=True):
+        sites = [self]
+        if include_related:
+            sites.extend(site.related_sites)
+        return any((s.site_class == "A" for s in sites))
+
+    def is_capital(self, include_related=True):
+        sites = [self]
+        if include_related:
+            sites.extend(site.related_sites)
+        return any((re.match("PPL[AC]", s.site_kind) for s in sites))
+
+    def is_populated_place(self, include_related=True):
+        sites = [self]
+        if include_related:
+            sites.extend(site.related_sites)
+        return any((s.site_class == "P" for s in sites))
+
     def get_ocean(self):
         """Gets the name of the nearest ocean, if any"""
         centroid = self.centroid
@@ -1077,7 +1121,12 @@ class Site(Record):
             row = grid.filter(where={"LatPreferred_tab": "Yes"})
             if not row:
                 row = grid[0]
-            self.geometry = self._build_geometry(row)
+            try:
+                self.geometry = self._build_geometry(row)
+            except Exception as exc:
+                warn(
+                    f"Could not build geometry from {row}: {str(exc)} (irn={self.location_id})"
+                )
         # Map PLSS
         labels = [s.lower() for s in data.get("MapOtherKind_tab", [])]
         if "section" in labels and "township range" in labels:
@@ -1172,7 +1221,7 @@ class Site(Record):
             self.geometry = self._build_geometry(geom, crs=4326)
             self.sources.append(source)
         else:
-            # Geometries from GeoNames use lat/lng to define the center, than the
+            # Geometries from GeoNames use lat/lng to define the center, then the
             # bounding box to determine the error radius. This is intended to
             # align the geometry with human georeferences, which commonly use the
             # center, not the bounding box, while capturing an accurate error radius.
@@ -1182,7 +1231,7 @@ class Site(Record):
             except KeyError:
                 self.geometry = point
             else:
-                self.geometry = point.encompass(bbox)
+                self.geometry = point.encompass(bbox, how="envelope")
 
         # Map explicitly defined URL to url_mask
         if data.get("url"):

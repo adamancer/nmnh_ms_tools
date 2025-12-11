@@ -131,6 +131,8 @@ class LocStandardizer(Standardizer):
             "region",
             "republic",
             "township",
+            "sheng",
+            "shi",
             "subdistrict",
             "zone",
             # Spanish

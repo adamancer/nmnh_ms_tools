@@ -190,7 +190,18 @@ CODES_VALLEYS = [
     "WADS",
     "WADX",
 ]
-CODES_VOLCANOES = ["CLDA", "CONE", "FSR", "VLC", "VLF", "VLS"]
+CODES_VOLCANOES = [
+    "CLDA",
+    "CONE",
+    "FSR",
+    "VLC",
+    # The following are custom codes based on the GVP data model
+    "VLF",
+    "VLS",
+    "GVPVLC",
+    "GVPVLF",
+    "GVPSUB",
+]
 CODES_WETLANDS = ["CRKT", "MRSH", "MRSHN", "SWMP", "WTLD", "WTLDI"]
 CODES_UNDERSEA = [
     "APNU",

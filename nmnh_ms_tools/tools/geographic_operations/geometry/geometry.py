@@ -173,6 +173,9 @@ class GeoMetry:
         if not isinstance(geom, gpd.GeoSeries):
             raise TypeError(f"geom must be a GeoSeries ({repr(type(geom))} given)")
 
+        if not geom.any():
+            raise ValueError(f"Passed geometry is empty: {geom}")
+
         self._geom = geom
 
         # Clear cached properties when geom changes
@@ -462,9 +465,15 @@ class GeoMetry:
             point = point.to_crs(crs)
         return point
 
+    def to_gdf(self):
+        data = self.to_json()
+        data["geometry"] = wkt.loads(data["geometry"])
+        return gpd.GeoDataFrame([data], crs=self.crs, geometry="geometry")
+
     def to_json(self):
         return {
-            "geom": self.verbatim_geom.iloc[0].wkt,
+            "name": self.name,
+            "geometry": self.verbatim_geom.iloc[0].wkt,
             "crs": self.verbatim_geom.crs,
             "radius_km": self._radius_km,
             "validate": self.validate,
@@ -792,6 +801,7 @@ class GeoMetry:
 
     def min_dist_km(self, other, threshold_km=None):
         """Calculates minimum distance in km between two geometries"""
+        # FIXME: Should this be a reproject?
         geom = self.as_wgs84
         other = other.as_wgs84
         # Use centroids where radius is estimated
@@ -814,15 +824,15 @@ class GeoMetry:
         #    return min(dists_km)
         return dist_km
 
-    def encompass(self, other):
-        """Creates an ellipse centered on a point that encompasses another geometry"""
+    def encompass(self, other, how="ellipse"):
+        """Creates a polygon centered on a point that encompasses another geometry"""
         if self.geom_type != "Point":
             raise ValueError("Geometry must be a Point")
         geom = self.copy()
         other = self.__class__(other)
         with mutable(geom):
             geom._radius_km = geom.max_dist_km(other)
-        return geom.ellipse
+        return getattr(geom, how)
 
     def get_common_projection(self, others):
         if others is None:
@@ -830,12 +840,14 @@ class GeoMetry:
         if not isinstance(others, (list, tuple)):
             others = [others]
         others = [self.__class__(o) for o in others]
-        meridians = [self.meridians] + [o.meridians for o in others]
+        # Order geometrics with largest first
+        geoms = sorted([self] + others, key=lambda g: -g.area)
+        meridians = [g.meridians for g in geoms]
         for lon in meridians[0].intersection(*meridians[1:]):
             return self.equal_area_mask.format(lat=0, lon=lon)
-        # Test meridians
+        # Find meridian where convex hulls for all shapes are single polygons
         counts = {}
-        for merids in [self.meridians] + [o.meridians for o in others]:
+        for merids in meridians:
             for merid in merids:
                 counts.setdefault(merid, 0)
                 counts[merid] += 1
@@ -877,15 +889,24 @@ class GeoMetry:
 
     def validate_shape(self):
         if not self.is_valid:
-            geom = self.buffer(0.1)
-            if geom.is_valid:
-                logger.debug("Buffered to fix invalid shape")
-                self.geom = geom.geom
+            geom = self.geom.simplify(0.001)
+            if geom.is_valid.all():
+                logger.debug("Simplified to fix invalid shape")
+                self.geom = geom
+        if not self.is_valid:
+            try:
+                geom = self.buffer(0.1)
+            except ValueError:
+                pass
+            else:
+                if geom.is_valid:
+                    logger.debug("Buffered to fix invalid shape")
+                    self.geom = geom.geom
         if not self.is_valid:
             geom = geom.convex_hull
-            if geom.is_valid:
+            if geom.is_valid.all():
                 logger.debug("Took convex hull to fix invalid shape")
-                self.geom = geom.geom
+                self.geom = geom
         if not self.is_valid:
             warnings.warn(f"GeoMetry invalid: {self.geom.iloc[0]}")
         return
@@ -974,9 +995,12 @@ class GeoMetry:
 
     def buffer(self, dist, how="km"):
         """Buffers an object by distance in km"""
+        # FIXME: Buffering shapes that cross dateline produces strange results
         logger.debug(f"Buffering shape to {repr(dist)} (how={repr(how)})")
         if how not in ("km", "rel"):
             raise ValueError("how must be 'km' or 'rel'")
+        if not isinstance(dist, (float, int)):
+            raise TypeError(f"dist must be a numeric data type ({repr(dist)} given)")
         if how == "rel":
             dist = self.radius_km * (dist - 1)
         if dist:
@@ -1029,13 +1053,13 @@ class GeoMetry:
                 geom.parents.append(self)
                 return geom
             elif multiplier > 1:
-                geom = geom.resize(modifier, how="rel")
+                geom = geom.resize(multiplier, how="rel")
                 geom.modifier = modifier
                 geom.parents.append(self)
                 return geom
             else:
-                # Calculate shape representing the middle 50% of the geometry
                 return geom
+                # Calculate shape representing the middle 50% of the geometry
                 # FIXME: Does not work well with high aspect ratios
                 geom = self.match(
                     draw_polygon(geom.center.y, geom.center.x, self.radius_km / 2, 50)
@@ -1445,10 +1469,11 @@ def reproject(geoms):
 
 def _truncate(val):
     """Truncates string for log"""
-    if isinstance(val, gpd.GeoDataFrame):
-        val = val.iloc[0]
-    if isinstance(val, gpd.GeoSeries):
-        val = val.iloc[0]
+    if isinstance(val, (gpd.GeoDataFrame, gpd.GeoSeries)):
+        try:
+            val = val.iloc[0]
+        except IndexError:
+            val = ""
     return repr(truncate(str(val), 128))
 
 

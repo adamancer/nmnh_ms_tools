@@ -267,6 +267,7 @@ class Georeferencer:
             result="success",
             description=evaluator.describe(),
             geometry=evaluator.result.geometry.wkt,
+            centroid=evaluator.result.centroid.wkt,
             crs=str(evaluator.result.geometry.crs),
             radius_km=evaluator.radius_km,
             has_coords=bool(site.geometry),
@@ -275,6 +276,7 @@ class Georeferencer:
             within_unc=within_unc,
             within_est=within_est,
             site=str(site),
+            sources=evaluator.result.sources,
         )
         self.evaluated[self.key] = result
         self.results.append(result)
@@ -384,16 +386,15 @@ class Georeferencer:
             location_id = self.get_location_id(site)
             if not location_id:
                 location_id = site.location_id
-            if "resolves to empty mapping" in str(exc):
+            if "Could not map admin" in str(exc) or "Resolves to empty mapping" in str(
+                exc
+            ):
                 warnings.warn(str(exc))
             else:
                 self.notify(f"Failed to parse site: {exc}")
                 logger.error(f"{location_id}: {exc}", exc_info=exc)
                 if self.raise_on_error:
-                    try:
-                        raise exc
-                    finally:
-                        sys.exit()
+                    raise exc
             return
 
         desc = evaluator.describe() if evaluator else f"{exc.__class__.__name__}: {exc}"
@@ -413,8 +414,15 @@ class Georeferencer:
                 evaluator.kml(f"miss_{site.location_id}", refsite=site)
         self.notify(f"Failed: {exc}")
         # Count misses on admin names
-        if "Could not map admin names:" in str(exc):
-            names = [clear_empty(n) for n in json.loads(str(exc).split(": ", 1)[-1])]
+        if (
+            "Could not map admin" in str(exc)
+            or "Admin resolves to empty mapping" in str(exc)
+            or "Admin does not resolve:" in str(exc)
+            or "country is required:" in str(exc)
+            or "state_province is required to resolve county" in str(exc)
+        ):
+            admin = re.search(r"\[.*\]", str(exc)).group()
+            names = [clear_empty(n) for n in json.loads(admin)]
             key = tuple([" | ".join(as_list(n)) for n in names])
             try:
                 self.admin_failed[key] += 1
@@ -426,8 +434,6 @@ class Georeferencer:
         elif "Could not encompass sites" in str(
             exc
         ) or "Too many candidates to encompass" in str(exc):
-            # Note failure but specifics not needed
-            logger.warning(f"Georeference failed: {site.location_id} (no match)")
             pass
         else:
             # Unknown error, so include the traceback in the log
@@ -435,10 +441,7 @@ class Georeferencer:
                 f"Georeference failed: {site.location_id} (error)", exc_info=exc
             )
             if self.raise_on_error:
-                try:
-                    raise exc
-                finally:
-                    sys.exit()
+                raise exc
 
     def summarize(self, archive):
         """Summarizes performance for sites with known coordinates"""
@@ -588,7 +591,8 @@ class Georeferencer:
     def build_site(self, rowdict):
         from ...bots.geonames import GeoNamesBot
 
-        rowdict["location_id"] = self._loc_id
+        if not self.id_key in rowdict:
+            rowdict["location_id"] = self._loc_id
 
         try:
             site = Site(rowdict)

@@ -367,12 +367,18 @@ class MatchEvaluator:
                         raise
                     logger.debug(f"Could not restrict: {site}")
 
-            # Filter out sites that couldn't be restricted if a shared name was
+            # Filter out sites that couldn't be restricted
             names = self.names(restricted_to_admin)
             for name, group in self.group_by_name(sites).items():
                 for site in group:
-                    if self.key(site) in names and site not in restricted_to_admin:
-                        self.interpret([site], "rejected (disjoint)")
+                    # Keep sites if a related site intersects admin. This allows us
+                    # to keep relative directions like "Off the coast of Maine."
+                    for rel in site.related_sites:
+                        if rel.intersects(admin):
+                            break
+                    else:
+                        if self.key(site) in names and site not in restricted_to_admin:
+                            self.interpret([site], "rejected (disjoint)")
             sites = self.uninterpreted(sites)
             logger.debug(f"Restricted to admin: {self.names(sites)}")
 
@@ -745,7 +751,7 @@ class MatchEvaluator:
                 if places:
                     others = [s for s in group if s.site_class != "P"]
                     self.explain(
-                        others, ("includes only populated places" " matching this name")
+                        others, ("includes only populated places matching this name")
                     )
                     self.interpret(others, "rejected (interpreted elsewhere)")
                     continue
@@ -755,7 +761,7 @@ class MatchEvaluator:
                 if places and places != sites:
                     others = [s for s in group if s.site_class == "S"]
                     self.explain(
-                        others, ("excludes buildings and spots" " matching this name")
+                        others, ("excludes buildings and spots matching this name")
                     )
                     self.interpret(others, "rejected (interpreted elsewhere)")
                     continue
@@ -782,10 +788,10 @@ class MatchEvaluator:
         if sites is None:
             sites = self.sites[:]
         # FIXME: City check invalid for sites parsed using the ModifiedParser
-        capitals = [s for s in sites if re.match(r"^PPL[AC]", s.site_kind)]
+        capitals = [s for s in sites if s.is_capital()]
         if capitals:
             return capitals
-        return [s for s in sites if s.site_class == "P"]
+        return [s for s in sites if s.is_populated_place()]
 
     def extend_into_ocean(self, geom):
         """Extends polygon into ocean"""
@@ -795,25 +801,32 @@ class MatchEvaluator:
         offshore = [s for s in terr if s.site_kind == "offshore"]
         if terr and (marine or offshore):
             logger.debug("Extending polygon into ocean")
-            marine.sort(key=lambda s: s.radius_km)
+            marine.sort(key=lambda s: -s.radius_km)
+            # Check for non-ocean marine feaures that have polygons
+            # has_poly = [s for s in marine if not s.geometry.geom_type == "Point"]
+            # seas = [s for s in marine if s.site_kind != "OCN"]
             # Separate oceans from other marine localities
             oceans = [s for s in marine if s.site_kind == "OCN"]
             ocean = oceans[0].name if oceans else None
             # Resize the base geometry. If the resize fails, return the
             # original geometry immediately so the function doesn't incorrectly
             # report that the result is constrained to the ocean/sea
+            logger.debug("Resizing polygon")
             resized = geom.resize(CONT_SHELF_WIDTH_KM)
+            logger.debug("Resized to shelf width")
             if resized in (geom, geom.envelope):
                 logger.debug("Resize failed: {geom.radius_km:.1f} km")
                 return geom
             # Map intersection of geometry with ocean
             tiles = self.ocean.query(resized.to_crs(4326), ocean=ocean)
+            logger.debug("Got tiles")
             if tiles:
                 # Get intersection of proposed geometry with the world ocean
                 shape = GeoMetry(self.adjacent(tiles), crs=4326)
+                shape.plot()
                 geom = resized.intersection(shape)
 
-                # Limit to smaller named water body possible
+                # Limit to smallest named water body
                 for wtr_body in [s for s in marine if s.site_kind != "OCN"]:
                     try:
                         xtn = geom.intersection(wtr_body.resize(RESIZE, how="rel"))
@@ -1196,6 +1209,7 @@ class MatchEvaluator:
         last_parent = None
         in_bounds = []
         for site in marine:
+
             # The largest body of water is in-bounds by default
             if not in_bounds:
                 in_bounds.append(site)

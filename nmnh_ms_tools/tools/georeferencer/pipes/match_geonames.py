@@ -12,7 +12,7 @@ from ....databases.geohelper import get_preferred
 from ....records import Site
 from ....tools.geographic_names.caches import RecordCache
 from ....tools.geographic_names.parsers.modified import has_direction
-from ....utils import LazyAttr, as_list
+from ....utils import LazyAttr, as_list, mutable
 
 
 logger = logging.getLogger(__name__)
@@ -193,7 +193,8 @@ class MatchGeoNames(MatchPipe):
                 cached = []
                 for site in self.cache[key]:
                     cloned = site.copy()
-                    cloned.sources = site.sources
+                    with mutable(cloned):
+                        cloned.sources = site.sources
                     cached.append(cloned)
                 logger.debug(f"Resolved from cache: {key}")
                 return cached

@@ -11,6 +11,7 @@ nameparser
 nltk
 numpy
 Pillow
+pyarrow~=20.0
 pyproj
 pytz
 PyYAML
@@ -22,7 +23,3 @@ SQLAlchemy
 titlecase
 Unidecode
 xmu
-
-coverage
-pytest
-pytest-mock

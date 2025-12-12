@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nmnh_ms_tools"
+version = "0.2b1"
+dependencies = [
+  "beautifulsoup4",
+  "bibtexparser",
+  "geographiclib",
+  "geopandas",
+  "gliner",
+  "html5lib",
+  "inflect",
+  "lxml",
+  "matplotlib",
+  "nameparser",
+  "nltk",
+  "numpy",
+  "Pillow",
+  "pyproj",
+  "pytz",
+  "PyYAML",
+  "requests",
+  "requests_cache",
+  "shapely",
+  "six",
+  "SQLAlchemy",
+  "titlecase",
+  "Unidecode",
+  "xmu",
+]
+requires-python = ">=3.11"
+authors = [
+  {name = "Adam Mansur", email = "mansura@si.edu"}
+]
+maintainers  = [
+  {name = "Adam Mansur", email = "mansura@si.edu"}
+]
+description = "A grab bag of tools for working with natural history data"
+readme = "README.md"
+license = "MIT"
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+
+[project.urls]
+Repository = "https://github.com/adamancer/nmnh_ms_tools"
+
+[tool.setuptools.packages.find]
